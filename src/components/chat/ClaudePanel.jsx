@@ -1,261 +1,187 @@
-import { useState, useEffect, useRef } from 'react';
-import { Send, Bot, User, Trash2, Loader2, Wrench, X, Sparkles } from 'lucide-react';
+import { useState } from 'react';
+import {
+  Sparkles, X, Terminal, Database, Workflow, Globe,
+  Search, FileText, Target, Zap, Copy, Check,
+  ExternalLink, ChevronDown, ChevronRight
+} from 'lucide-react';
+
+const MCP_STATUS = [
+  { name: 'julio-seo-hub', status: 'connected', tools: ['WordPress', 'Supabase', 'SEO Analysis', 'Quick Wins'] },
+  { name: 'n8n-mcp', status: 'connected', tools: ['Workflows', 'Executions', 'Webhooks'] },
+];
+
+const PROMPT_CATEGORIES = [
+  {
+    title: 'WordPress',
+    icon: Globe,
+    prompts: [
+      { label: 'Derniers articles SRAT', prompt: 'Liste les 5 derniers articles publiés sur srat.fr' },
+      { label: 'Créer un article', prompt: 'Crée un article sur [sujet] pour le site [alias]' },
+      { label: 'Articles tous sites', prompt: 'Combien d\'articles sont publiés sur chaque site ?' },
+    ]
+  },
+  {
+    title: 'Keywords & SEO',
+    icon: Search,
+    prompts: [
+      { label: 'Analyser un keyword', prompt: 'Analyse SEO complète pour le keyword "[keyword]"' },
+      { label: 'Quick Wins', prompt: 'Détecte les quick wins sur tous mes sites' },
+      { label: 'Concurrents', prompt: 'Analyse les concurrents pour "[keyword]"' },
+    ]
+  },
+  {
+    title: 'Workflows n8n',
+    icon: Workflow,
+    prompts: [
+      { label: 'Lister workflows', prompt: 'Liste mes workflows n8n actifs' },
+      { label: 'Lancer WF0', prompt: 'Exécute le workflow WF0 SEO Cascade Starter' },
+      { label: 'Dernières exécutions', prompt: 'Montre les dernières exécutions de workflows' },
+    ]
+  },
+  {
+    title: 'Base de données',
+    icon: Database,
+    prompts: [
+      { label: 'Stats sites', prompt: 'Requête Supabase: statistiques de tous les sites' },
+      { label: 'Keywords suivis', prompt: 'Combien de keywords sont suivis par site ?' },
+      { label: 'Positions moyennes', prompt: 'Quelle est la position moyenne par site ?' },
+    ]
+  },
+];
 
 export default function ClaudePanel({ onClose }) {
-  const [messages, setMessages] = useState([]);
-  const [input, setInput] = useState('');
-  const [isTyping, setIsTyping] = useState(false);
-  const [isConnected, setIsConnected] = useState(false);
-  const [currentTool, setCurrentTool] = useState(null);
-  const wsRef = useRef(null);
-  const messagesEndRef = useRef(null);
+  const [copiedPrompt, setCopiedPrompt] = useState(null);
+  const [expandedCategory, setExpandedCategory] = useState('WordPress');
 
-  useEffect(() => {
-    connectWebSocket();
-    return () => wsRef.current?.close();
-  }, []);
-
-  const connectWebSocket = () => {
-    const ws = new WebSocket('ws://localhost:3002');
-
-    ws.onopen = () => {
-      setIsConnected(true);
-      console.log('Connected to Claude backend');
-    };
-
-    ws.onclose = () => {
-      setIsConnected(false);
-      // Retry connection after 3 seconds
-      setTimeout(connectWebSocket, 3000);
-    };
-
-    ws.onerror = () => setIsConnected(false);
-
-    ws.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-
-      switch (data.type) {
-        case 'typing':
-          setIsTyping(data.status);
-          if (!data.status) setCurrentTool(null);
-          break;
-        case 'tool_use':
-          setCurrentTool(data.tool);
-          break;
-        case 'response':
-          setMessages(prev => [...prev, {
-            role: 'assistant',
-            content: data.content,
-            timestamp: new Date(),
-          }]);
-          break;
-        case 'error':
-          setMessages(prev => [...prev, {
-            role: 'error',
-            content: data.message,
-            timestamp: new Date(),
-          }]);
-          break;
-        case 'cleared':
-          setMessages([]);
-          break;
-      }
-    };
-
-    wsRef.current = ws;
+  const copyPrompt = (prompt) => {
+    navigator.clipboard.writeText(prompt);
+    setCopiedPrompt(prompt);
+    setTimeout(() => setCopiedPrompt(null), 2000);
   };
-
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, isTyping]);
-
-  const sendMessage = () => {
-    if (!input.trim() || !isConnected) return;
-
-    setMessages(prev => [...prev, {
-      role: 'user',
-      content: input,
-      timestamp: new Date(),
-    }]);
-
-    wsRef.current?.send(JSON.stringify({
-      type: 'chat',
-      content: input,
-    }));
-
-    setInput('');
-  };
-
-  const clearChat = () => {
-    wsRef.current?.send(JSON.stringify({ type: 'clear' }));
-  };
-
-  const handleKeyDown = (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      sendMessage();
-    }
-  };
-
-  // Quick actions
-  const quickActions = [
-    { label: 'Quick Wins', prompt: 'Détecte les quick wins sur tous mes sites' },
-    { label: 'Articles SRAT', prompt: 'Liste les derniers articles publiés sur srat.fr' },
-    { label: 'Workflows', prompt: 'Liste mes workflows n8n actifs' },
-    { label: 'Analyse KW', prompt: 'Analyse le keyword "diagnostic immobilier paris"' },
-  ];
 
   return (
-    <aside className="w-96 bg-dark-card border-l border-dark-border flex flex-col h-screen">
+    <aside className="w-80 bg-dark-card border-l border-dark-border flex flex-col h-screen">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-dark-border">
         <div className="flex items-center gap-3">
-          <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${isConnected ? 'bg-gradient-to-br from-primary to-secondary' : 'bg-danger/20'}`}>
-            <Sparkles className={`w-5 h-5 ${isConnected ? 'text-white' : 'text-danger'}`} />
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center">
+            <Sparkles className="w-5 h-5 text-white" />
           </div>
           <div>
-            <h3 className="font-semibold text-white">Claude SEO</h3>
-            <p className={`text-xs ${isConnected ? 'text-success' : 'text-danger'}`}>
-              {isConnected ? 'Connecté aux MCPs' : 'Déconnecté - Backend requis'}
+            <h3 className="font-semibold text-white">Claude Code</h3>
+            <p className="text-xs text-success">MCPs connectés</p>
+          </div>
+        </div>
+        <button
+          onClick={onClose}
+          className="p-2 rounded-lg hover:bg-dark-border text-dark-muted hover:text-white transition-colors"
+        >
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+
+      {/* Info Banner */}
+      <div className="p-4 bg-primary/10 border-b border-primary/20">
+        <div className="flex items-start gap-3">
+          <Terminal className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
+          <div className="text-xs">
+            <p className="text-white font-medium">Claude Code = MCPs + Skills</p>
+            <p className="text-dark-muted mt-1">
+              Utilise le terminal Claude Code pour exécuter ces actions. Copie un prompt ci-dessous.
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-1">
-          <button
-            onClick={clearChat}
-            className="p-2 rounded-lg hover:bg-dark-border text-dark-muted hover:text-white transition-colors"
-            title="Effacer la conversation"
-          >
-            <Trash2 className="w-4 h-4" />
-          </button>
-          <button
-            onClick={onClose}
-            className="p-2 rounded-lg hover:bg-dark-border text-dark-muted hover:text-white transition-colors"
-          >
-            <X className="w-4 h-4" />
-          </button>
+      </div>
+
+      {/* MCP Status */}
+      <div className="p-4 border-b border-dark-border">
+        <p className="text-xs text-dark-muted mb-3 uppercase tracking-wide">MCPs Actifs</p>
+        <div className="space-y-2">
+          {MCP_STATUS.map((mcp) => (
+            <div key={mcp.name} className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 bg-success rounded-full"></div>
+                <span className="text-sm text-white">{mcp.name}</span>
+              </div>
+              <span className="text-xs text-dark-muted">{mcp.tools.length} outils</span>
+            </div>
+          ))}
         </div>
       </div>
 
-      {/* Quick Actions */}
-      {messages.length === 0 && (
-        <div className="p-4 border-b border-dark-border">
-          <p className="text-xs text-dark-muted mb-2">Actions rapides</p>
-          <div className="flex flex-wrap gap-2">
-            {quickActions.map((action, i) => (
-              <button
-                key={i}
-                onClick={() => {
-                  setInput(action.prompt);
-                  setTimeout(sendMessage, 100);
-                }}
-                disabled={!isConnected}
-                className="px-3 py-1.5 bg-dark-bg border border-dark-border rounded-lg text-xs text-dark-muted hover:text-white hover:border-primary transition-colors disabled:opacity-50"
-              >
-                {action.label}
-              </button>
-            ))}
+      {/* Prompt Suggestions */}
+      <div className="flex-1 overflow-y-auto">
+        <div className="p-4">
+          <p className="text-xs text-dark-muted mb-3 uppercase tracking-wide">Prompts suggérés</p>
+
+          <div className="space-y-2">
+            {PROMPT_CATEGORIES.map((category) => {
+              const Icon = category.icon;
+              const isExpanded = expandedCategory === category.title;
+
+              return (
+                <div key={category.title} className="bg-dark-bg rounded-lg border border-dark-border overflow-hidden">
+                  <button
+                    onClick={() => setExpandedCategory(isExpanded ? null : category.title)}
+                    className="w-full flex items-center justify-between p-3 hover:bg-dark-border/50 transition-colors"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Icon className="w-4 h-4 text-primary" />
+                      <span className="text-sm font-medium text-white">{category.title}</span>
+                    </div>
+                    {isExpanded ? (
+                      <ChevronDown className="w-4 h-4 text-dark-muted" />
+                    ) : (
+                      <ChevronRight className="w-4 h-4 text-dark-muted" />
+                    )}
+                  </button>
+
+                  {isExpanded && (
+                    <div className="px-3 pb-3 space-y-2">
+                      {category.prompts.map((item, i) => (
+                        <div
+                          key={i}
+                          className="flex items-center justify-between p-2 bg-dark-card rounded-lg group"
+                        >
+                          <span className="text-xs text-dark-muted group-hover:text-white transition-colors">
+                            {item.label}
+                          </span>
+                          <button
+                            onClick={() => copyPrompt(item.prompt)}
+                            className="p-1.5 rounded hover:bg-dark-border transition-colors"
+                            title="Copier le prompt"
+                          >
+                            {copiedPrompt === item.prompt ? (
+                              <Check className="w-3.5 h-3.5 text-success" />
+                            ) : (
+                              <Copy className="w-3.5 h-3.5 text-dark-muted" />
+                            )}
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
-      )}
-
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {messages.length === 0 && (
-          <div className="text-center text-dark-muted text-sm py-8">
-            <Bot className="w-16 h-16 mx-auto mb-4 opacity-30" />
-            <p className="font-medium">Assistant SEO avec MCPs</p>
-            <p className="mt-2 text-xs">
-              Accès: WordPress, Supabase, n8n, DataForSEO
-            </p>
-            {!isConnected && (
-              <div className="mt-4 p-3 bg-warning/10 border border-warning/30 rounded-lg text-warning text-xs">
-                Lance le backend:<br/>
-                <code className="bg-dark-bg px-2 py-1 rounded mt-1 inline-block">
-                  cd server && npm run dev
-                </code>
-              </div>
-            )}
-          </div>
-        )}
-
-        {messages.map((msg, index) => (
-          <div
-            key={index}
-            className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}
-          >
-            <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
-              msg.role === 'user'
-                ? 'bg-primary'
-                : msg.role === 'error'
-                ? 'bg-danger/20'
-                : 'bg-gradient-to-br from-primary/20 to-secondary/20'
-            }`}>
-              {msg.role === 'user' ? (
-                <User className="w-4 h-4 text-white" />
-              ) : (
-                <Bot className={`w-4 h-4 ${msg.role === 'error' ? 'text-danger' : 'text-primary'}`} />
-              )}
-            </div>
-            <div className={`max-w-[85%] rounded-xl px-4 py-2.5 ${
-              msg.role === 'user'
-                ? 'bg-primary text-white'
-                : msg.role === 'error'
-                ? 'bg-danger/10 border border-danger/30 text-danger'
-                : 'bg-dark-bg border border-dark-border text-white'
-            }`}>
-              <p className="text-sm whitespace-pre-wrap leading-relaxed">{msg.content}</p>
-            </div>
-          </div>
-        ))}
-
-        {isTyping && (
-          <div className="flex gap-3">
-            <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-gradient-to-br from-primary/20 to-secondary/20">
-              <Bot className="w-4 h-4 text-primary" />
-            </div>
-            <div className="bg-dark-bg border border-dark-border rounded-xl px-4 py-2.5">
-              <div className="flex items-center gap-2 text-sm text-dark-muted">
-                {currentTool ? (
-                  <>
-                    <Wrench className="w-4 h-4 text-warning animate-pulse" />
-                    <span className="text-warning">{currentTool}</span>
-                  </>
-                ) : (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Réflexion...</span>
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-
-        <div ref={messagesEndRef} />
       </div>
 
-      {/* Input */}
-      <div className="p-4 border-t border-dark-border bg-dark-card">
-        <div className="flex items-end gap-2">
-          <textarea
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder={isConnected ? "Demande quelque chose..." : "Backend non connecté..."}
-            disabled={!isConnected}
-            rows={1}
-            className="flex-1 bg-dark-bg border border-dark-border rounded-xl px-4 py-3 text-white text-sm placeholder:text-dark-muted focus:outline-none focus:border-primary resize-none disabled:opacity-50"
-            style={{ minHeight: '48px', maxHeight: '120px' }}
-          />
-          <button
-            onClick={sendMessage}
-            disabled={!input.trim() || !isConnected}
-            className="p-3 bg-primary rounded-xl text-white hover:bg-primary-dark disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            <Send className="w-5 h-5" />
-          </button>
-        </div>
+      {/* Footer */}
+      <div className="p-4 border-t border-dark-border bg-dark-bg">
+        <a
+          href="https://claude.ai"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center justify-center gap-2 w-full py-2.5 bg-dark-card border border-dark-border rounded-lg text-sm text-dark-muted hover:text-white hover:border-primary transition-colors"
+        >
+          <ExternalLink className="w-4 h-4" />
+          Ouvrir Claude.ai
+        </a>
+        <p className="text-xs text-dark-muted text-center mt-2">
+          Pour les MCPs, utilise Claude Code
+        </p>
       </div>
     </aside>
   );
