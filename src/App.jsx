@@ -1,7 +1,9 @@
 import { useState } from 'react';
+import { MessageSquare, X } from 'lucide-react';
 import Sidebar from './components/layout/Sidebar';
 import Header from './components/layout/Header';
-import { Dashboard, Sites, Keywords, Workflows, QuickWins } from './views';
+import ClaudeChat from './components/chat/ClaudeChat';
+import { Dashboard, Sites, Keywords, Workflows, QuickWins, Articles } from './views';
 
 const viewTitles = {
   dashboard: 'Dashboard',
@@ -17,6 +19,7 @@ const viewTitles = {
 function App() {
   const [activeView, setActiveView] = useState('dashboard');
   const [isLoading, setIsLoading] = useState(false);
+  const [isChatOpen, setIsChatOpen] = useState(false);
 
   const handleRefresh = () => {
     setIsLoading(true);
@@ -36,11 +39,7 @@ function App() {
       case 'workflows':
         return <Workflows />;
       case 'articles':
-        return (
-          <div className="flex items-center justify-center h-96">
-            <p className="text-dark-muted">Module Articles - Coming Soon</p>
-          </div>
-        );
+        return <Articles />;
       case 'analytics':
         return (
           <div className="flex items-center justify-center h-96">
@@ -73,6 +72,23 @@ function App() {
           {renderView()}
         </main>
       </div>
+
+      {/* Claude Chat Panel */}
+      <ClaudeChat isOpen={isChatOpen} onToggle={() => setIsChatOpen(!isChatOpen)} />
+
+      {/* Floating Chat Button */}
+      <button
+        onClick={() => setIsChatOpen(!isChatOpen)}
+        className={`fixed right-6 ${isChatOpen ? 'bottom-[620px]' : 'bottom-6'} w-14 h-14 rounded-full shadow-lg flex items-center justify-center transition-all duration-300 ${
+          isChatOpen ? 'bg-danger hover:bg-danger/80' : 'bg-primary hover:bg-primary-dark'
+        }`}
+      >
+        {isChatOpen ? (
+          <X className="w-6 h-6 text-white" />
+        ) : (
+          <MessageSquare className="w-6 h-6 text-white" />
+        )}
+      </button>
     </div>
   );
 }

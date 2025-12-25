@@ -1,16 +1,133 @@
-# React + Vite
+# SEO Command Center
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Dashboard de gestion SEO pour le portfolio Julio Sikoutris - 15 sites WordPress.
 
-Currently, two official plugins are available:
+## Architecture
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+```
+seo-command-center/
+├── src/                    # Frontend React + Vite + Tailwind
+│   ├── components/         # Composants réutilisables
+│   │   ├── chat/          # Claude Chat Panel
+│   │   ├── common/        # Card, Badge, Button, StatCard
+│   │   ├── dashboard/     # Stats, Charts, Tables
+│   │   ├── layout/        # Sidebar, Header
+│   │   └── workflows/     # Workflow Status
+│   └── views/             # Pages principales
+│       ├── Dashboard.jsx
+│       ├── Sites.jsx
+│       ├── Keywords.jsx
+│       ├── QuickWins.jsx
+│       ├── Articles.jsx
+│       └── Workflows.jsx
+└── server/                 # Backend Express + Claude API
+    └── index.js           # WebSocket + Anthropic SDK
+```
 
-## React Compiler
+## Fonctionnalités
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- **Dashboard** : Vue d'ensemble avec stats, graphiques, activité
+- **Sites** : Gestion des 15 sites WordPress du portfolio
+- **Keywords** : Suivi des positions avec filtres intent/quick wins
+- **Quick Wins** : Détection des opportunités P11-20
+- **Articles** : Gestion WordPress (créer, éditer, publier)
+- **Workflows** : Monitoring des workflows n8n
+- **Claude Chat** : Assistant SEO avec accès aux MCPs
 
-## Expanding the ESLint configuration
+## Installation
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+### 1. Frontend
+
+```bash
+cd ~/seo-command-center
+npm install
+npm run dev
+```
+
+→ Ouvre http://localhost:5173
+
+### 2. Backend (pour le Chat Claude)
+
+```bash
+cd ~/seo-command-center/server
+
+# Configurer l'API key
+cp .env.example .env
+# Éditer .env et ajouter ANTHROPIC_API_KEY
+
+npm install
+npm run dev
+```
+
+→ WebSocket sur ws://localhost:3002
+
+## Configuration
+
+### Variables d'environnement (server/.env)
+
+```
+ANTHROPIC_API_KEY=sk-ant-xxxxx
+MCP_BRIDGE_URL=http://localhost:3001  # optionnel
+PORT=3002
+```
+
+## MCPs Intégrés
+
+Le Chat Claude a accès aux outils suivants :
+
+| Outil | Description |
+|-------|-------------|
+| `wordpress_get_posts` | Lire les articles d'un site |
+| `wordpress_create_post` | Créer un article |
+| `supabase_query` | Requêtes sur la BDD SEO |
+| `seo_keyword_analysis` | Analyse complète d'un keyword |
+| `quick_wins_detect` | Détecter les opportunités |
+| `n8n_execute_workflow` | Lancer un workflow |
+| `n8n_list_workflows` | Lister les workflows |
+
+## Sites WordPress
+
+| Alias | Domaine | Entité |
+|-------|---------|--------|
+| srat | srat.fr | SRAT |
+| srat-energies | srat-energies.fr | SRAT |
+| pro-formation | formation-diagnostiqueur-immobilier.net | PRO FORMATION |
+| pro-formation-re | pro-formation.re | PRO FORMATION |
+| metis-digital | metis-digital.click | METIS |
+| bien-vieillir | bien-vieillir.solutions | METIS |
+| annuaire-qualiopi | annuairequaliopi.fr | METIS |
+| assurance-animal | monassuranceanimal.fr | METIS |
+| diagnostic-13 | diagnostic-immobilier13.fr | Client |
+| 3pt | plan-pluriannuel-de-travaux-3pt.fr | Cabinet |
+| digne-infos | digne-infos.fr | METIS |
+| actualites-aurillac | actualites-aurillac.fr | METIS |
+| actualites-gap | actualites-gap.fr | METIS |
+| infos-aubenas | infos-aubenas.fr | METIS |
+| manosque-infos | manosque-infos.fr | METIS |
+
+## Synchronisation
+
+### GitHub (recommandé)
+
+```bash
+# Créer un repo sur github.com, puis :
+git remote add origin git@github.com:USERNAME/seo-command-center.git
+git push -u origin main
+```
+
+### Sur un autre ordinateur
+
+```bash
+git clone git@github.com:USERNAME/seo-command-center.git
+cd seo-command-center
+npm install
+cd server && npm install
+```
+
+## Stack Technique
+
+- **Frontend** : React 19, Vite, Tailwind CSS v4
+- **Charts** : Recharts
+- **Icons** : Lucide React
+- **Backend** : Express, WebSocket, Anthropic SDK
+- **MCPs** : julio-seo-hub, n8n-mcp
