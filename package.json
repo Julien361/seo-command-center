@@ -5,7 +5,7 @@
   "description": "Dashboard SEO avec Claude Code intégré",
   "private": true,
   "type": "module",
-  "main": "electron/main.js",
+  "main": "electron/main.cjs",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
