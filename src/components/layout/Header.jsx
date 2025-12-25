@@ -1,6 +1,6 @@
 import { Bell, Search, User, RefreshCw } from 'lucide-react';
 
-export default function Header({ title, onRefresh, isLoading }) {
+export default function Header({ title, onRefresh, isLoading, rightAction }) {
   return (
     <header className="h-16 bg-dark-card border-b border-dark-border flex items-center justify-between px-6">
       <div className="flex items-center gap-4">
@@ -37,6 +37,12 @@ export default function Header({ title, onRefresh, isLoading }) {
           </div>
           <span className="text-sm font-medium text-white">Julio</span>
         </div>
+
+        {rightAction && (
+          <div className="pl-4 border-l border-dark-border">
+            {rightAction}
+          </div>
+        )}
       </div>
     </header>
   );

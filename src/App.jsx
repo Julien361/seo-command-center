@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { MessageSquare, X } from 'lucide-react';
+import { PanelRightClose, PanelRight } from 'lucide-react';
 import Sidebar from './components/layout/Sidebar';
 import Header from './components/layout/Header';
-import ClaudeChat from './components/chat/ClaudeChat';
+import ClaudePanel from './components/chat/ClaudePanel';
 import { Dashboard, Sites, Keywords, Workflows, QuickWins, Articles } from './views';
 
 const viewTitles = {
@@ -19,7 +19,7 @@ const viewTitles = {
 function App() {
   const [activeView, setActiveView] = useState('dashboard');
   const [isLoading, setIsLoading] = useState(false);
-  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [isChatOpen, setIsChatOpen] = useState(true);
 
   const handleRefresh = () => {
     setIsLoading(true);
@@ -59,13 +59,28 @@ function App() {
 
   return (
     <div className="flex h-screen bg-dark-bg">
+      {/* Sidebar Navigation */}
       <Sidebar activeView={activeView} onViewChange={setActiveView} />
 
+      {/* Main Content */}
       <div className="flex-1 flex flex-col overflow-hidden">
         <Header
           title={viewTitles[activeView]}
           onRefresh={handleRefresh}
           isLoading={isLoading}
+          rightAction={
+            <button
+              onClick={() => setIsChatOpen(!isChatOpen)}
+              className="p-2 rounded-lg hover:bg-dark-border transition-colors"
+              title={isChatOpen ? 'Masquer Claude' : 'Afficher Claude'}
+            >
+              {isChatOpen ? (
+                <PanelRightClose className="w-5 h-5 text-dark-muted" />
+              ) : (
+                <PanelRight className="w-5 h-5 text-primary" />
+              )}
+            </button>
+          }
         />
 
         <main className="flex-1 overflow-auto p-6">
@@ -73,22 +88,10 @@ function App() {
         </main>
       </div>
 
-      {/* Claude Chat Panel */}
-      <ClaudeChat isOpen={isChatOpen} onToggle={() => setIsChatOpen(!isChatOpen)} />
-
-      {/* Floating Chat Button */}
-      <button
-        onClick={() => setIsChatOpen(!isChatOpen)}
-        className={`fixed right-6 ${isChatOpen ? 'bottom-[620px]' : 'bottom-6'} w-14 h-14 rounded-full shadow-lg flex items-center justify-center transition-all duration-300 ${
-          isChatOpen ? 'bg-danger hover:bg-danger/80' : 'bg-primary hover:bg-primary-dark'
-        }`}
-      >
-        {isChatOpen ? (
-          <X className="w-6 h-6 text-white" />
-        ) : (
-          <MessageSquare className="w-6 h-6 text-white" />
-        )}
-      </button>
+      {/* Claude Panel - Fixed Right */}
+      {isChatOpen && (
+        <ClaudePanel onClose={() => setIsChatOpen(false)} />
+      )}
     </div>
   );
 }
