@@ -1,8 +1,199 @@
 import { useState, useEffect } from 'react';
-import { ExternalLink, Search, Plus, MoreVertical, RefreshCw, Loader2, CloudDownload, Zap } from 'lucide-react';
+import { ExternalLink, Search, Plus, MoreVertical, RefreshCw, Loader2, CloudDownload, Zap, X, TrendingUp, TrendingDown, Target, FileText, ArrowUp, ArrowDown } from 'lucide-react';
 import { Card, Badge, Button } from '../components/common';
-import { sitesApi, keywordsApi, gscApi } from '../lib/supabase';
+import { sitesApi, keywordsApi, gscApi, supabase } from '../lib/supabase';
 import { n8nApi } from '../lib/n8n';
+
+// Site Detail Panel Component
+function SiteDetailPanel({ site, onClose }) {
+  const [keywords, setKeywords] = useState([]);
+  const [pages, setPages] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    if (site?.id) {
+      loadSiteData();
+    }
+  }, [site?.id]);
+
+  const loadSiteData = async () => {
+    setIsLoading(true);
+    try {
+      // Charger keywords et pages du site
+      const [kwData, pagesData] = await Promise.all([
+        supabase.from('keywords').select('*').eq('site_id', site.id).order('current_position', { ascending: true }).limit(20),
+        supabase.from('pages').select('*').eq('site_id', site.id).order('updated_at', { ascending: false }).limit(10)
+      ]);
+
+      setKeywords(kwData.data || []);
+      setPages(pagesData.data || []);
+    } catch (err) {
+      console.error('Error loading site data:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const getPositionColor = (pos) => {
+    if (!pos) return 'text-dark-muted';
+    if (pos <= 3) return 'text-success';
+    if (pos <= 10) return 'text-info';
+    if (pos <= 20) return 'text-warning';
+    return 'text-danger';
+  };
+
+  const getPositionChange = (kw) => {
+    if (!kw.previous_position || !kw.current_position) return null;
+    return kw.previous_position - kw.current_position;
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-dark-card border border-dark-border rounded-xl w-full max-w-4xl max-h-[90vh] overflow-hidden" onClick={e => e.stopPropagation()}>
+        {/* Header */}
+        <div className="flex items-center justify-between p-6 border-b border-dark-border">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 bg-primary/20 rounded-xl flex items-center justify-center text-primary font-bold text-xl">
+              {(site.alias || site.domain || '?')[0].toUpperCase()}
+            </div>
+            <div>
+              <h2 className="text-xl font-bold text-white">{site.domain}</h2>
+              <div className="flex items-center gap-3 mt-1">
+                <span className="text-dark-muted text-sm">{site.alias}</span>
+                <Badge variant={entityColors[site.entity] || 'secondary'}>{site.entity}</Badge>
+              </div>
+            </div>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-dark-border rounded-lg">
+            <X className="w-5 h-5 text-dark-muted" />
+          </button>
+        </div>
+
+        {/* Stats Summary */}
+        <div className="grid grid-cols-5 gap-4 p-6 border-b border-dark-border bg-dark-bg/50">
+          <div className="text-center">
+            <div className="text-2xl font-bold text-white">{site.keywords || 0}</div>
+            <div className="text-xs text-dark-muted">Keywords</div>
+          </div>
+          <div className="text-center">
+            <div className={`text-2xl font-bold ${site.avgPosition ? getPositionColor(site.avgPosition) : 'text-dark-muted'}`}>
+              {site.avgPosition || '-'}
+            </div>
+            <div className="text-xs text-dark-muted">Position Moy.</div>
+          </div>
+          <div className="text-center">
+            <div className="text-2xl font-bold text-info">{site.clicks?.toLocaleString() || 0}</div>
+            <div className="text-xs text-dark-muted">Clics (28j)</div>
+          </div>
+          <div className="text-center">
+            <div className="text-2xl font-bold text-warning">{site.quickWins || 0}</div>
+            <div className="text-xs text-dark-muted">Quick Wins</div>
+          </div>
+          <div className="text-center">
+            <div className="text-2xl font-bold text-white">{site.articles || 0}</div>
+            <div className="text-xs text-dark-muted">Articles</div>
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="p-6 overflow-y-auto max-h-[50vh]">
+          {isLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="w-6 h-6 text-primary animate-spin" />
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-6">
+              {/* Keywords */}
+              <div>
+                <h3 className="text-sm font-medium text-dark-muted mb-3 flex items-center gap-2">
+                  <Target className="w-4 h-4" /> Keywords ({keywords.length})
+                </h3>
+                {keywords.length === 0 ? (
+                  <p className="text-dark-muted text-sm">Aucun keyword suivi</p>
+                ) : (
+                  <div className="space-y-2">
+                    {keywords.slice(0, 10).map(kw => {
+                      const change = getPositionChange(kw);
+                      return (
+                        <div key={kw.id} className="flex items-center justify-between p-2 bg-dark-bg rounded-lg">
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm text-white truncate">{kw.keyword}</div>
+                            <div className="text-xs text-dark-muted">
+                              Vol: {kw.search_volume?.toLocaleString() || '-'}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {change !== null && change !== 0 && (
+                              <span className={`flex items-center text-xs ${change > 0 ? 'text-success' : 'text-danger'}`}>
+                                {change > 0 ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />}
+                                {Math.abs(change)}
+                              </span>
+                            )}
+                            <span className={`font-medium ${getPositionColor(kw.current_position)}`}>
+                              {kw.current_position || '-'}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {keywords.length > 10 && (
+                      <p className="text-xs text-dark-muted text-center mt-2">
+                        +{keywords.length - 10} autres keywords
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Pages */}
+              <div>
+                <h3 className="text-sm font-medium text-dark-muted mb-3 flex items-center gap-2">
+                  <FileText className="w-4 h-4" /> Pages auditees ({pages.length})
+                </h3>
+                {pages.length === 0 ? (
+                  <p className="text-dark-muted text-sm">Aucune page auditee</p>
+                ) : (
+                  <div className="space-y-2">
+                    {pages.map(page => (
+                      <div key={page.id} className="flex items-center justify-between p-2 bg-dark-bg rounded-lg">
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm text-white truncate">{page.title || page.slug}</div>
+                          <div className="text-xs text-dark-muted truncate">{page.slug}</div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-dark-muted">{page.word_count || 0} mots</span>
+                          {page.seo_score !== null && (
+                            <Badge variant={page.seo_score >= 80 ? 'success' : page.seo_score >= 50 ? 'warning' : 'danger'} size="sm">
+                              {page.seo_score}
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-between p-4 border-t border-dark-border bg-dark-bg/50">
+          <div className="text-xs text-dark-muted">
+            Derniere sync: {site.lastSync ? new Date(site.lastSync).toLocaleDateString('fr-FR') : 'Jamais'}
+          </div>
+          <div className="flex gap-2">
+            <a href={`https://${site.domain}`} target="_blank" rel="noopener noreferrer">
+              <Button variant="secondary" size="sm">
+                <ExternalLink className="w-4 h-4 mr-1" /> Visiter
+              </Button>
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 const entityColors = {
   'SRAT': 'primary',
@@ -21,6 +212,7 @@ export default function Sites({ onNavigate }) {
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterEntity, setFilterEntity] = useState('all');
+  const [selectedSite, setSelectedSite] = useState(null);
 
   const loadSites = async () => {
     setIsLoading(true);
@@ -265,7 +457,11 @@ export default function Sites({ onNavigate }) {
               </thead>
               <tbody>
                 {filteredSites.map((site) => (
-                  <tr key={site.id || site.alias} className="border-b border-dark-border/50 hover:bg-dark-border/30">
+                  <tr
+                    key={site.id || site.alias}
+                    className="border-b border-dark-border/50 hover:bg-dark-border/30 cursor-pointer"
+                    onClick={() => setSelectedSite(site)}
+                  >
                     <td className="py-4 px-4">
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 bg-primary/20 rounded-lg flex items-center justify-center text-primary font-bold">
@@ -318,6 +514,11 @@ export default function Sites({ onNavigate }) {
           </div>
         )}
       </Card>
+
+      {/* Site Detail Panel */}
+      {selectedSite && (
+        <SiteDetailPanel site={selectedSite} onClose={() => setSelectedSite(null)} />
+      )}
     </div>
   );
 }
