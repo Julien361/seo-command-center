@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import Sidebar from './components/layout/Sidebar';
 import Header from './components/layout/Header';
-import { Dashboard, Sites, Keywords, Workflows, QuickWins, Articles, AddSite, Settings, Cocons, Concurrents, Backlinks, AuditContenu, Idees, Calendrier, SchemaMarkup, LiensInternes, Positions, Performance, Alertes, Ameliorations, Revenus, SeoLocal, SeoTechnique, Credentials } from './views';
+import { Dashboard, Sites, Keywords, Workflows, QuickWins, Articles, AddSite, Settings, Cocons, Concurrents, Backlinks, AuditContenu, Idees, Calendrier, SchemaMarkup, LiensInternes, Briefs, ImagesSeo, Positions, Performance, Alertes, Ameliorations, Revenus, SeoLocal, SeoTechnique, Credentials } from './views';
 import PlaceholderView from './views/PlaceholderView';
 import { sitesApi } from './lib/supabase';
 
@@ -150,7 +150,7 @@ function App() {
       case 'idees':
         return <Idees />;
       case 'briefs':
-        return <PlaceholderView title="Briefs SEO" description="Creez des briefs de contenu optimises pour la Position 0." icon={FileText} />;
+        return <Briefs />;
       case 'pages':
         return <PlaceholderView title="Pages" description="Gerez vos pages piliers et satellites." icon={File} />;
       case 'articles':
@@ -160,7 +160,7 @@ function App() {
       case 'schema-markup':
         return <SchemaMarkup />;
       case 'images-seo':
-        return <PlaceholderView title="Images SEO" description="Optimisez vos images : alt text, compression, lazy loading." icon={Image} />;
+        return <ImagesSeo />;
       case 'calendrier':
         return <Calendrier />;
       case 'publication':

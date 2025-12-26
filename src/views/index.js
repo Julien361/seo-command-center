@@ -18,6 +18,8 @@ export { default as Idees } from './creation/Idees';
 export { default as Calendrier } from './creation/Calendrier';
 export { default as SchemaMarkup } from './creation/SchemaMarkup';
 export { default as LiensInternes } from './creation/LiensInternes';
+export { default as Briefs } from './creation/Briefs';
+export { default as ImagesSeo } from './creation/ImagesSeo';
 
 // Suivi views
 export { default as Positions } from './suivi/Positions';
