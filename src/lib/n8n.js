@@ -5,76 +5,257 @@
 
 const N8N_BASE_URL = 'https://julien1sikoutris.app.n8n.cloud';
 
-// IDs des workflows principaux
+// Configuration détaillée des workflows
 export const WORKFLOWS = {
-  // Orchestrateurs
-  WF0_CASCADE: 'by6OEOU5xK4BWx9g',           // WF0 - SEO Cascade Starter v4
-  WF0_ORCH: 'mS91z9LM22By2ulY',              // WF0-ORCH - SEO Cascade Starter (Orchestrator)
+  // === Orchestrateurs ===
+  WF0_CASCADE: {
+    id: 'by6OEOU5xK4BWx9g',
+    name: 'WF0 - SEO Cascade Starter v4',
+    webhook: 'wf0',
+    description: 'Lance une analyse SEO complète (DataForSEO + Perplexity + Firecrawl)',
+    category: 'orchestration',
+    isPaid: true,
+    estimatedCost: 0.15,
+  },
+  WF0_ORCH: {
+    id: 'mS91z9LM22By2ulY',
+    name: 'WF0-ORCH - SEO Cascade Starter (Orchestrator)',
+    webhook: 'wf0-orch',
+    description: 'Orchestrateur principal de la cascade SEO',
+    category: 'orchestration',
+    isPaid: true,
+    estimatedCost: 0.15,
+  },
 
-  // Data Collection
-  WF1_DATAFORSEO: '6XKZBK8855hj6Urr',        // SEO Keyword & SERP Analysis with DataForSEO
-  WF2_PERPLEXITY: 'deaMhuFxshQ23vIs',        // Perplexity SEO Market Research
-  WF3_FIRECRAWL: 'FBsfiSLPRygoxV0G',         // WF3: Firecrawl Competitor Deep Dive
+  // === Data Collection ===
+  WF1_DATAFORSEO: {
+    id: '6XKZBK8855hj6Urr',
+    name: 'SEO Keyword & SERP Analysis',
+    webhook: 'wf1',
+    description: 'Analyse keywords et SERP via DataForSEO',
+    category: 'dataCollection',
+    isPaid: true,
+    estimatedCost: 0.05,
+  },
+  WF2_PERPLEXITY: {
+    id: 'deaMhuFxshQ23vIs',
+    name: 'Perplexity SEO Market Research',
+    webhook: 'wf2',
+    description: 'Recherche marché via Perplexity AI',
+    category: 'dataCollection',
+    isPaid: true,
+    estimatedCost: 0.02,
+  },
+  WF3_FIRECRAWL: {
+    id: 'FBsfiSLPRygoxV0G',
+    name: 'Firecrawl Competitor Deep Dive',
+    webhook: 'wf3',
+    description: 'Analyse approfondie des concurrents',
+    category: 'dataCollection',
+    isPaid: true,
+    estimatedCost: 0.10,
+  },
+  PAA_EXTRACTION: {
+    id: 'OFx0E2vB3W2rapYe',
+    name: 'PAA Extraction',
+    webhook: 'paa',
+    description: 'Extraction des People Also Ask',
+    category: 'dataCollection',
+    isPaid: true,
+    estimatedCost: 0.02,
+  },
 
-  // Processing
-  WF4_SYNTHESIS: 'dvTj2fH1YPI2EC4z',         // SEO — WF4: Claude Synthesis
-  WF6_CLUSTERING: 'tNkJ8Guzd9jTArwd',        // WF6 - SEO Semantic Clustering v2
-  WF7_QUICKWINS: 'iDw93XnHfycbcLJb',         // Quick Wins Scoring v2.3
+  // === Processing ===
+  WF4_SYNTHESIS: {
+    id: 'dvTj2fH1YPI2EC4z',
+    name: 'Claude Synthesis',
+    webhook: 'wf4',
+    description: 'Synthèse des données avec Claude',
+    category: 'processing',
+    isPaid: true,
+    estimatedCost: 0.05,
+  },
+  WF6_CLUSTERING: {
+    id: 'tNkJ8Guzd9jTArwd',
+    name: 'SEO Semantic Clustering',
+    webhook: 'wf6',
+    description: 'Clustering sémantique des keywords',
+    category: 'processing',
+    isPaid: false,
+    estimatedCost: 0,
+  },
+  WF7_QUICKWINS: {
+    id: 'iDw93XnHfycbcLJb',
+    name: 'Quick Wins Scoring',
+    webhook: 'wf7',
+    description: 'Détection et scoring des opportunités quick win',
+    category: 'processing',
+    isPaid: false,
+    estimatedCost: 0,
+  },
+  COCON_BUILDER: {
+    id: 'DEJfmARt6NcjqE3S',
+    name: 'Cocon Sémantique Builder',
+    webhook: 'cocon-builder',
+    description: 'Construction de cocons sémantiques',
+    category: 'processing',
+    isPaid: true,
+    estimatedCost: 0.05,
+  },
 
-  // Monitoring
-  GSC_SYNC: 'T0jN2MPOw8sTqJ5X',              // WF-GSC-Sync
-  POSITION_MONITOR: 'nupR7R6kH9Vdctoq',      // WF-Position-Monitor
+  // === Monitoring ===
+  GSC_SYNC: {
+    id: 'T0jN2MPOw8sTqJ5X',
+    name: 'WF-GSC-Sync',
+    webhook: 'gsc-sync',
+    description: 'Synchronisation Google Search Console',
+    category: 'monitoring',
+    isPaid: false,
+    estimatedCost: 0,
+  },
+  POSITION_MONITOR: {
+    id: 'nupR7R6kH9Vdctoq',
+    name: 'Position Monitor',
+    webhook: 'position-monitor',
+    description: 'Surveillance des positions SERP',
+    category: 'monitoring',
+    isPaid: false,
+    estimatedCost: 0,
+  },
 
-  // Content
-  ARTICLE_PIPELINE: 'sheJloNkfUqk9u0q',      // WF-Article-Pipeline
-  CONTENT_BRIEF: 'dWy2YHSxGH0k4bOU',         // WF-ContentBrief
-  ARTICLE_GENERATOR: 'R9Iv0TV5dqxNQMCr',     // Article Generator v2
-  WP_PUBLISHER: 'SQfvpLH0jlvh4kd5',          // WF-WordPress-Publisher
+  // === Content Creation ===
+  CONTENT_BRIEF: {
+    id: 'dWy2YHSxGH0k4bOU',
+    name: 'Position 0 Brief Generator',
+    webhook: 'content-brief',
+    description: 'Génération de brief SEO optimisé Position 0',
+    category: 'content',
+    isPaid: true,
+    estimatedCost: 0.03,
+  },
+  ARTICLE_GENERATOR: {
+    id: 'R9Iv0TV5dqxNQMCr',
+    name: 'Article Generator v2',
+    webhook: 'article-generator',
+    description: 'Génération d\'articles SEO avec ACF',
+    category: 'content',
+    isPaid: true,
+    estimatedCost: 0.10,
+  },
+  PAGE_GENERATOR: {
+    id: 'WAarzRA41J1ucxVO',
+    name: 'Page Generator v2',
+    webhook: 'page-generator',
+    description: 'Génération de pages piliers/satellites',
+    category: 'content',
+    isPaid: true,
+    estimatedCost: 0.10,
+  },
+  ARTICLE_PIPELINE: {
+    id: 'sheJloNkfUqk9u0q',
+    name: 'Article Pipeline',
+    webhook: 'article-pipeline',
+    description: 'Pipeline complet: brief → article → publication',
+    category: 'content',
+    isPaid: true,
+    estimatedCost: 0.15,
+  },
+  ARTICLE_PLANNER: {
+    id: 'MZC8Sg5vRN8BFN51',
+    name: 'Article Planner',
+    webhook: 'article-planner',
+    description: 'Planification des articles',
+    category: 'content',
+    isPaid: false,
+    estimatedCost: 0,
+  },
 
-  // Utilities
-  SUPABASE_ORCH: 'NnlRGQiDMxIKp47H',         // WF-Supabase-Orchestrator
-  PAA_EXTRACTION: 'OFx0E2vB3W2rapYe',        // WF-PAA - People Also Ask
-  COCON_BUILDER: 'DEJfmARt6NcjqE3S',         // Cocon Sémantique Builder
+  // === Publishing ===
+  WP_PUBLISHER: {
+    id: 'SQfvpLH0jlvh4kd5',
+    name: 'WordPress Publisher',
+    webhook: 'wp-publish',
+    description: 'Publication sur WordPress',
+    category: 'publishing',
+    isPaid: false,
+    estimatedCost: 0,
+  },
+  AUTO_PUBLISHER: {
+    id: 'mvlueFPegkqd6Zzx',
+    name: 'Article Auto-Publisher',
+    webhook: 'auto-publish',
+    description: 'Publication automatique programmée',
+    category: 'publishing',
+    isPaid: false,
+    estimatedCost: 0,
+  },
+
+  // === Utilities ===
+  SUPABASE_ORCH: {
+    id: 'NnlRGQiDMxIKp47H',
+    name: 'Supabase Orchestrator',
+    webhook: 'supabase-orchestrator',
+    description: 'Opérations Supabase via workflow',
+    category: 'utilities',
+    isPaid: false,
+    estimatedCost: 0,
+  },
 };
 
 // Catégories de workflows pour l'UI
 export const WORKFLOW_CATEGORIES = {
   orchestration: {
     label: 'Orchestration',
-    workflows: ['WF0_CASCADE', 'WF0_ORCH'],
     color: 'primary',
+    description: 'Workflows principaux qui orchestrent les autres',
   },
   dataCollection: {
     label: 'Collecte de données',
-    workflows: ['WF1_DATAFORSEO', 'WF2_PERPLEXITY', 'WF3_FIRECRAWL'],
     color: 'info',
-    isPaid: true, // DataForSEO est payant
+    description: 'Récupération de données SEO externes',
   },
   processing: {
     label: 'Traitement',
-    workflows: ['WF4_SYNTHESIS', 'WF6_CLUSTERING', 'WF7_QUICKWINS'],
     color: 'warning',
+    description: 'Analyse et traitement des données',
   },
   monitoring: {
     label: 'Monitoring',
-    workflows: ['GSC_SYNC', 'POSITION_MONITOR'],
     color: 'success',
+    description: 'Surveillance et suivi des positions',
   },
   content: {
-    label: 'Contenu',
-    workflows: ['ARTICLE_PIPELINE', 'CONTENT_BRIEF', 'ARTICLE_GENERATOR', 'WP_PUBLISHER'],
+    label: 'Création de contenu',
     color: 'secondary',
+    description: 'Génération de briefs et articles',
+  },
+  publishing: {
+    label: 'Publication',
+    color: 'primary',
+    description: 'Publication sur WordPress',
+  },
+  utilities: {
+    label: 'Utilitaires',
+    color: 'default',
+    description: 'Outils et fonctions diverses',
   },
 };
 
-// Workflows qui coûtent de l'argent (DataForSEO)
-export const PAID_WORKFLOWS = ['WF0_CASCADE', 'WF0_ORCH', 'WF1_DATAFORSEO'];
+// Liste des workflows payants (pour les warnings)
+export const PAID_WORKFLOWS = Object.entries(WORKFLOWS)
+  .filter(([_, wf]) => wf.isPaid)
+  .map(([key]) => key);
+
+// Liste des workflows gratuits
+export const FREE_WORKFLOWS = Object.entries(WORKFLOWS)
+  .filter(([_, wf]) => !wf.isPaid)
+  .map(([key]) => key);
 
 /**
  * Déclenche un workflow via webhook
  * @param {string} webhookPath - Chemin du webhook (ex: 'wf0', 'gsc-sync')
  * @param {object} data - Données à envoyer
- * @param {boolean} isTest - Mode test (pas d'exécution réelle)
+ * @param {boolean} isTest - Mode test (webhook-test)
  */
 export async function triggerWebhook(webhookPath, data = {}, isTest = false) {
   const url = `${N8N_BASE_URL}/webhook${isTest ? '-test' : ''}/${webhookPath}`;
@@ -85,11 +266,16 @@ export async function triggerWebhook(webhookPath, data = {}, isTest = false) {
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(data),
+      body: JSON.stringify({
+        ...data,
+        source: 'seo-command-center',
+        timestamp: new Date().toISOString(),
+      }),
     });
 
     if (!response.ok) {
-      throw new Error(`Webhook error: ${response.status} ${response.statusText}`);
+      const errorText = await response.text();
+      throw new Error(`Webhook error: ${response.status} - ${errorText}`);
     }
 
     const result = await response.json();
@@ -101,117 +287,319 @@ export async function triggerWebhook(webhookPath, data = {}, isTest = false) {
 }
 
 /**
+ * Calcule le coût estimé d'un workflow
+ */
+export function getWorkflowCost(workflowKey) {
+  const workflow = WORKFLOWS[workflowKey];
+  return workflow?.estimatedCost || 0;
+}
+
+/**
  * API n8n pour le dashboard
  */
 export const n8nApi = {
+  // ===================
+  // Informations
+  // ===================
+
   /**
-   * Récupérer la liste des workflows
-   * Note: Utilise le MCP n8n-mcp en backend, ici on retourne les constantes
+   * Récupérer tous les workflows configurés
    */
-  getWorkflows: () => {
-    return Object.entries(WORKFLOWS).map(([key, id]) => ({
+  getWorkflows() {
+    return Object.entries(WORKFLOWS).map(([key, wf]) => ({
       key,
-      id,
-      name: key.replace(/_/g, ' '),
-      isPaid: PAID_WORKFLOWS.includes(key),
+      ...wf,
     }));
   },
 
   /**
-   * Lancer une analyse SEO complète (WF0)
-   * ATTENTION: Coûte de l'argent (DataForSEO)
-   * @param {string} seedKeyword - Keyword de départ
-   * @param {string} siteAlias - Alias du site (ex: 'srat')
+   * Récupérer les workflows par catégorie
    */
-  analyzeKeyword: async (seedKeyword, siteAlias) => {
+  getWorkflowsByCategory() {
+    const result = {};
+    Object.entries(WORKFLOW_CATEGORIES).forEach(([catKey, cat]) => {
+      result[catKey] = {
+        ...cat,
+        workflows: Object.entries(WORKFLOWS)
+          .filter(([_, wf]) => wf.category === catKey)
+          .map(([key, wf]) => ({ key, ...wf })),
+      };
+    });
+    return result;
+  },
+
+  /**
+   * Récupérer un workflow par clé
+   */
+  getWorkflow(key) {
+    return WORKFLOWS[key] ? { key, ...WORKFLOWS[key] } : null;
+  },
+
+  /**
+   * Vérifier si un workflow est payant
+   */
+  isPaidWorkflow(key) {
+    return PAID_WORKFLOWS.includes(key);
+  },
+
+  // ===================
+  // SEO Analysis (PAID)
+  // ===================
+
+  /**
+   * Analyse SEO complète (WF0 Cascade)
+   * ATTENTION: Coûte ~0.15€ (DataForSEO + Perplexity + Firecrawl)
+   */
+  async analyzeKeyword(seedKeyword, siteAlias, options = {}) {
     return triggerWebhook('wf0', {
       seed_keyword: seedKeyword,
       site_alias: siteAlias,
-      source: 'dashboard',
+      depth: options.depth || 'standard', // 'quick', 'standard', 'deep'
+      include_serp: options.includeSERP !== false,
+      include_paa: options.includePAA !== false,
+      include_competitors: options.includeCompetitors !== false,
     });
   },
 
   /**
-   * Synchroniser Google Search Console (gratuit)
-   * @param {string} siteId - UUID du site dans Supabase
+   * Analyse keyword + SERP uniquement (WF1 DataForSEO)
+   * ATTENTION: Coûte ~0.05€
    */
-  syncGSC: async (siteId = null) => {
+  async analyzeKeywordSerp(keyword, siteAlias, options = {}) {
+    return triggerWebhook('wf1', {
+      keyword,
+      site_alias: siteAlias,
+      location: options.location || 'France',
+      language: options.language || 'fr',
+    });
+  },
+
+  /**
+   * Recherche marché Perplexity (WF2)
+   * ATTENTION: Coûte ~0.02€
+   */
+  async marketResearch(keyword, siteAlias) {
+    return triggerWebhook('wf2', {
+      keyword,
+      site_alias: siteAlias,
+    });
+  },
+
+  /**
+   * Analyse concurrents (WF3 Firecrawl)
+   * ATTENTION: Coûte ~0.10€
+   */
+  async analyzeCompetitor(competitorUrl, siteAlias, keyword = null) {
+    return triggerWebhook('wf3', {
+      url: competitorUrl,
+      site_alias: siteAlias,
+      keyword,
+    });
+  },
+
+  /**
+   * Extraire People Also Ask
+   * ATTENTION: Coûte ~0.02€
+   */
+  async extractPAA(keyword, location = 'France') {
+    return triggerWebhook('paa', {
+      keyword,
+      location,
+    });
+  },
+
+  // ===================
+  // Processing (FREE/PAID)
+  // ===================
+
+  /**
+   * Recalculer les Quick Wins (WF7)
+   * GRATUIT
+   */
+  async recalculateQuickWins(siteId = null) {
+    return triggerWebhook('wf7', {
+      site_id: siteId,
+      action: 'recalculate',
+    });
+  },
+
+  /**
+   * Clustering sémantique (WF6)
+   * GRATUIT
+   */
+  async clusterKeywords(siteId, keywords = null) {
+    return triggerWebhook('wf6', {
+      site_id: siteId,
+      keywords,
+    });
+  },
+
+  /**
+   * Synthèse Claude (WF4)
+   * ATTENTION: Coûte ~0.05€
+   */
+  async synthesize(data, siteAlias) {
+    return triggerWebhook('wf4', {
+      data,
+      site_alias: siteAlias,
+    });
+  },
+
+  /**
+   * Construire un cocon sémantique
+   * ATTENTION: Coûte ~0.05€
+   */
+  async buildCocon(siteId, mainKeyword, satelliteKeywords = []) {
+    return triggerWebhook('cocon-builder', {
+      site_id: siteId,
+      main_keyword: mainKeyword,
+      satellites: satelliteKeywords,
+    });
+  },
+
+  // ===================
+  // Monitoring (FREE)
+  // ===================
+
+  /**
+   * Synchroniser Google Search Console
+   * GRATUIT
+   */
+  async syncGSC(siteId = null) {
     return triggerWebhook('gsc-sync', {
       site_id: siteId,
-      source: 'dashboard',
     });
   },
 
   /**
-   * Recalculer les Quick Wins (gratuit)
-   * @param {string} siteId - UUID du site
+   * Lancer le monitoring des positions
+   * GRATUIT
    */
-  recalculateQuickWins: async (siteId) => {
-    return triggerWebhook('quick-wins', {
-      site_id: siteId,
-      source: 'dashboard',
-    });
-  },
-
-  /**
-   * Lancer le monitoring des positions (gratuit)
-   */
-  monitorPositions: async () => {
+  async monitorPositions(siteId = null) {
     return triggerWebhook('position-monitor', {
-      source: 'dashboard',
+      site_id: siteId,
     });
   },
+
+  // ===================
+  // Content Creation (PAID)
+  // ===================
 
   /**
    * Générer un brief de contenu
-   * @param {string} keyword - Keyword cible
-   * @param {string} siteId - UUID du site
+   * ATTENTION: Coûte ~0.03€
    */
-  generateContentBrief: async (keyword, siteId) => {
+  async generateBrief(keyword, siteAlias, options = {}) {
     return triggerWebhook('content-brief', {
       keyword,
-      site_id: siteId,
-      source: 'dashboard',
+      site_alias: siteAlias,
+      target_snippet_type: options.snippetType || 'paragraph',
+      word_count: options.wordCount || 1500,
+      search_intent: options.intent || 'informational',
     });
   },
 
   /**
-   * Lancer le clustering sémantique (gratuit)
-   * @param {string} siteId - UUID du site
-   * @param {array} keywords - Liste de keywords à clusteriser
+   * Générer un article à partir d'un brief
+   * ATTENTION: Coûte ~0.10€
    */
-  clusterKeywords: async (siteId, keywords) => {
-    return triggerWebhook('clustering', {
-      site_id: siteId,
-      keywords,
-      source: 'dashboard',
+  async generateArticle(briefId, siteAlias, options = {}) {
+    return triggerWebhook('article-generator', {
+      brief_id: briefId,
+      site_alias: siteAlias,
+      humanize: options.humanize !== false,
+      include_faq: options.includeFAQ !== false,
     });
   },
 
   /**
-   * Extraire les People Also Ask
-   * @param {string} keyword - Keyword à analyser
+   * Générer une page (pilier ou satellite)
+   * ATTENTION: Coûte ~0.10€
    */
-  extractPAA: async (keyword) => {
-    return triggerWebhook('paa', {
+  async generatePage(keyword, siteAlias, pageType = 'pillar', options = {}) {
+    return triggerWebhook('page-generator', {
       keyword,
-      source: 'dashboard',
+      site_alias: siteAlias,
+      page_type: pageType, // 'pillar', 'satellite', 'landing'
+      cluster_id: options.clusterId,
+      word_count: pageType === 'pillar' ? 3000 : 1500,
     });
   },
 
   /**
-   * Opération Supabase via l'orchestrateur
-   * @param {string} operation - 'select', 'insert', 'upsert', 'delete'
-   * @param {string} table - Nom de la table
-   * @param {object} data - Données ou filtres
+   * Pipeline article complet (brief → article → publish)
+   * ATTENTION: Coûte ~0.15€
    */
-  supabaseOperation: async (operation, table, data) => {
+  async runArticlePipeline(keyword, siteAlias, options = {}) {
+    return triggerWebhook('article-pipeline', {
+      keyword,
+      site_alias: siteAlias,
+      auto_publish: options.autoPublish || false,
+      publish_status: options.publishStatus || 'draft',
+    });
+  },
+
+  // ===================
+  // Publishing (FREE)
+  // ===================
+
+  /**
+   * Publier sur WordPress
+   * GRATUIT
+   */
+  async publishToWordPress(articleId, siteAlias, options = {}) {
+    return triggerWebhook('wp-publish', {
+      article_id: articleId,
+      site_alias: siteAlias,
+      status: options.status || 'draft', // 'draft', 'publish', 'pending'
+      categories: options.categories || [],
+      tags: options.tags || [],
+    });
+  },
+
+  /**
+   * Planifier une publication automatique
+   * GRATUIT
+   */
+  async schedulePublication(articleId, siteAlias, scheduledDate) {
+    return triggerWebhook('auto-publish', {
+      article_id: articleId,
+      site_alias: siteAlias,
+      scheduled_date: scheduledDate,
+    });
+  },
+
+  // ===================
+  // Utilities
+  // ===================
+
+  /**
+   * Opération Supabase via workflow
+   */
+  async supabaseOperation(operation, table, data) {
     return triggerWebhook('supabase-orchestrator', {
-      operation,
+      operation, // 'select', 'insert', 'upsert', 'delete'
       table,
       data,
-      source: 'dashboard',
     });
+  },
+
+  /**
+   * Déclencher un workflow par clé
+   */
+  async trigger(workflowKey, data = {}) {
+    const workflow = WORKFLOWS[workflowKey];
+    if (!workflow) {
+      return { success: false, error: `Workflow inconnu: ${workflowKey}` };
+    }
+    return triggerWebhook(workflow.webhook, data);
+  },
+
+  /**
+   * Déclencher un webhook directement par son chemin
+   */
+  async triggerWebhook(webhookPath, data = {}) {
+    return triggerWebhook(webhookPath, data);
   },
 };
 
