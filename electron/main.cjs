@@ -17,6 +17,7 @@ autoUpdater.logger = {
 
 let mainWindow;
 let updateAvailable = null;
+let updateDownloaded = false;
 let ptyProcess = null;
 let isStarting = false;
 
@@ -287,6 +288,7 @@ autoUpdater.on('download-progress', (progress) => {
 
 autoUpdater.on('update-downloaded', (info) => {
   console.log('[AutoUpdater] Update downloaded:', info.version);
+  updateDownloaded = true;
   if (mainWindow) {
     mainWindow.webContents.send('updater-status', { status: 'downloaded', info });
   }
@@ -326,8 +328,16 @@ app.on('window-all-closed', () => {
   }
 });
 
-app.on('before-quit', () => {
+app.on('before-quit', (event) => {
   if (ptyProcess) {
     ptyProcess.kill();
+    ptyProcess = null;
+  }
+  // Force install update if downloaded
+  if (updateDownloaded) {
+    console.log('[AutoUpdater] Installing update before quit...');
+    event.preventDefault();
+    updateDownloaded = false; // Prevent infinite loop
+    autoUpdater.quitAndInstall(false, true);
   }
 });
