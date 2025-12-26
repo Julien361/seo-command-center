@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import Sidebar from './components/layout/Sidebar';
 import Header from './components/layout/Header';
-import { Dashboard, Sites, Keywords, Workflows, QuickWins, Articles, AddSite, Settings, Cocons, Concurrents, Backlinks, AuditContenu, Idees, Calendrier, Positions, Performance, Alertes, Revenus, SeoLocal, Credentials } from './views';
+import { Dashboard, Sites, Keywords, Workflows, QuickWins, Articles, AddSite, Settings, Cocons, Concurrents, Backlinks, AuditContenu, Idees, Calendrier, SchemaMarkup, Positions, Performance, Alertes, Revenus, SeoLocal, SeoTechnique, Credentials } from './views';
 import PlaceholderView from './views/PlaceholderView';
 import { sitesApi } from './lib/supabase';
 
@@ -158,7 +158,7 @@ function App() {
       case 'liens-internes':
         return <PlaceholderView title="Liens Internes" description="Optimisez votre maillage interne avec des suggestions automatiques." icon={Link2} />;
       case 'schema-markup':
-        return <PlaceholderView title="Schema Markup" description="Generez des schemas JSON-LD pour vos pages (FAQ, HowTo, etc.)." icon={Code} />;
+        return <SchemaMarkup />;
       case 'images-seo':
         return <PlaceholderView title="Images SEO" description="Optimisez vos images : alt text, compression, lazy loading." icon={Image} />;
       case 'calendrier':
@@ -174,7 +174,7 @@ function App() {
       case 'performance':
         return <Performance />;
       case 'seo-technique':
-        return <PlaceholderView title="SEO Technique" description="Core Web Vitals, erreurs 404, indexation." icon={SettingsIcon} />;
+        return <SeoTechnique />;
       case 'seo-local':
         return <SeoLocal />;
       case 'alertes':

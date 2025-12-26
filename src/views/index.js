@@ -16,6 +16,7 @@ export { default as AuditContenu } from './analyse/AuditContenu';
 // Creation views
 export { default as Idees } from './creation/Idees';
 export { default as Calendrier } from './creation/Calendrier';
+export { default as SchemaMarkup } from './creation/SchemaMarkup';
 
 // Suivi views
 export { default as Positions } from './suivi/Positions';
@@ -23,6 +24,7 @@ export { default as Performance } from './suivi/Performance';
 export { default as Alertes } from './suivi/Alertes';
 export { default as Revenus } from './suivi/Revenus';
 export { default as SeoLocal } from './suivi/SeoLocal';
+export { default as SeoTechnique } from './suivi/SeoTechnique';
 
 // Config views
 export { default as Credentials } from './config/Credentials';
