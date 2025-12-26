@@ -1,7 +1,8 @@
-const { app, BrowserWindow, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const path = require('path');
 const os = require('os');
+const http = require('http');
 
 // Configure auto-updater
 autoUpdater.autoDownload = false;
@@ -21,6 +22,7 @@ let updateDownloaded = false;
 let isInstallingUpdate = false;
 let ptyProcess = null;
 let isStarting = false;
+let oauthServer = null;
 
 // Determine if we're in development or production
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
@@ -231,6 +233,127 @@ ipcMain.handle('updater-get-status', async () => {
     currentVersion: app.getVersion(),
     isPackaged: app.isPackaged,
   };
+});
+
+// WordPress API proxy (bypasses CORS)
+ipcMain.handle('wp-fetch', async (event, { url, options = {} }) => {
+  console.log('[WP-Fetch] Request to:', url);
+  try {
+    // Node.js 18+ has native fetch
+    const response = await fetch(url, {
+      ...options,
+      headers: {
+        ...options.headers,
+        'User-Agent': 'SEO-Command-Center/1.0',
+      },
+    });
+
+    const data = await response.text();
+    const headers = {};
+    response.headers.forEach((value, key) => {
+      headers[key] = value;
+    });
+
+    return {
+      ok: response.ok,
+      status: response.status,
+      statusText: response.statusText,
+      headers,
+      data,
+    };
+  } catch (error) {
+    console.error('[WP-Fetch] Error:', error);
+    return { ok: false, error: error.message };
+  }
+});
+
+// Google OAuth handlers
+ipcMain.handle('google-auth-start', async (event, authUrl) => {
+  console.log('[OAuth] Starting Google auth flow');
+
+  return new Promise((resolve, reject) => {
+    // Start local server to capture OAuth callback
+    if (oauthServer) {
+      oauthServer.close();
+    }
+
+    oauthServer = http.createServer((req, res) => {
+      const url = new URL(req.url, 'http://localhost:8085');
+
+      if (url.pathname === '/oauth/callback') {
+        const code = url.searchParams.get('code');
+        const error = url.searchParams.get('error');
+
+        // Send response to browser
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+        if (code) {
+          res.end(`
+            <html>
+              <head><title>Connexion réussie</title></head>
+              <body style="font-family: sans-serif; text-align: center; padding: 50px; background: #0f172a; color: white;">
+                <h1 style="color: #22c55e;">Connexion Google réussie !</h1>
+                <p>Vous pouvez fermer cette fenêtre et retourner à l'application.</p>
+                <script>window.close();</script>
+              </body>
+            </html>
+          `);
+
+          // Send code to renderer
+          if (mainWindow) {
+            mainWindow.webContents.send('google-auth-code', { code });
+          }
+          resolve({ success: true, code });
+        } else {
+          res.end(`
+            <html>
+              <head><title>Erreur</title></head>
+              <body style="font-family: sans-serif; text-align: center; padding: 50px; background: #0f172a; color: white;">
+                <h1 style="color: #ef4444;">Erreur de connexion</h1>
+                <p>${error || 'Une erreur est survenue'}</p>
+              </body>
+            </html>
+          `);
+          reject({ success: false, error: error || 'Unknown error' });
+        }
+
+        // Close server after response
+        setTimeout(() => {
+          if (oauthServer) {
+            oauthServer.close();
+            oauthServer = null;
+          }
+        }, 1000);
+      }
+    });
+
+    oauthServer.listen(8085, () => {
+      console.log('[OAuth] Server listening on port 8085');
+      // Open browser with auth URL
+      shell.openExternal(authUrl);
+    });
+
+    oauthServer.on('error', (err) => {
+      console.error('[OAuth] Server error:', err);
+      reject({ success: false, error: err.message });
+    });
+
+    // Timeout after 5 minutes
+    setTimeout(() => {
+      if (oauthServer) {
+        oauthServer.close();
+        oauthServer = null;
+        reject({ success: false, error: 'Timeout' });
+      }
+    }, 300000);
+  });
+});
+
+ipcMain.handle('google-auth-stop', async () => {
+  if (oauthServer) {
+    oauthServer.close();
+    oauthServer = null;
+  }
+  return { success: true };
 });
 
 // App lifecycle

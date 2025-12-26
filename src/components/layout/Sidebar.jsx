@@ -238,7 +238,14 @@ export default function Sidebar({ activeView, onViewChange }) {
 
       {/* Settings */}
       <div className="p-3 border-t border-dark-border">
-        <button className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-dark-muted hover:bg-dark-border hover:text-white transition-all">
+        <button
+          onClick={() => onViewChange('settings')}
+          className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${
+            activeView === 'settings'
+              ? 'bg-primary text-white'
+              : 'text-dark-muted hover:bg-dark-border hover:text-white'
+          }`}
+        >
           <Settings className="w-4 h-4" />
           <span className="font-medium">Settings</span>
         </button>

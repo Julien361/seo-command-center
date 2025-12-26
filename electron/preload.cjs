@@ -61,3 +61,27 @@ contextBridge.exposeInMainWorld('updater', {
     ipcRenderer.removeAllListeners('updater-status');
   },
 });
+
+// Expose WordPress API proxy (bypasses CORS)
+contextBridge.exposeInMainWorld('wpApi', {
+  fetch: (url, options) => ipcRenderer.invoke('wp-fetch', { url, options }),
+});
+
+// Expose Google OAuth methods
+contextBridge.exposeInMainWorld('googleAuth', {
+  // Start OAuth flow - opens browser and starts local server
+  startAuth: (authUrl) => ipcRenderer.invoke('google-auth-start', authUrl),
+
+  // Stop OAuth server
+  stopAuth: () => ipcRenderer.invoke('google-auth-stop'),
+
+  // Listen for auth code from callback
+  onAuthCode: (callback) => {
+    ipcRenderer.on('google-auth-code', (event, data) => callback(data));
+  },
+
+  // Remove listeners
+  removeListeners: () => {
+    ipcRenderer.removeAllListeners('google-auth-code');
+  },
+});

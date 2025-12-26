@@ -99,17 +99,30 @@ export const sitesApi = {
 
     try {
       const authHeader = 'Basic ' + btoa(`${site.wp_username}:${site.wp_app_password}`);
+      const url = `${site.wp_api_url}posts?per_page=1&status=publish`;
 
-      // Récupérer le nombre total d'articles
-      const postsResponse = await fetch(`${site.wp_api_url}/posts?per_page=1&status=publish`, {
-        headers: { 'Authorization': authHeader }
-      });
+      let postsResponse;
+      let totalArticles = 0;
 
-      if (!postsResponse.ok) {
-        throw new Error(`HTTP ${postsResponse.status}`);
+      // Use Electron proxy if available (bypasses CORS)
+      if (window.wpApi?.fetch) {
+        const result = await window.wpApi.fetch(url, {
+          headers: { 'Authorization': authHeader }
+        });
+        if (!result.ok) {
+          throw new Error(result.error || `HTTP ${result.status}`);
+        }
+        totalArticles = parseInt(result.headers['x-wp-total']) || 0;
+      } else {
+        // Fallback to regular fetch (may be blocked by CORS)
+        postsResponse = await fetch(url, {
+          headers: { 'Authorization': authHeader }
+        });
+        if (!postsResponse.ok) {
+          throw new Error(`HTTP ${postsResponse.status}`);
+        }
+        totalArticles = parseInt(postsResponse.headers.get('X-WP-Total')) || 0;
       }
-
-      const totalArticles = parseInt(postsResponse.headers.get('X-WP-Total')) || 0;
 
       // Mettre à jour dans Supabase
       const { error } = await supabase
