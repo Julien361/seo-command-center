@@ -37,6 +37,11 @@
     "dmg": {
       "title": "SEO Command Center"
     },
+    "asar": true,
+    "asarUnpack": [
+      "node_modules/node-pty/**/*",
+      "electron/**/*"
+    ],
     "publish": {
       "provider": "github",
       "owner": "Julien361",

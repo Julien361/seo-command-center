@@ -25,7 +25,9 @@ function createWindow() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      preload: path.join(__dirname, 'preload.cjs'),
+      preload: app.isPackaged
+        ? path.join(process.resourcesPath, 'app.asar.unpacked', 'electron', 'preload.cjs')
+        : path.join(__dirname, 'preload.cjs'),
     },
   });
 
@@ -33,7 +35,8 @@ function createWindow() {
   if (isDev) {
     mainWindow.loadURL('http://localhost:5173');
   } else {
-    mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
+    const appPath = app.getAppPath();
+    mainWindow.loadFile(path.join(appPath, 'dist', 'index.html'));
   }
 
   mainWindow.on('closed', () => {
@@ -54,27 +57,46 @@ function startClaude() {
   isStarting = true;
 
   try {
-    // Dynamically require node-pty (native module)
-    const pty = require('node-pty');
+    // Load node-pty from unpacked location in production
+    let pty;
+    if (app.isPackaged) {
+      const ptyPath = path.join(process.resourcesPath, 'app.asar.unpacked', 'node_modules', 'node-pty');
+      pty = require(ptyPath);
+    } else {
+      pty = require('node-pty');
+    }
     console.log('[PTY] node-pty loaded successfully');
 
     // Use zsh with login shell to get proper PATH
     const shell = '/bin/zsh';
     const args = ['-l'];
 
-    console.log('[PTY] Spawning:', shell, args);
+    // Build PATH with common locations for homebrew and npm global binaries
+    const homeDir = os.homedir();
 
-    // Start in the SEO Command Center project directory
-    const projectDir = path.join(__dirname, '..');
-    console.log('[PTY] Starting in directory:', projectDir);
+    // Use seo-command-center project directory
+    const cwd = path.join(homeDir, 'seo-command-center');
+    console.log('[PTY] Spawning:', shell, args, 'in', cwd);
+    const extraPaths = [
+      '/opt/homebrew/bin',
+      '/opt/homebrew/sbin',
+      '/usr/local/bin',
+      '/usr/local/sbin',
+      `${homeDir}/.npm-global/bin`,
+      `${homeDir}/.nvm/versions/node/*/bin`,
+    ].join(':');
+
+    const enhancedPath = `${extraPaths}:${process.env.PATH || '/usr/bin:/bin'}`;
+    console.log('[PTY] Enhanced PATH includes homebrew locations');
 
     ptyProcess = pty.spawn(shell, args, {
       name: 'xterm-256color',
       cols: 120,
       rows: 30,
-      cwd: projectDir,
+      cwd: cwd,
       env: {
         ...process.env,
+        PATH: enhancedPath,
         TERM: 'xterm-256color',
         COLORTERM: 'truecolor',
         LANG: 'en_US.UTF-8',
@@ -102,8 +124,8 @@ function startClaude() {
     // Auto-launch claude after shell is ready
     setTimeout(() => {
       if (ptyProcess) {
-        console.log('[PTY] Sending claude command');
-        ptyProcess.write('claude\r');
+        console.log('[PTY] Sending claude command with permission mode');
+        ptyProcess.write('claude --permission-mode bypassPermissions\r');
       }
     }, 500);
 
