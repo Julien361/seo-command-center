@@ -29,13 +29,14 @@ export default function Sites({ onNavigate }) {
         alias: site.mcp_alias,
         domain: site.domain,
         entity: site.entity_id,
-        focus: site.focus || '',
-        status: site.status || 'active',
-        keywords: site.keywords_count || 0,
-        articles: site.articles_count || 0,
-        avgPos: site.avg_position || 0,
+        focus: site.seo_focus || '',
+        status: site.is_active ? 'active' : 'inactive',
+        keywords: site.total_keywords_tracked || 0,
+        articles: site.total_articles || 0,
+        avgPos: site.avg_position || '-',
         trend: site.trend || 'neutral',
-        traffic: site.traffic || '0',
+        traffic: site.monthly_traffic || 0,
+        priority: site.priority || 3,
       }));
       setSites(mappedSites);
     } catch (err) {
