@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { Globe, Save, ArrowLeft } from 'lucide-react';
+import { Globe, Save, ArrowLeft, CheckCircle, AlertCircle } from 'lucide-react';
 import { Card, Button } from '../components/common';
+import { sitesApi } from '../lib/supabase';
 
 const ENTITIES = [
   { value: 'SRAT', label: 'SRAT' },
@@ -20,24 +21,35 @@ export default function AddSite({ onNavigate }) {
     ga4PropertyId: '',
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [message, setMessage] = useState({ type: '', text: '' });
 
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
+    setMessage({ type: '', text: '' });
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
+    setMessage({ type: '', text: '' });
 
-    // TODO: Intégrer avec Supabase pour sauvegarder le site
-    console.log('Nouveau site:', formData);
+    try {
+      await sitesApi.create(formData);
+      setMessage({ type: 'success', text: 'Site ajouté avec succès !' });
 
-    setTimeout(() => {
+      setTimeout(() => {
+        if (onNavigate) onNavigate('sites');
+      }, 1500);
+    } catch (error) {
+      console.error('Erreur:', error);
+      setMessage({
+        type: 'error',
+        text: error.message || 'Erreur lors de l\'ajout du site'
+      });
+    } finally {
       setIsSubmitting(false);
-      alert('Site ajouté avec succès !');
-      if (onNavigate) onNavigate('sites');
-    }, 1000);
+    }
   };
 
   return (
@@ -161,6 +173,21 @@ export default function AddSite({ onNavigate }) {
               </div>
             </div>
           </div>
+
+          {message.text && (
+            <div className={`flex items-center gap-2 p-4 rounded-lg ${
+              message.type === 'success'
+                ? 'bg-success/10 text-success border border-success/30'
+                : 'bg-danger/10 text-danger border border-danger/30'
+            }`}>
+              {message.type === 'success' ? (
+                <CheckCircle className="w-5 h-5" />
+              ) : (
+                <AlertCircle className="w-5 h-5" />
+              )}
+              <span>{message.text}</span>
+            </div>
+          )}
 
           <div className="flex justify-end gap-3 pt-6 border-t border-dark-border">
             {onNavigate && (
