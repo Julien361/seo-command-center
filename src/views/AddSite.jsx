@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Globe, Save, ArrowLeft, CheckCircle, AlertCircle, Link, Database, BarChart3 } from 'lucide-react';
+import { Globe, Save, ArrowLeft, CheckCircle, AlertCircle, Link, Database, BarChart3, Zap, MapPin, Users, MessageSquare, Loader2 } from 'lucide-react';
 import { Card, Button } from '../components/common';
 import { sitesApi } from '../lib/supabase';
 
@@ -9,6 +9,22 @@ const ENTITIES = [
   { value: 'METIS', label: 'METIS' },
   { value: 'Client', label: 'Client' },
   { value: 'Cabinet', label: 'Cabinet' },
+];
+
+const CONTENT_TONES = [
+  { value: 'expert', label: 'Expert / Professionnel' },
+  { value: 'pedagogique', label: 'Pédagogique / Accessible' },
+  { value: 'journalistique', label: 'Journalistique / Informatif' },
+  { value: 'commercial', label: 'Commercial / Persuasif' },
+  { value: 'decontracte', label: 'Décontracté / Conversationnel' },
+];
+
+const PRIORITIES = [
+  { value: 1, label: '1 - Critique (site principal)' },
+  { value: 2, label: '2 - Haute priorité' },
+  { value: 3, label: '3 - Priorité normale' },
+  { value: 4, label: '4 - Basse priorité' },
+  { value: 5, label: '5 - Maintenance minimale' },
 ];
 
 export default function AddSite({ onNavigate }) {
@@ -22,7 +38,14 @@ export default function AddSite({ onNavigate }) {
     wpAppPassword: '',
     gscProperty: '',
     ga4PropertyId: '',
+    // Nouveaux champs
+    targetAudience: '',
+    contentTone: 'expert',
+    geographicFocus: '',
+    priority: 3,
   });
+  const [wpTestStatus, setWpTestStatus] = useState({ status: 'idle', message: '' }); // idle, testing, success, error
+  const [articlesCount, setArticlesCount] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
 
@@ -51,8 +74,55 @@ export default function AddSite({ onNavigate }) {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    setFormData(prev => ({ ...prev, [name]: name === 'priority' ? parseInt(value) : value }));
     setMessage({ type: '', text: '' });
+    // Reset WP test si on change les credentials
+    if (['wpApiUrl', 'wpUsername', 'wpAppPassword'].includes(name)) {
+      setWpTestStatus({ status: 'idle', message: '' });
+      setArticlesCount(null);
+    }
+  };
+
+  // Test de connexion WordPress
+  const testWordPressConnection = async () => {
+    if (!formData.wpApiUrl || !formData.wpUsername || !formData.wpAppPassword) {
+      setWpTestStatus({ status: 'error', message: 'Remplissez tous les champs WordPress' });
+      return;
+    }
+
+    setWpTestStatus({ status: 'testing', message: 'Test en cours...' });
+
+    try {
+      // Test authentification via /users/me
+      const authHeader = 'Basic ' + btoa(`${formData.wpUsername}:${formData.wpAppPassword}`);
+      const userResponse = await fetch(`${formData.wpApiUrl}/users/me`, {
+        headers: { 'Authorization': authHeader }
+      });
+
+      if (!userResponse.ok) {
+        throw new Error('Identifiants incorrects');
+      }
+
+      // Compter les articles
+      const postsResponse = await fetch(`${formData.wpApiUrl}/posts?per_page=1`, {
+        headers: { 'Authorization': authHeader }
+      });
+
+      if (postsResponse.ok) {
+        const totalPosts = postsResponse.headers.get('X-WP-Total');
+        setArticlesCount(parseInt(totalPosts) || 0);
+      }
+
+      setWpTestStatus({ status: 'success', message: 'Connexion réussie !' });
+    } catch (error) {
+      console.error('WP Test Error:', error);
+      setWpTestStatus({
+        status: 'error',
+        message: error.message === 'Failed to fetch'
+          ? 'URL inaccessible ou CORS bloqué'
+          : error.message
+      });
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -61,7 +131,17 @@ export default function AddSite({ onNavigate }) {
     setMessage({ type: '', text: '' });
 
     try {
-      await sitesApi.create(formData);
+      // Si le test WP n'a pas été fait mais les credentials sont remplis, tester d'abord
+      if (formData.wpApiUrl && formData.wpUsername && formData.wpAppPassword && wpTestStatus.status !== 'success') {
+        await testWordPressConnection();
+      }
+
+      // Créer le site avec le comptage d'articles
+      await sitesApi.create({
+        ...formData,
+        articlesCount: articlesCount || 0
+      });
+
       setMessage({ type: 'success', text: 'Site ajouté avec succès !' });
 
       setTimeout(() => {
@@ -169,6 +249,86 @@ export default function AddSite({ onNavigate }) {
             </div>
           </div>
 
+          {/* Section: Stratégie SEO & Contenu */}
+          <div className="pt-6 border-t border-dark-border">
+            <div className="flex items-center gap-4 pb-4">
+              <div className="w-10 h-10 bg-warning/20 rounded-lg flex items-center justify-center">
+                <MessageSquare className="w-5 h-5 text-warning" />
+              </div>
+              <div>
+                <h4 className="text-md font-semibold text-white">Stratégie SEO & Contenu</h4>
+                <p className="text-xs text-dark-muted">Personnalisez la génération de contenu</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-6">
+              <div>
+                <label className="block text-sm font-medium text-white mb-2">
+                  <Users className="w-4 h-4 inline mr-1" />
+                  Audience cible
+                </label>
+                <input
+                  type="text"
+                  name="targetAudience"
+                  value={formData.targetAudience}
+                  onChange={handleChange}
+                  placeholder="ex: Propriétaires 50+, Entrepreneurs, Étudiants..."
+                  className="w-full bg-dark-bg border border-dark-border rounded-lg px-4 py-3 text-white placeholder:text-dark-muted focus:outline-none focus:border-primary"
+                />
+                <p className="text-xs text-dark-muted mt-1">Utilisé pour adapter le ton et le vocabulaire</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-white mb-2">
+                  Ton éditorial
+                </label>
+                <select
+                  name="contentTone"
+                  value={formData.contentTone}
+                  onChange={handleChange}
+                  className="w-full bg-dark-bg border border-dark-border rounded-lg px-4 py-3 text-white focus:outline-none focus:border-primary"
+                >
+                  {CONTENT_TONES.map(tone => (
+                    <option key={tone.value} value={tone.value}>{tone.label}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-white mb-2">
+                  <MapPin className="w-4 h-4 inline mr-1" />
+                  Zone géographique
+                </label>
+                <input
+                  type="text"
+                  name="geographicFocus"
+                  value={formData.geographicFocus}
+                  onChange={handleChange}
+                  placeholder="ex: France, Île-de-France, Marseille (13)..."
+                  className="w-full bg-dark-bg border border-dark-border rounded-lg px-4 py-3 text-white placeholder:text-dark-muted focus:outline-none focus:border-primary"
+                />
+                <p className="text-xs text-dark-muted mt-1">Pour le SEO local et les expressions géolocalisées</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-white mb-2">
+                  <Zap className="w-4 h-4 inline mr-1" />
+                  Priorité du site
+                </label>
+                <select
+                  name="priority"
+                  value={formData.priority}
+                  onChange={handleChange}
+                  className="w-full bg-dark-bg border border-dark-border rounded-lg px-4 py-3 text-white focus:outline-none focus:border-primary"
+                >
+                  {PRIORITIES.map(p => (
+                    <option key={p.value} value={p.value}>{p.label}</option>
+                  ))}
+                </select>
+                <p className="text-xs text-dark-muted mt-1">Influence l'ordre de traitement des workflows</p>
+              </div>
+            </div>
+          </div>
+
           {/* Section: WordPress API */}
           <div className="pt-6 border-t border-dark-border">
             <div className="flex items-center gap-4 pb-4">
@@ -222,6 +382,39 @@ export default function AddSite({ onNavigate }) {
                   className="w-full bg-dark-bg border border-dark-border rounded-lg px-4 py-3 text-white placeholder:text-dark-muted focus:outline-none focus:border-primary text-sm"
                 />
               </div>
+            </div>
+
+            {/* Bouton test + statut */}
+            <div className="mt-4 flex items-center gap-4">
+              <Button
+                type="button"
+                variant="secondary"
+                icon={wpTestStatus.status === 'testing' ? Loader2 : Zap}
+                onClick={testWordPressConnection}
+                disabled={wpTestStatus.status === 'testing'}
+                className={wpTestStatus.status === 'testing' ? 'animate-pulse' : ''}
+              >
+                {wpTestStatus.status === 'testing' ? 'Test en cours...' : 'Tester la connexion'}
+              </Button>
+
+              {wpTestStatus.status === 'success' && (
+                <div className="flex items-center gap-2 text-success">
+                  <CheckCircle className="w-5 h-5" />
+                  <span>{wpTestStatus.message}</span>
+                  {articlesCount !== null && (
+                    <span className="text-dark-muted ml-2">
+                      ({articlesCount} article{articlesCount > 1 ? 's' : ''} existant{articlesCount > 1 ? 's' : ''})
+                    </span>
+                  )}
+                </div>
+              )}
+
+              {wpTestStatus.status === 'error' && (
+                <div className="flex items-center gap-2 text-danger">
+                  <AlertCircle className="w-5 h-5" />
+                  <span>{wpTestStatus.message}</span>
+                </div>
+              )}
             </div>
           </div>
 

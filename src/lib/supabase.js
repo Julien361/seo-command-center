@@ -32,13 +32,20 @@ export const sitesApi = {
         domain: site.domain,
         url: `https://${site.domain}`,
         entity_id: site.entity,
-        focus: site.focus,
+        seo_focus: site.focus || null,
         wp_api_url: site.wpApiUrl || null,
+        wp_endpoint: site.wpApiUrl || null, // Compatibilité legacy
         wp_username: site.wpUsername || null,
         wp_app_password: site.wpAppPassword || null,
         gsc_property: site.gscProperty || null,
         ga4_property_id: site.ga4PropertyId || null,
-        status: 'active',
+        // Nouveaux champs
+        target_audience: site.targetAudience || null,
+        content_tone: site.contentTone || 'expert',
+        geographic_focus: site.geographicFocus || null,
+        priority: site.priority || 3,
+        total_articles: site.articlesCount || 0,
+        is_active: true,
       }])
       .select()
       .single();
@@ -55,12 +62,17 @@ export const sitesApi = {
         domain: site.domain,
         url: `https://${site.domain}`,
         entity_id: site.entity,
-        focus: site.focus,
+        seo_focus: site.focus || null,
         wp_api_url: site.wpApiUrl || null,
+        wp_endpoint: site.wpApiUrl || null,
         wp_username: site.wpUsername || null,
         wp_app_password: site.wpAppPassword || null,
         gsc_property: site.gscProperty || null,
         ga4_property_id: site.ga4PropertyId || null,
+        target_audience: site.targetAudience || null,
+        content_tone: site.contentTone || 'expert',
+        geographic_focus: site.geographicFocus || null,
+        priority: site.priority || 3,
       })
       .eq('id', id)
       .select()
