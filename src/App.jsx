@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import Sidebar from './components/layout/Sidebar';
 import Header from './components/layout/Header';
-import { Dashboard, Sites, Keywords, Workflows, QuickWins, Articles, AddSite, Settings, Cocons, Concurrents, Backlinks, AuditContenu, Idees, Calendrier, SchemaMarkup, Positions, Performance, Alertes, Revenus, SeoLocal, SeoTechnique, Credentials } from './views';
+import { Dashboard, Sites, Keywords, Workflows, QuickWins, Articles, AddSite, Settings, Cocons, Concurrents, Backlinks, AuditContenu, Idees, Calendrier, SchemaMarkup, LiensInternes, Positions, Performance, Alertes, Ameliorations, Revenus, SeoLocal, SeoTechnique, Credentials } from './views';
 import PlaceholderView from './views/PlaceholderView';
 import { sitesApi } from './lib/supabase';
 
@@ -156,7 +156,7 @@ function App() {
       case 'articles':
         return <Articles />;
       case 'liens-internes':
-        return <PlaceholderView title="Liens Internes" description="Optimisez votre maillage interne avec des suggestions automatiques." icon={Link2} />;
+        return <LiensInternes />;
       case 'schema-markup':
         return <SchemaMarkup />;
       case 'images-seo':
@@ -168,7 +168,7 @@ function App() {
 
       // Suivi
       case 'ameliorations':
-        return <PlaceholderView title="Ameliorations" description="Suivez vos actions d'optimisation et leur impact sur les positions." icon={TrendingUp} />;
+        return <Ameliorations />;
       case 'positions':
         return <Positions />;
       case 'performance':

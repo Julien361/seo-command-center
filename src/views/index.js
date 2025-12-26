@@ -17,11 +17,13 @@ export { default as AuditContenu } from './analyse/AuditContenu';
 export { default as Idees } from './creation/Idees';
 export { default as Calendrier } from './creation/Calendrier';
 export { default as SchemaMarkup } from './creation/SchemaMarkup';
+export { default as LiensInternes } from './creation/LiensInternes';
 
 // Suivi views
 export { default as Positions } from './suivi/Positions';
 export { default as Performance } from './suivi/Performance';
 export { default as Alertes } from './suivi/Alertes';
+export { default as Ameliorations } from './suivi/Ameliorations';
 export { default as Revenus } from './suivi/Revenus';
 export { default as SeoLocal } from './suivi/SeoLocal';
 export { default as SeoTechnique } from './suivi/SeoTechnique';
