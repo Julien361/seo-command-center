@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import Sidebar from './components/layout/Sidebar';
 import Header from './components/layout/Header';
-import { Dashboard, Sites, Keywords, Workflows, QuickWins, Articles, AddSite, Settings, Cocons, Concurrents, Backlinks, AuditContenu, Idees, Positions, Credentials } from './views';
+import { Dashboard, Sites, Keywords, Workflows, QuickWins, Articles, AddSite, Settings, Cocons, Concurrents, Backlinks, AuditContenu, Idees, Calendrier, Positions, Performance, Alertes, Credentials } from './views';
 import PlaceholderView from './views/PlaceholderView';
 import { sitesApi } from './lib/supabase';
 
@@ -162,7 +162,7 @@ function App() {
       case 'images-seo':
         return <PlaceholderView title="Images SEO" description="Optimisez vos images : alt text, compression, lazy loading." icon={Image} />;
       case 'calendrier':
-        return <PlaceholderView title="Calendrier Editorial" description="Planifiez votre production de contenu." icon={Calendar} />;
+        return <Calendrier />;
       case 'publication':
         return <PlaceholderView title="Publication" description="Publiez directement sur vos sites WordPress." icon={Send} />;
 
@@ -172,13 +172,13 @@ function App() {
       case 'positions':
         return <Positions />;
       case 'performance':
-        return <PlaceholderView title="Performance" description="Trafic, CTR, impressions et metriques cles." icon={BarChart3} />;
+        return <Performance />;
       case 'seo-technique':
         return <PlaceholderView title="SEO Technique" description="Core Web Vitals, erreurs 404, indexation." icon={SettingsIcon} />;
       case 'seo-local':
         return <PlaceholderView title="SEO Local" description="Google Business Profile, avis, citations NAP." icon={MapPin} />;
       case 'alertes':
-        return <PlaceholderView title="Alertes" description="Soyez notifie des baisses de position et erreurs." icon={Bell} />;
+        return <Alertes />;
       case 'revenus':
         return <PlaceholderView title="Revenus" description="Suivez vos leads, ventes et revenus par site." icon={DollarSign} />;
 
