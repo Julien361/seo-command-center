@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import Sidebar from './components/layout/Sidebar';
 import Header from './components/layout/Header';
-import { Dashboard, Sites, Keywords, Workflows, QuickWins, Articles, AddSite, Settings, Cocons, Concurrents, Backlinks } from './views';
+import { Dashboard, Sites, Keywords, Workflows, QuickWins, Articles, AddSite, Settings, Cocons, Concurrents, Backlinks, AuditContenu, Idees, Positions, Credentials } from './views';
 import PlaceholderView from './views/PlaceholderView';
 import { sitesApi } from './lib/supabase';
 
@@ -142,13 +142,13 @@ function App() {
       case 'backlinks':
         return <Backlinks />;
       case 'audit-contenu':
-        return <PlaceholderView title="Audit Contenu" description="Analysez la qualite SEO de vos pages existantes." icon={FileSearch} />;
+        return <AuditContenu />;
       case 'cocons':
         return <Cocons />;
 
       // Creation
       case 'idees':
-        return <PlaceholderView title="Generateur d'Idees" description="Generez des idees de contenu a partir de PAA, trends et concurrents." icon={Lightbulb} />;
+        return <Idees />;
       case 'briefs':
         return <PlaceholderView title="Briefs SEO" description="Creez des briefs de contenu optimises pour la Position 0." icon={FileText} />;
       case 'pages':
@@ -170,7 +170,7 @@ function App() {
       case 'ameliorations':
         return <PlaceholderView title="Ameliorations" description="Suivez vos actions d'optimisation et leur impact sur les positions." icon={TrendingUp} />;
       case 'positions':
-        return <PlaceholderView title="Suivi des Positions" description="Evolution de vos positions dans les SERPs." icon={LineChart} />;
+        return <Positions />;
       case 'performance':
         return <PlaceholderView title="Performance" description="Trafic, CTR, impressions et metriques cles." icon={BarChart3} />;
       case 'seo-technique':
@@ -186,7 +186,7 @@ function App() {
       case 'workflows':
         return <Workflows />;
       case 'credentials':
-        return <PlaceholderView title="Credentials & APIs" description="Configurez vos acces API (WordPress, Google, DataForSEO, etc.)." icon={Key} />;
+        return <Credentials />;
 
       default:
         return <Dashboard />;

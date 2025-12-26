@@ -11,3 +11,13 @@ export { default as Settings } from './Settings';
 export { default as Cocons } from './analyse/Cocons';
 export { default as Concurrents } from './analyse/Concurrents';
 export { default as Backlinks } from './analyse/Backlinks';
+export { default as AuditContenu } from './analyse/AuditContenu';
+
+// Creation views
+export { default as Idees } from './creation/Idees';
+
+// Suivi views
+export { default as Positions } from './suivi/Positions';
+
+// Config views
+export { default as Credentials } from './config/Credentials';
