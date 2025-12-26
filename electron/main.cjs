@@ -18,6 +18,7 @@ autoUpdater.logger = {
 let mainWindow;
 let updateAvailable = null;
 let updateDownloaded = false;
+let isInstallingUpdate = false;
 let ptyProcess = null;
 let isStarting = false;
 
@@ -210,15 +211,17 @@ ipcMain.handle('updater-download', async () => {
 
 ipcMain.handle('updater-install', async () => {
   console.log('[AutoUpdater] Install requested');
+  isInstallingUpdate = true;
   // Kill PTY process before quitting
   if (ptyProcess) {
     ptyProcess.kill();
     ptyProcess = null;
   }
-  // Force quit and install: isSilent=false, isForceRunAfter=true
-  setImmediate(() => {
+  // Small delay to ensure PTY is fully closed
+  setTimeout(() => {
+    console.log('[AutoUpdater] Calling quitAndInstall...');
     autoUpdater.quitAndInstall(false, true);
-  });
+  }, 500);
   return { success: true };
 });
 
@@ -300,15 +303,18 @@ autoUpdater.on('update-downloaded', (info) => {
     buttons: ['Redémarrer maintenant', 'Plus tard'],
   }).then((result) => {
     if (result.response === 0) {
+      console.log('[AutoUpdater] User chose to restart now');
+      isInstallingUpdate = true;
       // Kill PTY process before quitting
       if (ptyProcess) {
         ptyProcess.kill();
         ptyProcess = null;
       }
-      // Force quit and install: isSilent=false, isForceRunAfter=true
-      setImmediate(() => {
+      // Small delay to ensure everything is cleaned up
+      setTimeout(() => {
+        console.log('[AutoUpdater] Calling quitAndInstall...');
         autoUpdater.quitAndInstall(false, true);
-      });
+      }, 500);
     }
   });
 });
@@ -330,15 +336,24 @@ app.on('window-all-closed', () => {
 });
 
 app.on('before-quit', (event) => {
+  console.log('[App] before-quit event, isInstallingUpdate:', isInstallingUpdate);
   if (ptyProcess) {
     ptyProcess.kill();
     ptyProcess = null;
   }
-  // Force install update if downloaded
+  // Don't interfere if we're already installing an update
+  if (isInstallingUpdate) {
+    console.log('[App] Update installation in progress, allowing quit');
+    return;
+  }
+  // Force install update if downloaded but not yet installing
   if (updateDownloaded) {
     console.log('[AutoUpdater] Installing update before quit...');
     event.preventDefault();
+    isInstallingUpdate = true;
     updateDownloaded = false; // Prevent infinite loop
-    autoUpdater.quitAndInstall(false, true);
+    setTimeout(() => {
+      autoUpdater.quitAndInstall(false, true);
+    }, 100);
   }
 });

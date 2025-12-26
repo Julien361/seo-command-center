@@ -79,6 +79,8 @@ export default function ClaudePanel({ onClose }) {
     // Handle terminal output
     window.terminal.onData((data) => {
       xterm.write(data);
+      // Force scroll to bottom when new data arrives
+      xterm.scrollToBottom();
     });
 
     // Handle terminal exit
