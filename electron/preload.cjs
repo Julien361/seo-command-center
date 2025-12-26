@@ -1,27 +1,33 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
-// Expose protected methods to the renderer process
-contextBridge.exposeInMainWorld('claude', {
-  // Send a message to Claude Code
-  send: (message) => ipcRenderer.invoke('claude-send', message),
+// Expose terminal methods to the renderer process
+contextBridge.exposeInMainWorld('terminal', {
+  // Start Claude Code terminal
+  start: () => ipcRenderer.invoke('terminal-start'),
 
-  // Start Claude Code process
-  start: () => ipcRenderer.invoke('claude-start'),
+  // Write data to terminal
+  write: (data) => ipcRenderer.invoke('terminal-write', data),
 
-  // Stop Claude Code process
-  stop: () => ipcRenderer.invoke('claude-stop'),
+  // Resize terminal
+  resize: (cols, rows) => ipcRenderer.invoke('terminal-resize', { cols, rows }),
 
-  // Get Claude Code status
-  status: () => ipcRenderer.invoke('claude-status'),
+  // Stop terminal
+  stop: () => ipcRenderer.invoke('terminal-stop'),
 
-  // Listen for Claude output
-  onOutput: (callback) => {
-    ipcRenderer.on('claude-output', (event, data) => callback(data));
+  // Listen for terminal data
+  onData: (callback) => {
+    ipcRenderer.on('terminal-data', (event, data) => callback(data));
   },
 
-  // Remove output listener
-  removeOutputListener: () => {
-    ipcRenderer.removeAllListeners('claude-output');
+  // Listen for terminal exit
+  onExit: (callback) => {
+    ipcRenderer.on('terminal-exit', (event, code) => callback(code));
+  },
+
+  // Remove listeners
+  removeListeners: () => {
+    ipcRenderer.removeAllListeners('terminal-data');
+    ipcRenderer.removeAllListeners('terminal-exit');
   },
 });
 

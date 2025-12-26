@@ -1,9 +1,15 @@
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog } = require('electron');
+const { autoUpdater } = require('electron-updater');
 const path = require('path');
-const { spawn } = require('child_process');
+const os = require('os');
+
+// Configure auto-updater
+autoUpdater.autoDownload = false;
+autoUpdater.autoInstallOnAppQuit = true;
 
 let mainWindow;
-let claudeProcess = null;
+let ptyProcess = null;
+let isStarting = false;
 
 // Determine if we're in development or production
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
@@ -26,100 +32,130 @@ function createWindow() {
   // Load the app
   if (isDev) {
     mainWindow.loadURL('http://localhost:5173');
-    mainWindow.webContents.openDevTools();
   } else {
     mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
   }
 
   mainWindow.on('closed', () => {
     mainWindow = null;
-    if (claudeProcess) {
-      claudeProcess.kill();
+    if (ptyProcess) {
+      ptyProcess.kill();
     }
   });
 }
 
-// Claude Code process management
-function startClaudeProcess() {
-  if (claudeProcess) {
+// Start Claude Code in a PTY
+function startClaude() {
+  if (ptyProcess || isStarting) {
+    console.log('[PTY] Already running or starting');
     return;
   }
 
-  // Find claude command
-  const claudePath = process.platform === 'darwin'
-    ? '/usr/local/bin/claude'
-    : 'claude';
+  isStarting = true;
 
-  claudeProcess = spawn(claudePath, ['--dangerously-skip-permissions'], {
-    cwd: process.env.HOME,
-    env: { ...process.env, FORCE_COLOR: '0' },
-    shell: true,
-  });
+  try {
+    // Dynamically require node-pty (native module)
+    const pty = require('node-pty');
+    console.log('[PTY] node-pty loaded successfully');
 
-  claudeProcess.stdout.on('data', (data) => {
-    const output = data.toString();
+    // Use zsh with login shell to get proper PATH
+    const shell = '/bin/zsh';
+    const args = ['-l'];
+
+    console.log('[PTY] Spawning:', shell, args);
+
+    // Start in the SEO Command Center project directory
+    const projectDir = path.join(__dirname, '..');
+    console.log('[PTY] Starting in directory:', projectDir);
+
+    ptyProcess = pty.spawn(shell, args, {
+      name: 'xterm-256color',
+      cols: 120,
+      rows: 30,
+      cwd: projectDir,
+      env: {
+        ...process.env,
+        TERM: 'xterm-256color',
+        COLORTERM: 'truecolor',
+        LANG: 'en_US.UTF-8',
+      },
+    });
+
+    console.log('[PTY] Process spawned with PID:', ptyProcess.pid);
+    isStarting = false;
+
+    ptyProcess.onData((data) => {
+      if (mainWindow) {
+        mainWindow.webContents.send('terminal-data', data);
+      }
+    });
+
+    ptyProcess.onExit(({ exitCode }) => {
+      console.log('[PTY] Process exited with code:', exitCode);
+      if (mainWindow) {
+        mainWindow.webContents.send('terminal-exit', exitCode);
+      }
+      ptyProcess = null;
+      isStarting = false;
+    });
+
+    // Auto-launch claude after shell is ready
+    setTimeout(() => {
+      if (ptyProcess) {
+        console.log('[PTY] Sending claude command');
+        ptyProcess.write('claude\r');
+      }
+    }, 500);
+
+  } catch (error) {
+    console.error('[PTY] Error starting:', error);
+    isStarting = false;
     if (mainWindow) {
-      mainWindow.webContents.send('claude-output', { type: 'stdout', data: output });
+      mainWindow.webContents.send('terminal-data', `\x1b[31mError: ${error.message}\x1b[0m\r\n`);
     }
-  });
-
-  claudeProcess.stderr.on('data', (data) => {
-    const output = data.toString();
-    if (mainWindow) {
-      mainWindow.webContents.send('claude-output', { type: 'stderr', data: output });
-    }
-  });
-
-  claudeProcess.on('close', (code) => {
-    if (mainWindow) {
-      mainWindow.webContents.send('claude-output', { type: 'exit', code });
-    }
-    claudeProcess = null;
-  });
-
-  claudeProcess.on('error', (error) => {
-    if (mainWindow) {
-      mainWindow.webContents.send('claude-output', { type: 'error', data: error.message });
-    }
-  });
+  }
 }
 
 // IPC Handlers
-ipcMain.handle('claude-send', async (event, message) => {
-  if (!claudeProcess) {
-    startClaudeProcess();
-    // Wait for process to start
-    await new Promise(resolve => setTimeout(resolve, 1000));
-  }
+ipcMain.handle('terminal-start', async () => {
+  startClaude();
+  return { success: true };
+});
 
-  if (claudeProcess && claudeProcess.stdin) {
-    claudeProcess.stdin.write(message + '\n');
+ipcMain.handle('terminal-write', async (event, data) => {
+  console.log('[PTY] Write request, ptyProcess exists:', !!ptyProcess, 'data:', JSON.stringify(data));
+  if (ptyProcess) {
+    ptyProcess.write(data);
     return { success: true };
   }
-
-  return { success: false, error: 'Claude process not running' };
+  console.log('[PTY] No ptyProcess to write to!');
+  return { success: false };
 });
 
-ipcMain.handle('claude-start', async () => {
-  startClaudeProcess();
-  return { success: true };
+ipcMain.handle('terminal-resize', async (event, { cols, rows }) => {
+  if (ptyProcess) {
+    ptyProcess.resize(cols, rows);
+    return { success: true };
+  }
+  return { success: false };
 });
 
-ipcMain.handle('claude-stop', async () => {
-  if (claudeProcess) {
-    claudeProcess.kill();
-    claudeProcess = null;
+ipcMain.handle('terminal-stop', async () => {
+  if (ptyProcess) {
+    ptyProcess.kill();
+    ptyProcess = null;
   }
   return { success: true };
-});
-
-ipcMain.handle('claude-status', async () => {
-  return { running: claudeProcess !== null };
 });
 
 // App lifecycle
 app.whenReady().then(() => {
   createWindow();
+
+  // Check for updates (only in production)
+  if (app.isPackaged) {
+    autoUpdater.checkForUpdates();
+  }
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -128,9 +164,36 @@ app.whenReady().then(() => {
   });
 });
 
+// Auto-updater events
+autoUpdater.on('update-available', (info) => {
+  dialog.showMessageBox(mainWindow, {
+    type: 'info',
+    title: 'Mise à jour disponible',
+    message: `Version ${info.version} disponible. Télécharger maintenant ?`,
+    buttons: ['Oui', 'Plus tard'],
+  }).then((result) => {
+    if (result.response === 0) {
+      autoUpdater.downloadUpdate();
+    }
+  });
+});
+
+autoUpdater.on('update-downloaded', () => {
+  dialog.showMessageBox(mainWindow, {
+    type: 'info',
+    title: 'Mise à jour prête',
+    message: 'La mise à jour sera installée au redémarrage.',
+    buttons: ['Redémarrer maintenant', 'Plus tard'],
+  }).then((result) => {
+    if (result.response === 0) {
+      autoUpdater.quitAndInstall();
+    }
+  });
+});
+
 app.on('window-all-closed', () => {
-  if (claudeProcess) {
-    claudeProcess.kill();
+  if (ptyProcess) {
+    ptyProcess.kill();
   }
   if (process.platform !== 'darwin') {
     app.quit();
@@ -138,7 +201,7 @@ app.on('window-all-closed', () => {
 });
 
 app.on('before-quit', () => {
-  if (claudeProcess) {
-    claudeProcess.kill();
+  if (ptyProcess) {
+    ptyProcess.kill();
   }
 });

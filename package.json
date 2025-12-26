@@ -13,7 +13,8 @@
     "preview": "vite preview",
     "electron:dev": "concurrently \"npm run dev\" \"wait-on http://localhost:5173 && electron .\"",
     "electron:build": "npm run build && electron-builder",
-    "electron:build:mac": "npm run build && electron-builder --mac"
+    "electron:build:mac": "npm run build && electron-builder --mac",
+    "release": "npm run build && electron-builder --mac --publish always"
   },
   "build": {
     "appId": "com.julio.seo-command-center",
@@ -35,16 +36,25 @@
     },
     "dmg": {
       "title": "SEO Command Center"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "Julien361",
+      "repo": "seo-command-center"
     }
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.18",
     "@tanstack/react-query": "^5.90.12",
     "axios": "^1.13.2",
+    "electron-updater": "^6.6.2",
     "lucide-react": "^0.562.0",
+    "node-pty": "^1.1.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "recharts": "^3.6.0"
+    "recharts": "^3.6.0",
+    "xterm": "^5.3.0",
+    "xterm-addon-fit": "^0.8.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
@@ -55,6 +65,7 @@
     "concurrently": "^9.2.1",
     "electron": "^39.2.7",
     "electron-builder": "^26.0.12",
+    "electron-rebuild": "^3.2.9",
     "eslint": "^9.39.1",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.24",
