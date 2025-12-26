@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import Sidebar from './components/layout/Sidebar';
 import Header from './components/layout/Header';
-import { Dashboard, Sites, Keywords, Workflows, QuickWins, Articles, AddSite, Settings } from './views';
+import { Dashboard, Sites, Keywords, Workflows, QuickWins, Articles, AddSite, Settings, Cocons, Concurrents, Backlinks } from './views';
 import PlaceholderView from './views/PlaceholderView';
 import { sitesApi } from './lib/supabase';
 
@@ -138,13 +138,13 @@ function App() {
       case 'quickwins':
         return <QuickWins />;
       case 'concurrents':
-        return <PlaceholderView title="Analyse Concurrents" description="Analysez vos concurrents, leurs backlinks, leurs keywords et identifiez les content gaps." icon={Target} />;
+        return <Concurrents />;
       case 'backlinks':
-        return <PlaceholderView title="Backlinks" description="Suivez votre profil de liens, les nouveaux backlinks et les opportunites." icon={Link} />;
+        return <Backlinks />;
       case 'audit-contenu':
         return <PlaceholderView title="Audit Contenu" description="Analysez la qualite SEO de vos pages existantes." icon={FileSearch} />;
       case 'cocons':
-        return <PlaceholderView title="Cocons Semantiques" description="Visualisez et gerez vos cocons semantiques avec une mind map interactive." icon={GitBranch} />;
+        return <Cocons />;
 
       // Creation
       case 'idees':
