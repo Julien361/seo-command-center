@@ -4,6 +4,7 @@ import Card from '../../components/common/Card';
 import Badge from '../../components/common/Badge';
 import Button from '../../components/common/Button';
 import { sitesApi, supabase } from '../../lib/supabase';
+import { n8nApi } from '../../lib/n8n';
 
 // Core Web Vitals thresholds
 const cwvThresholds = {
@@ -235,6 +236,7 @@ export default function SeoTechnique() {
   const [isLoading, setIsLoading] = useState(true);
   const [selectedSiteId, setSelectedSiteId] = useState('all');
   const [issueTypeFilter, setIssueTypeFilter] = useState('all');
+  const [isAuditing, setIsAuditing] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -294,9 +296,34 @@ export default function SeoTechnique() {
     }
   };
 
-  const handleRunAudit = () => {
-    // TODO: Trigger n8n workflow for technical audit
-    alert('Audit technique en cours via n8n...');
+  const handleRunAudit = async () => {
+    const site = selectedSiteId !== 'all' ? sites.find(s => s.id === selectedSiteId) : null;
+
+    const targetSites = site ? [site] : sites;
+    const siteNames = targetSites.map(s => s.domain).join(', ');
+
+    if (!confirm(`Lancer un audit technique pour ${site ? site.domain : 'tous les sites'} ?\n\nCela analysera les Core Web Vitals, erreurs 404/500, et problèmes d'indexation.`)) {
+      return;
+    }
+
+    setIsAuditing(true);
+    try {
+      const result = await n8nApi.triggerWebhook('technical-audit', {
+        site_alias: site?.mcp_alias || 'all',
+        site_ids: targetSites.map(s => s.id)
+      });
+
+      if (result.success) {
+        alert(`Audit technique lancé pour ${siteNames} ! Les résultats seront disponibles dans quelques minutes.`);
+        setTimeout(loadData, 10000);
+      } else {
+        alert('Erreur: ' + result.error);
+      }
+    } catch (err) {
+      alert('Erreur: ' + err.message);
+    } finally {
+      setIsAuditing(false);
+    }
   };
 
   // Filter issues
@@ -339,9 +366,9 @@ export default function SeoTechnique() {
           <h1 className="text-2xl font-bold text-white">SEO Technique</h1>
           <p className="text-dark-muted mt-1">Core Web Vitals, erreurs et indexation</p>
         </div>
-        <Button onClick={handleRunAudit}>
-          <RefreshCw className="w-4 h-4 mr-2" />
-          Lancer un audit
+        <Button onClick={handleRunAudit} disabled={isAuditing}>
+          <RefreshCw className={`w-4 h-4 mr-2 ${isAuditing ? 'animate-spin' : ''}`} />
+          {isAuditing ? 'Audit...' : 'Lancer un audit'}
         </Button>
       </div>
 

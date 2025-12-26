@@ -4,6 +4,7 @@ import Card from '../../components/common/Card';
 import Badge from '../../components/common/Badge';
 import Button from '../../components/common/Button';
 import { sitesApi, supabase } from '../../lib/supabase';
+import { n8nApi } from '../../lib/n8n';
 
 // Link status configuration
 const linkStatus = {
@@ -279,6 +280,7 @@ export default function LiensInternes() {
   const [selectedSiteId, setSelectedSiteId] = useState('all');
   const [activeTab, setActiveTab] = useState('suggestions');
   const [showAddModal, setShowAddModal] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -389,9 +391,36 @@ export default function LiensInternes() {
     setShowAddModal(false);
   };
 
-  const handleGenerateSuggestions = () => {
-    // TODO: Trigger n8n workflow for link suggestions
-    alert('Generation des suggestions via n8n...');
+  const handleGenerateSuggestions = async () => {
+    const site = selectedSiteId !== 'all' ? sites.find(s => s.id === selectedSiteId) : null;
+
+    if (!site) {
+      alert('Veuillez d\'abord sélectionner un site');
+      return;
+    }
+
+    if (!confirm(`Générer des suggestions de liens internes pour ${site.domain} ?\n\nCette opération analyse votre contenu pour trouver des opportunités de maillage.`)) {
+      return;
+    }
+
+    setIsGenerating(true);
+    try {
+      const result = await n8nApi.triggerWebhook('internal-links', {
+        site_alias: site.mcp_alias,
+        site_id: site.id
+      });
+
+      if (result.success) {
+        alert(`Analyse lancée pour ${site.domain} ! Les suggestions apparaîtront dans quelques minutes.`);
+        setTimeout(loadData, 5000);
+      } else {
+        alert('Erreur: ' + result.error);
+      }
+    } catch (err) {
+      alert('Erreur: ' + err.message);
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   // Filter by site
@@ -432,9 +461,9 @@ export default function LiensInternes() {
           <p className="text-dark-muted mt-1">Optimisez votre maillage interne</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="secondary" onClick={handleGenerateSuggestions}>
-            <Lightbulb className="w-4 h-4 mr-2" />
-            Generer suggestions
+          <Button variant="secondary" onClick={handleGenerateSuggestions} disabled={isGenerating}>
+            <Lightbulb className={`w-4 h-4 mr-2 ${isGenerating ? 'animate-pulse' : ''}`} />
+            {isGenerating ? 'Génération...' : 'Generer suggestions'}
           </Button>
           <Button onClick={() => setShowAddModal(true)}>
             <Plus className="w-4 h-4 mr-2" />
@@ -535,9 +564,9 @@ export default function LiensInternes() {
               <Lightbulb className="w-12 h-12 mx-auto text-dark-muted mb-4" />
               <h3 className="text-lg font-medium text-white mb-2">Aucune suggestion</h3>
               <p className="text-dark-muted mb-6">Generez des suggestions de liens internes basees sur votre contenu</p>
-              <Button onClick={handleGenerateSuggestions}>
-                <Lightbulb className="w-4 h-4 mr-2" />
-                Generer des suggestions
+              <Button onClick={handleGenerateSuggestions} disabled={isGenerating}>
+                <Lightbulb className={`w-4 h-4 mr-2 ${isGenerating ? 'animate-pulse' : ''}`} />
+                {isGenerating ? 'Génération...' : 'Generer des suggestions'}
               </Button>
             </Card>
           ) : (

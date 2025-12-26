@@ -4,6 +4,7 @@ import Card from '../../components/common/Card';
 import Badge from '../../components/common/Badge';
 import Button from '../../components/common/Button';
 import { sitesApi, supabase } from '../../lib/supabase';
+import { n8nApi } from '../../lib/n8n';
 
 // Score color helper
 const getScoreColor = (score) => {
@@ -96,6 +97,8 @@ export default function AuditContenu() {
   const [selectedSiteId, setSelectedSiteId] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
+  const [isAuditing, setIsAuditing] = useState(false);
+  const [isScanning, setIsScanning] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -124,13 +127,63 @@ export default function AuditContenu() {
   };
 
   const handleAudit = async (page) => {
-    // TODO: Trigger n8n workflow for content audit
-    alert(`Audit de la page "${page.title}" (via n8n workflow)`);
+    const site = sites.find(s => s.id === page.site_id);
+
+    if (!confirm(`Auditer la page "${page.title}" ?\n\nCela analysera le contenu SEO de cette page.`)) {
+      return;
+    }
+
+    setIsAuditing(true);
+    try {
+      const result = await n8nApi.triggerWebhook('content-audit', {
+        page_id: page.id,
+        url: page.wp_url || page.url,
+        site_alias: site?.mcp_alias
+      });
+
+      if (result.success) {
+        alert(`Audit lancé pour "${page.title}" ! Les résultats seront disponibles dans quelques minutes.`);
+        setTimeout(loadData, 5000);
+      } else {
+        alert('Erreur: ' + result.error);
+      }
+    } catch (err) {
+      alert('Erreur: ' + err.message);
+    } finally {
+      setIsAuditing(false);
+    }
   };
 
   const handleScanAll = async () => {
-    // TODO: Trigger full site audit via n8n
-    alert('Scan complet du site (via n8n workflow)');
+    const site = selectedSiteId !== 'all' ? sites.find(s => s.id === selectedSiteId) : null;
+
+    if (!site) {
+      alert('Veuillez d\'abord sélectionner un site à scanner');
+      return;
+    }
+
+    if (!confirm(`Scanner toutes les pages de ${site.domain} ?\n\nCette opération peut prendre plusieurs minutes.`)) {
+      return;
+    }
+
+    setIsScanning(true);
+    try {
+      const result = await n8nApi.triggerWebhook('content-audit-full', {
+        site_alias: site.mcp_alias,
+        site_id: site.id
+      });
+
+      if (result.success) {
+        alert(`Scan complet lancé pour ${site.domain} ! Les pages seront auditées progressivement.`);
+        setTimeout(loadData, 10000);
+      } else {
+        alert('Erreur: ' + result.error);
+      }
+    } catch (err) {
+      alert('Erreur: ' + err.message);
+    } finally {
+      setIsScanning(false);
+    }
   };
 
   // Filter pages
@@ -172,9 +225,9 @@ export default function AuditContenu() {
             <RefreshCw className="w-4 h-4 mr-2" />
             Actualiser
           </Button>
-          <Button onClick={handleScanAll}>
-            <FileSearch className="w-4 h-4 mr-2" />
-            Scanner tout
+          <Button onClick={handleScanAll} disabled={isScanning}>
+            <FileSearch className={`w-4 h-4 mr-2 ${isScanning ? 'animate-spin' : ''}`} />
+            {isScanning ? 'Scan...' : 'Scanner tout'}
           </Button>
         </div>
       </div>
@@ -275,9 +328,9 @@ export default function AuditContenu() {
           <p className="text-dark-muted mb-6">
             Creez des pages dans la section Creation ou scannez vos pages WordPress existantes
           </p>
-          <Button onClick={handleScanAll}>
-            <FileSearch className="w-4 h-4 mr-2" />
-            Scanner les pages WordPress
+          <Button onClick={handleScanAll} disabled={isScanning}>
+            <FileSearch className={`w-4 h-4 mr-2 ${isScanning ? 'animate-spin' : ''}`} />
+            {isScanning ? 'Scan...' : 'Scanner les pages WordPress'}
           </Button>
         </Card>
       ) : (
