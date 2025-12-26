@@ -27,7 +27,7 @@ function App() {
       case 'dashboard':
         return <Dashboard />;
       case 'sites':
-        return <Sites />;
+        return <Sites onNavigate={setActiveView} />;
       case 'keywords':
         return <Keywords />;
       case 'quickwins':
