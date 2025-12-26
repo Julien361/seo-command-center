@@ -4,6 +4,7 @@ import Card from '../../components/common/Card';
 import Badge from '../../components/common/Badge';
 import Button from '../../components/common/Button';
 import { sitesApi, supabase } from '../../lib/supabase';
+import { n8nApi } from '../../lib/n8n';
 
 // Backlink Row Component
 function BacklinkRow({ backlink }) {
@@ -100,6 +101,7 @@ export default function Backlinks() {
   const [selectedSiteId, setSelectedSiteId] = useState('all');
   const [selectedStatus, setSelectedStatus] = useState('all');
   const [selectedType, setSelectedType] = useState('all');
+  const [isSyncing, setIsSyncing] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -126,6 +128,33 @@ export default function Backlinks() {
       setError(err.message);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleSyncBacklinks = async () => {
+    const site = selectedSiteId !== 'all' ? sites.find(s => s.id === selectedSiteId) : null;
+
+    if (!confirm(`Synchroniser les backlinks ${site ? `de ${site.domain}` : 'de tous les sites'} ?\n\nCette opération utilise l'API DataForSEO (~0.20€ par site).`)) {
+      return;
+    }
+
+    setIsSyncing(true);
+    try {
+      const result = await n8nApi.triggerWebhook('backlinks-sync', {
+        site_alias: site?.mcp_alias || 'all',
+        site_id: site?.id || null
+      });
+
+      if (result.success) {
+        alert(`Synchronisation des backlinks lancée ! Les données seront mises à jour dans quelques minutes.`);
+        setTimeout(loadData, 10000);
+      } else {
+        alert('Erreur: ' + result.error);
+      }
+    } catch (err) {
+      alert('Erreur: ' + err.message);
+    } finally {
+      setIsSyncing(false);
     }
   };
 
@@ -169,9 +198,9 @@ export default function Backlinks() {
           <p className="text-dark-muted mt-1">Suivez votre profil de liens et identifiez les opportunites</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="ghost" onClick={loadData}>
-            <RefreshCw className="w-4 h-4 mr-2" />
-            Sync DataForSEO
+          <Button variant="ghost" onClick={handleSyncBacklinks} disabled={isSyncing}>
+            <RefreshCw className={`w-4 h-4 mr-2 ${isSyncing ? 'animate-spin' : ''}`} />
+            {isSyncing ? 'Sync...' : 'Sync DataForSEO'}
           </Button>
           <Button>
             <Plus className="w-4 h-4 mr-2" />
@@ -288,9 +317,9 @@ export default function Backlinks() {
             Synchronisez vos backlinks depuis DataForSEO ou ajoutez-les manuellement
           </p>
           <div className="flex gap-3 justify-center">
-            <Button variant="ghost">
-              <RefreshCw className="w-4 h-4 mr-2" />
-              Sync DataForSEO
+            <Button variant="ghost" onClick={handleSyncBacklinks} disabled={isSyncing}>
+              <RefreshCw className={`w-4 h-4 mr-2 ${isSyncing ? 'animate-spin' : ''}`} />
+              {isSyncing ? 'Sync...' : 'Sync DataForSEO'}
             </Button>
             <Button>
               <Plus className="w-4 h-4 mr-2" />

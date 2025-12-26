@@ -4,6 +4,7 @@ import Card from '../../components/common/Card';
 import Badge from '../../components/common/Badge';
 import Button from '../../components/common/Button';
 import { sitesApi, supabase } from '../../lib/supabase';
+import { n8nApi } from '../../lib/n8n';
 
 // Status colors
 const statusConfig = {
@@ -209,6 +210,7 @@ export default function Calendrier() {
   const [isLoading, setIsLoading] = useState(true);
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [addingDate, setAddingDate] = useState(null);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -243,6 +245,31 @@ export default function Calendrier() {
       console.error('Error loading calendar data:', err);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleAutoSchedule = async () => {
+    if (!confirm('Générer un planning de publication automatique ?\n\nCela analysera vos contenus en attente et proposera un calendrier optimisé.')) {
+      return;
+    }
+
+    setIsSyncing(true);
+    try {
+      const result = await n8nApi.triggerWebhook('calendar-optimize', {
+        month: currentDate.getMonth() + 1,
+        year: currentDate.getFullYear()
+      });
+
+      if (result.success) {
+        alert('Optimisation du calendrier lancée ! Le planning sera mis à jour dans quelques minutes.');
+        setTimeout(loadData, 5000);
+      } else {
+        alert('Erreur: ' + result.error);
+      }
+    } catch (err) {
+      alert('Erreur: ' + err.message);
+    } finally {
+      setIsSyncing(false);
     }
   };
 
@@ -368,10 +395,16 @@ export default function Calendrier() {
           <h1 className="text-2xl font-bold text-white">Calendrier Editorial</h1>
           <p className="text-dark-muted mt-1">Planifiez votre production de contenu</p>
         </div>
-        <Button onClick={() => setAddingDate(new Date())}>
-          <Plus className="w-4 h-4 mr-2" />
-          Nouveau contenu
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="ghost" onClick={handleAutoSchedule} disabled={isSyncing}>
+            <Calendar className={`w-4 h-4 mr-2 ${isSyncing ? 'animate-pulse' : ''}`} />
+            {isSyncing ? 'Optimisation...' : 'Auto-planifier'}
+          </Button>
+          <Button onClick={() => setAddingDate(new Date())}>
+            <Plus className="w-4 h-4 mr-2" />
+            Nouveau contenu
+          </Button>
+        </div>
       </div>
 
       {/* Stats */}

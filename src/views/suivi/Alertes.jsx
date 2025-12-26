@@ -4,6 +4,7 @@ import Card from '../../components/common/Card';
 import Badge from '../../components/common/Badge';
 import Button from '../../components/common/Button';
 import { sitesApi, supabase } from '../../lib/supabase';
+import { n8nApi } from '../../lib/n8n';
 
 // Alert type configuration
 const alertTypes = {
@@ -164,6 +165,7 @@ export default function Alertes() {
   const [typeFilter, setTypeFilter] = useState('all');
   const [showSettings, setShowSettings] = useState(false);
   const [alertSettings, setAlertSettings] = useState({});
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   useEffect(() => {
     loadAlerts();
@@ -237,6 +239,32 @@ export default function Alertes() {
     }
   };
 
+  const handleRefreshAlerts = async () => {
+    if (!confirm('Analyser les sites pour détecter de nouvelles alertes ?\n\nCela vérifiera les positions, le trafic et les erreurs techniques.')) {
+      return;
+    }
+
+    setIsRefreshing(true);
+    try {
+      const result = await n8nApi.triggerWebhook('alerts-check', {
+        check_positions: true,
+        check_traffic: true,
+        check_errors: true
+      });
+
+      if (result.success) {
+        alert('Analyse lancée ! Les nouvelles alertes apparaîtront dans quelques minutes.');
+        setTimeout(loadAlerts, 10000);
+      } else {
+        alert('Erreur: ' + result.error);
+      }
+    } catch (err) {
+      alert('Erreur: ' + err.message);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
   // Filter alerts
   const filteredAlerts = alerts.filter(alert => {
     if (filter === 'unread' && alert.read_at) return false;
@@ -269,6 +297,10 @@ export default function Alertes() {
           <p className="text-dark-muted mt-1">Notifications et alertes en temps reel</p>
         </div>
         <div className="flex gap-2">
+          <Button variant="ghost" onClick={handleRefreshAlerts} disabled={isRefreshing}>
+            <Bell className={`w-4 h-4 mr-2 ${isRefreshing ? 'animate-pulse' : ''}`} />
+            {isRefreshing ? 'Analyse...' : 'Analyser'}
+          </Button>
           <Button variant="secondary" onClick={() => setShowSettings(true)}>
             <Settings className="w-4 h-4 mr-2" />
             Configurer
