@@ -6,8 +6,17 @@ const os = require('os');
 // Configure auto-updater
 autoUpdater.autoDownload = false;
 autoUpdater.autoInstallOnAppQuit = true;
+autoUpdater.logger = require('electron').app;
+
+// Log all auto-updater events
+autoUpdater.logger = {
+  info: (msg) => console.log('[AutoUpdater]', msg),
+  warn: (msg) => console.warn('[AutoUpdater]', msg),
+  error: (msg) => console.error('[AutoUpdater]', msg),
+};
 
 let mainWindow;
+let updateAvailable = null;
 let ptyProcess = null;
 let isStarting = false;
 
@@ -170,6 +179,48 @@ ipcMain.handle('terminal-stop', async () => {
   return { success: true };
 });
 
+// Auto-updater IPC handlers
+ipcMain.handle('updater-check', async () => {
+  console.log('[AutoUpdater] Manual check requested');
+  if (!app.isPackaged) {
+    console.log('[AutoUpdater] Skipping check - not packaged');
+    return { available: false, reason: 'dev-mode' };
+  }
+  try {
+    const result = await autoUpdater.checkForUpdates();
+    console.log('[AutoUpdater] Check result:', result);
+    return { available: !!result?.updateInfo, info: result?.updateInfo };
+  } catch (error) {
+    console.error('[AutoUpdater] Check error:', error);
+    return { available: false, error: error.message };
+  }
+});
+
+ipcMain.handle('updater-download', async () => {
+  console.log('[AutoUpdater] Download requested');
+  try {
+    await autoUpdater.downloadUpdate();
+    return { success: true };
+  } catch (error) {
+    console.error('[AutoUpdater] Download error:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('updater-install', async () => {
+  console.log('[AutoUpdater] Install requested');
+  autoUpdater.quitAndInstall();
+  return { success: true };
+});
+
+ipcMain.handle('updater-get-status', async () => {
+  return {
+    updateAvailable,
+    currentVersion: app.getVersion(),
+    isPackaged: app.isPackaged,
+  };
+});
+
 // App lifecycle
 app.whenReady().then(() => {
   createWindow();
@@ -187,7 +238,19 @@ app.whenReady().then(() => {
 });
 
 // Auto-updater events
+autoUpdater.on('checking-for-update', () => {
+  console.log('[AutoUpdater] Checking for updates...');
+  if (mainWindow) {
+    mainWindow.webContents.send('updater-status', { status: 'checking' });
+  }
+});
+
 autoUpdater.on('update-available', (info) => {
+  console.log('[AutoUpdater] Update available:', info.version);
+  updateAvailable = info;
+  if (mainWindow) {
+    mainWindow.webContents.send('updater-status', { status: 'available', info });
+  }
   dialog.showMessageBox(mainWindow, {
     type: 'info',
     title: 'Mise à jour disponible',
@@ -200,17 +263,42 @@ autoUpdater.on('update-available', (info) => {
   });
 });
 
-autoUpdater.on('update-downloaded', () => {
+autoUpdater.on('update-not-available', (info) => {
+  console.log('[AutoUpdater] No update available, current version is latest');
+  if (mainWindow) {
+    mainWindow.webContents.send('updater-status', { status: 'not-available', info });
+  }
+});
+
+autoUpdater.on('download-progress', (progress) => {
+  console.log('[AutoUpdater] Download progress:', Math.round(progress.percent) + '%');
+  if (mainWindow) {
+    mainWindow.webContents.send('updater-status', { status: 'downloading', progress });
+  }
+});
+
+autoUpdater.on('update-downloaded', (info) => {
+  console.log('[AutoUpdater] Update downloaded:', info.version);
+  if (mainWindow) {
+    mainWindow.webContents.send('updater-status', { status: 'downloaded', info });
+  }
   dialog.showMessageBox(mainWindow, {
     type: 'info',
     title: 'Mise à jour prête',
-    message: 'La mise à jour sera installée au redémarrage.',
+    message: `Version ${info.version} téléchargée. Redémarrer pour installer ?`,
     buttons: ['Redémarrer maintenant', 'Plus tard'],
   }).then((result) => {
     if (result.response === 0) {
       autoUpdater.quitAndInstall();
     }
   });
+});
+
+autoUpdater.on('error', (error) => {
+  console.error('[AutoUpdater] Error:', error);
+  if (mainWindow) {
+    mainWindow.webContents.send('updater-status', { status: 'error', error: error.message });
+  }
 });
 
 app.on('window-all-closed', () => {
