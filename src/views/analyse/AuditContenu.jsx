@@ -21,13 +21,18 @@ const getScoreBg = (score) => {
 
 // Page Audit Card
 function PageAuditCard({ page, onAudit }) {
-  const score = page.seo_score || Math.floor(Math.random() * 40 + 50); // Placeholder
+  const score = page.seo_score || 0;
 
+  // Generate issues based on page data
   const issues = [
-    { type: 'warning', text: 'Meta description trop courte', condition: !page.meta_description || page.meta_description.length < 120 },
-    { type: 'error', text: 'Titre H1 manquant', condition: !page.h1 },
-    { type: 'warning', text: 'Contenu thin (< 300 mots)', condition: page.word_count < 300 },
-    { type: 'success', text: 'Images optimisees', condition: true },
+    { type: 'error', text: 'Title manquant', condition: !page.title || !page.meta_title },
+    { type: 'warning', text: 'Title trop court', condition: page.meta_title && page.meta_title.length < 30 },
+    { type: 'warning', text: 'Title trop long', condition: page.meta_title && page.meta_title.length > 60 },
+    { type: 'error', text: 'Meta description manquante', condition: !page.meta_description },
+    { type: 'warning', text: 'Meta description courte', condition: page.meta_description && page.meta_description.length < 120 },
+    { type: 'error', text: 'H1 manquant', condition: !page.h1 },
+    { type: 'warning', text: 'Contenu thin (< 300 mots)', condition: (page.word_count || 0) < 300 },
+    { type: 'success', text: 'Contenu riche', condition: (page.word_count || 0) >= 1000 },
   ].filter(i => i.condition);
 
   return (
@@ -43,9 +48,12 @@ function PageAuditCard({ page, onAudit }) {
             )}
           </div>
           <p className="text-sm text-dark-muted truncate mt-0.5">{page.slug || page.wp_url || '/'}</p>
+          {page.sites?.mcp_alias && (
+            <Badge variant="secondary" size="sm" className="mt-1">{page.sites.mcp_alias}</Badge>
+          )}
         </div>
         <div className={`w-12 h-12 rounded-lg border flex items-center justify-center ${getScoreBg(score)}`}>
-          <span className={`text-lg font-bold ${getScoreColor(score)}`}>{score}</span>
+          <span className={`text-lg font-bold ${getScoreColor(score)}`}>{score || '-'}</span>
         </div>
       </div>
 
@@ -158,26 +166,26 @@ export default function AuditContenu() {
     const site = selectedSiteId !== 'all' ? sites.find(s => s.id === selectedSiteId) : null;
 
     if (!site) {
-      alert('Veuillez d\'abord sélectionner un site à scanner');
+      alert('Veuillez d\'abord selectionner un site a scanner');
       return;
     }
 
-    if (!confirm(`Scanner toutes les pages de ${site.domain} ?\n\nCette opération peut prendre plusieurs minutes.`)) {
+    if (!confirm(`Scanner les pages de ${site.domain} avec Firecrawl ?\n\nCela analysera jusqu'a 10 pages du site.`)) {
       return;
     }
 
     setIsScanning(true);
     try {
-      const result = await n8nApi.triggerWebhook('content-audit-full', {
+      const result = await n8nApi.triggerWebhook('technical-audit', {
         site_alias: site.mcp_alias,
-        site_id: site.id
+        max_pages: 10
       });
 
-      if (result.success) {
-        alert(`Scan complet lancé pour ${site.domain} ! Les pages seront auditées progressivement.`);
-        setTimeout(loadData, 10000);
+      if (result.success !== false) {
+        alert(`Audit technique lance pour ${site.domain} !\nLes resultats seront disponibles dans ~30 secondes.`);
+        setTimeout(loadData, 30000);
       } else {
-        alert('Erreur: ' + result.error);
+        alert('Erreur: ' + (result.error || 'Echec du lancement'));
       }
     } catch (err) {
       alert('Erreur: ' + err.message);
@@ -189,18 +197,26 @@ export default function AuditContenu() {
   // Filter pages
   const filteredPages = pages.filter(page => {
     const matchesSearch = page.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          page.slug?.toLowerCase().includes(searchTerm.toLowerCase());
+                          page.slug?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          page.wp_url?.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesSite = selectedSiteId === 'all' || page.site_id === selectedSiteId;
-    return matchesSearch && matchesSite;
+    const score = page.seo_score || 0;
+    let matchesScore = true;
+    if (filterStatus === 'good') matchesScore = score >= 80;
+    else if (filterStatus === 'medium') matchesScore = score >= 50 && score < 80;
+    else if (filterStatus === 'bad') matchesScore = score < 50;
+    return matchesSearch && matchesSite && matchesScore;
   });
 
-  // Calculate stats
+  // Calculate stats (only for pages with scores)
+  const pagesWithScores = pages.filter(p => p.seo_score !== null && p.seo_score !== undefined);
   const stats = {
     total: pages.length,
-    optimized: pages.filter(p => (p.seo_score || 0) >= 80).length,
-    needsWork: pages.filter(p => (p.seo_score || 0) < 50).length,
-    avgScore: pages.length > 0
-      ? Math.round(pages.reduce((sum, p) => sum + (p.seo_score || 60), 0) / pages.length)
+    audited: pagesWithScores.length,
+    optimized: pagesWithScores.filter(p => p.seo_score >= 80).length,
+    needsWork: pagesWithScores.filter(p => p.seo_score < 50).length,
+    avgScore: pagesWithScores.length > 0
+      ? Math.round(pagesWithScores.reduce((sum, p) => sum + p.seo_score, 0) / pagesWithScores.length)
       : 0
   };
 
@@ -240,8 +256,8 @@ export default function AuditContenu() {
               <FileText className="w-5 h-5 text-primary" />
             </div>
             <div>
-              <div className="text-2xl font-bold text-white">{stats.total}</div>
-              <div className="text-sm text-dark-muted">Pages totales</div>
+              <div className="text-2xl font-bold text-white">{stats.audited}<span className="text-sm text-dark-muted">/{stats.total}</span></div>
+              <div className="text-sm text-dark-muted">Pages auditees</div>
             </div>
           </div>
         </Card>
