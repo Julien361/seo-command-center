@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ExternalLink, Search, Plus, TrendingUp, TrendingDown, MoreVertical, RefreshCw, Loader2, CloudDownload, CheckCircle, Zap } from 'lucide-react';
+import { ExternalLink, Search, Plus, MoreVertical, RefreshCw, Loader2, CloudDownload, Zap } from 'lucide-react';
 import { Card, Badge, Button } from '../components/common';
 import { sitesApi, keywordsApi } from '../lib/supabase';
 import { n8nApi } from '../lib/n8n';
@@ -32,28 +32,32 @@ export default function Sites({ onNavigate }) {
         keywordsApi.getAll()
       ]);
 
-      // Compter les keywords par site
-      const keywordsPerSite = {};
-      const positionsPerSite = {};
+      // Charger aussi les quick wins
+      const quickWinsData = await import('../lib/supabase').then(m => m.quickWinsApi.getAll());
+
+      // Calculer les stats par site
+      const statsPerSite = {};
       keywordsData.forEach(kw => {
         if (kw.site_id) {
-          keywordsPerSite[kw.site_id] = (keywordsPerSite[kw.site_id] || 0) + 1;
-          // Calculer la position moyenne (si position disponible)
-          if (kw.current_position && kw.current_position > 0) {
-            if (!positionsPerSite[kw.site_id]) {
-              positionsPerSite[kw.site_id] = { sum: 0, count: 0 };
-            }
-            positionsPerSite[kw.site_id].sum += kw.current_position;
-            positionsPerSite[kw.site_id].count += 1;
+          if (!statsPerSite[kw.site_id]) {
+            statsPerSite[kw.site_id] = { keywords: 0, volume: 0 };
           }
+          statsPerSite[kw.site_id].keywords += 1;
+          statsPerSite[kw.site_id].volume += (kw.search_volume || 0);
+        }
+      });
+
+      // Compter les quick wins par site
+      const quickWinsPerSite = {};
+      quickWinsData.forEach(qw => {
+        if (qw.site_id && qw.status === 'pending') {
+          quickWinsPerSite[qw.site_id] = (quickWinsPerSite[qw.site_id] || 0) + 1;
         }
       });
 
       // Mapper les données Supabase vers le format attendu
       const mappedSites = sitesData.map(site => {
-        const avgPos = positionsPerSite[site.id]
-          ? Math.round(positionsPerSite[site.id].sum / positionsPerSite[site.id].count * 10) / 10
-          : site.avg_position;
+        const stats = statsPerSite[site.id] || { keywords: 0, volume: 0 };
 
         return {
           id: site.id,
@@ -62,12 +66,12 @@ export default function Sites({ onNavigate }) {
           entity: site.entity_id,
           focus: site.seo_focus || '',
           status: site.is_active ? 'active' : 'inactive',
-          keywords: keywordsPerSite[site.id] || 0,
+          keywords: stats.keywords,
+          volume: stats.volume,
+          quickWins: quickWinsPerSite[site.id] || 0,
           articles: site.total_articles || 0,
-          avgPos: avgPos || '-',
-          trend: site.trend || 'neutral',
-          traffic: site.monthly_traffic || 0,
           priority: site.priority || 3,
+          lastSync: site.last_monitored_at,
         };
       });
       setSites(mappedSites);
@@ -248,11 +252,11 @@ export default function Sites({ onNavigate }) {
                 <tr className="border-b border-dark-border">
                   <th className="text-left py-3 px-4 text-sm font-medium text-dark-muted">Site</th>
                   <th className="text-left py-3 px-4 text-sm font-medium text-dark-muted">Entité</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-dark-muted">Focus</th>
                   <th className="text-center py-3 px-4 text-sm font-medium text-dark-muted">Keywords</th>
+                  <th className="text-center py-3 px-4 text-sm font-medium text-dark-muted">Volume</th>
+                  <th className="text-center py-3 px-4 text-sm font-medium text-dark-muted">Quick Wins</th>
                   <th className="text-center py-3 px-4 text-sm font-medium text-dark-muted">Articles</th>
-                  <th className="text-center py-3 px-4 text-sm font-medium text-dark-muted">Pos. Moy.</th>
-                  <th className="text-center py-3 px-4 text-sm font-medium text-dark-muted">Traffic</th>
+                  <th className="text-center py-3 px-4 text-sm font-medium text-dark-muted">Priorité</th>
                   <th className="text-center py-3 px-4 text-sm font-medium text-dark-muted">Actions</th>
                 </tr>
               </thead>
@@ -278,17 +282,28 @@ export default function Sites({ onNavigate }) {
                     <td className="py-4 px-4">
                       <Badge variant={entityColors[site.entity] || 'secondary'}>{site.entity || '-'}</Badge>
                     </td>
-                    <td className="py-4 px-4 text-dark-muted text-sm">{site.focus || '-'}</td>
                     <td className="py-4 px-4 text-center text-white">{site.keywords}</td>
+                    <td className="py-4 px-4 text-center text-white">
+                      {site.volume > 0 ? site.volume.toLocaleString() : '-'}
+                    </td>
+                    <td className="py-4 px-4 text-center">
+                      {site.quickWins > 0 ? (
+                        <Badge variant="warning">{site.quickWins}</Badge>
+                      ) : (
+                        <span className="text-dark-muted">-</span>
+                      )}
+                    </td>
                     <td className="py-4 px-4 text-center text-white">{site.articles}</td>
                     <td className="py-4 px-4 text-center">
                       <div className="flex items-center justify-center gap-1">
-                        <span className="text-white">{site.avgPos || '-'}</span>
-                        {site.trend === 'up' && <TrendingUp className="w-4 h-4 text-success" />}
-                        {site.trend === 'down' && <TrendingDown className="w-4 h-4 text-danger" />}
+                        {[1, 2, 3, 4, 5].map(star => (
+                          <div
+                            key={star}
+                            className={`w-2 h-2 rounded-full ${star <= site.priority ? 'bg-primary' : 'bg-dark-border'}`}
+                          />
+                        ))}
                       </div>
                     </td>
-                    <td className="py-4 px-4 text-center text-white">{site.traffic}</td>
                     <td className="py-4 px-4 text-center">
                       <button className="p-2 rounded-lg hover:bg-dark-border">
                         <MoreVertical className="w-4 h-4 text-dark-muted" />
