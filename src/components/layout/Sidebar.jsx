@@ -35,7 +35,17 @@ export default function Sidebar({ activeView, onViewChange }) {
   const fitAddonRef = useRef(null);
   const [isConnected, setIsConnected] = useState(false);
   const [isExpanded, setIsExpanded] = useState(true);
+  const [appVersion, setAppVersion] = useState('');
   const isElectron = typeof window !== 'undefined' && window.electronAPI?.isElectron;
+
+  // Fetch app version
+  useEffect(() => {
+    if (window.updater) {
+      window.updater.getStatus().then((status) => {
+        setAppVersion(status.currentVersion || '');
+      });
+    }
+  }, []);
 
   useEffect(() => {
     if (!isElectron || !terminalRef.current || xtermRef.current) return;
@@ -135,7 +145,10 @@ export default function Sidebar({ activeView, onViewChange }) {
       <div className="p-4 border-b border-dark-border">
         <h1 className="text-lg font-bold text-white flex items-center gap-2">
           <TrendingUp className="w-5 h-5 text-primary" />
-          SEO Command Center
+          <span>SEO Command Center</span>
+          {appVersion && (
+            <span className="text-xs font-normal text-dark-muted">v{appVersion}</span>
+          )}
         </h1>
       </div>
 
