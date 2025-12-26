@@ -166,10 +166,10 @@ export default function Sidebar({ activeView, onViewChange }) {
         {/* Add Site Button */}
         <button
           onClick={() => onViewChange('add-site')}
-          className="w-full mt-3 flex items-center gap-2 px-3 py-2 rounded-lg text-sm bg-primary/10 text-primary hover:bg-primary/20 transition-all border border-primary/30"
+          className="w-full mt-4 flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg text-sm bg-primary text-white hover:bg-primary-dark transition-all font-medium shadow-lg shadow-primary/25"
         >
           <Plus className="w-4 h-4" />
-          <span className="font-medium">Ajouter un site</span>
+          <span>Ajouter un site</span>
         </button>
       </nav>
 
