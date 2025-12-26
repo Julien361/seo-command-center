@@ -20,6 +20,8 @@ export { default as SchemaMarkup } from './creation/SchemaMarkup';
 export { default as LiensInternes } from './creation/LiensInternes';
 export { default as Briefs } from './creation/Briefs';
 export { default as ImagesSeo } from './creation/ImagesSeo';
+export { default as Pages } from './creation/Pages';
+export { default as Publication } from './creation/Publication';
 
 // Suivi views
 export { default as Positions } from './suivi/Positions';

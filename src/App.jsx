@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import Sidebar from './components/layout/Sidebar';
 import Header from './components/layout/Header';
-import { Dashboard, Sites, Keywords, Workflows, QuickWins, Articles, AddSite, Settings, Cocons, Concurrents, Backlinks, AuditContenu, Idees, Calendrier, SchemaMarkup, LiensInternes, Briefs, ImagesSeo, Positions, Performance, Alertes, Ameliorations, Revenus, SeoLocal, SeoTechnique, Credentials } from './views';
+import { Dashboard, Sites, Keywords, Workflows, QuickWins, Articles, AddSite, Settings, Cocons, Concurrents, Backlinks, AuditContenu, Idees, Calendrier, SchemaMarkup, LiensInternes, Briefs, ImagesSeo, Pages, Publication, Positions, Performance, Alertes, Ameliorations, Revenus, SeoLocal, SeoTechnique, Credentials } from './views';
 import PlaceholderView from './views/PlaceholderView';
 import { sitesApi } from './lib/supabase';
 
@@ -152,7 +152,7 @@ function App() {
       case 'briefs':
         return <Briefs />;
       case 'pages':
-        return <PlaceholderView title="Pages" description="Gerez vos pages piliers et satellites." icon={File} />;
+        return <Pages />;
       case 'articles':
         return <Articles />;
       case 'liens-internes':
@@ -164,7 +164,7 @@ function App() {
       case 'calendrier':
         return <Calendrier />;
       case 'publication':
-        return <PlaceholderView title="Publication" description="Publiez directement sur vos sites WordPress." icon={Send} />;
+        return <Publication />;
 
       // Suivi
       case 'ameliorations':
