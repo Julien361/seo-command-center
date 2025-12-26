@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
-import Card from '../../components/ui/Card';
-import Badge from '../../components/ui/Badge';
-import Button from '../../components/ui/Button';
-import { supabase, sitesApi } from '../../lib/supabase';
+import Card from '../../components/common/Card';
+import Badge from '../../components/common/Badge';
+import Button from '../../components/common/Button';
+import { sitesApi, supabase } from '../../lib/supabase';
 import {
   Send,
   Globe,
