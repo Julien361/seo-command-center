@@ -200,6 +200,99 @@ export const WORKFLOWS = {
     isPaid: false,
     estimatedCost: 0,
   },
+
+  // === Images ===
+  IMAGES_OPTIMIZE: {
+    id: '6lgJJFCCIAMuoFoE',
+    name: 'WF-Images-Optimize',
+    webhook: 'images-optimize',
+    description: 'Optimisation des images (compression, alt text, WebP)',
+    category: 'utilities',
+    isPaid: false,
+    estimatedCost: 0,
+  },
+  IMAGES_SCAN: {
+    id: 'M7jDtkzUVshB7QRv',
+    name: 'WF-Images-Scan',
+    webhook: 'images-scan',
+    description: 'Scan des images d\'un site WordPress',
+    category: 'utilities',
+    isPaid: false,
+    estimatedCost: 0,
+  },
+
+  // === Liens internes ===
+  INTERNAL_LINKS: {
+    id: 'Nea7YNmY4YGGVmum',
+    name: 'WF-Internal-Links',
+    webhook: 'internal-links',
+    description: 'Génération de suggestions de liens internes',
+    category: 'processing',
+    isPaid: true,
+    estimatedCost: 0.03,
+  },
+
+  // === Audits ===
+  CONTENT_AUDIT: {
+    id: '18HIJ41yGnNLtDIe',
+    name: 'WF-Content-Audit',
+    webhook: 'content-audit',
+    description: 'Audit SEO d\'une page unique',
+    category: 'processing',
+    isPaid: true,
+    estimatedCost: 0.02,
+  },
+  CONTENT_AUDIT_FULL: {
+    id: 'gfNe9WHBUawfDpBa',
+    name: 'WF-Content-Audit-Full',
+    webhook: 'content-audit-full',
+    description: 'Audit SEO complet d\'un site',
+    category: 'processing',
+    isPaid: true,
+    estimatedCost: 0.10,
+  },
+  TECHNICAL_AUDIT: {
+    id: 'EccWXjB7YoUyGmsV',
+    name: 'WF-Technical-Audit',
+    webhook: 'technical-audit',
+    description: 'Audit technique SEO (Core Web Vitals, robots, sitemap)',
+    category: 'monitoring',
+    isPaid: false,
+    estimatedCost: 0,
+  },
+
+  // === Backlinks ===
+  BACKLINKS_SYNC: {
+    id: 'dWXrcejRE9hiV7Nq',
+    name: 'WF-Backlinks-Sync',
+    webhook: 'backlinks-sync',
+    description: 'Synchronisation des backlinks via DataForSEO',
+    category: 'dataCollection',
+    isPaid: true,
+    estimatedCost: 0.20,
+  },
+
+  // === Alertes ===
+  ALERTS_CHECK: {
+    id: 'Pji5AbHtElrg0doQ',
+    name: 'WF-Alerts-Check',
+    webhook: 'alerts-check',
+    description: 'Vérification des alertes SEO (positions, trafic, erreurs)',
+    category: 'monitoring',
+    isPaid: false,
+    estimatedCost: 0,
+  },
+
+  // === Calendrier ===
+  CALENDAR_OPTIMIZE: {
+    id: 'A61sMJh36kmCgHzq',
+    name: 'WF-Calendar-Optimize',
+    webhook: 'calendar-optimize',
+    description: 'Optimisation du calendrier éditorial',
+    category: 'content',
+    isPaid: false,
+    estimatedCost: 0,
+  },
 };
 
 // Catégories de workflows pour l'UI
@@ -581,6 +674,132 @@ export const n8nApi = {
       operation, // 'select', 'insert', 'upsert', 'delete'
       table,
       data,
+    });
+  },
+
+  // ===================
+  // Images
+  // ===================
+
+  /**
+   * Optimiser les images
+   * GRATUIT (traitement local)
+   */
+  async optimizeImages(type, siteAlias, imageIds = []) {
+    return triggerWebhook('images-optimize', {
+      type, // 'compression', 'alt', 'webp', 'all'
+      site_alias: siteAlias,
+      images: imageIds,
+    });
+  },
+
+  /**
+   * Scanner les images d'un site
+   * GRATUIT
+   */
+  async scanImages(siteAlias, siteUrl) {
+    return triggerWebhook('images-scan', {
+      site_alias: siteAlias,
+      site_url: siteUrl,
+    });
+  },
+
+  // ===================
+  // Liens internes
+  // ===================
+
+  /**
+   * Générer des suggestions de liens internes
+   * ATTENTION: Coûte ~0.03€
+   */
+  async suggestInternalLinks(siteAlias, siteId) {
+    return triggerWebhook('internal-links', {
+      site_alias: siteAlias,
+      site_id: siteId,
+    });
+  },
+
+  // ===================
+  // Audits
+  // ===================
+
+  /**
+   * Auditer une page
+   * ATTENTION: Coûte ~0.02€
+   */
+  async auditPage(pageId, url, siteAlias) {
+    return triggerWebhook('content-audit', {
+      page_id: pageId,
+      url,
+      site_alias: siteAlias,
+    });
+  },
+
+  /**
+   * Auditer tout un site
+   * ATTENTION: Coûte ~0.10€
+   */
+  async auditSite(siteAlias, siteId) {
+    return triggerWebhook('content-audit-full', {
+      site_alias: siteAlias,
+      site_id: siteId,
+    });
+  },
+
+  /**
+   * Audit technique SEO
+   * GRATUIT
+   */
+  async technicalAudit(siteAlias, siteIds = []) {
+    return triggerWebhook('technical-audit', {
+      site_alias: siteAlias,
+      site_ids: siteIds,
+    });
+  },
+
+  // ===================
+  // Backlinks
+  // ===================
+
+  /**
+   * Synchroniser les backlinks via DataForSEO
+   * ATTENTION: Coûte ~0.20€ par site
+   */
+  async syncBacklinks(siteAlias, siteId) {
+    return triggerWebhook('backlinks-sync', {
+      site_alias: siteAlias,
+      site_id: siteId,
+    });
+  },
+
+  // ===================
+  // Alertes
+  // ===================
+
+  /**
+   * Vérifier les alertes SEO
+   * GRATUIT
+   */
+  async checkAlerts(options = {}) {
+    return triggerWebhook('alerts-check', {
+      check_positions: options.positions !== false,
+      check_traffic: options.traffic !== false,
+      check_errors: options.errors !== false,
+    });
+  },
+
+  // ===================
+  // Calendrier
+  // ===================
+
+  /**
+   * Optimiser le calendrier éditorial
+   * GRATUIT
+   */
+  async optimizeCalendar(month, year) {
+    return triggerWebhook('calendar-optimize', {
+      month,
+      year,
     });
   },
 
