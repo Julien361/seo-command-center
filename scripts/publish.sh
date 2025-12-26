@@ -19,8 +19,12 @@ npm run release
 echo "📤 Commit et push..."
 git add .
 git commit -m "v$NEW_VERSION - Auto-update"
-git tag "v$NEW_VERSION"
-git push && git push --tags
+git tag -f "v$NEW_VERSION"
+git push && git push --tags -f
+
+# Publish the draft release (electron-builder creates drafts by default)
+echo "🚀 Publication de la release..."
+gh release edit "v$NEW_VERSION" --draft=false --latest
 
 echo "✅ Version $NEW_VERSION publiée avec auto-update !"
 echo "📍 Les utilisateurs recevront automatiquement la mise à jour."
