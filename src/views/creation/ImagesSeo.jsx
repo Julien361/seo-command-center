@@ -4,6 +4,7 @@ import Card from '../../components/common/Card';
 import Badge from '../../components/common/Badge';
 import Button from '../../components/common/Button';
 import { sitesApi, supabase } from '../../lib/supabase';
+import { n8nApi } from '../../lib/n8n';
 
 // Image issue types
 const issueTypes = {
@@ -231,7 +232,7 @@ function EditImageModal({ image, onClose, onSave }) {
 }
 
 // Bulk optimization suggestions
-function OptimizationPanel({ images, onOptimize }) {
+function OptimizationPanel({ images, onOptimize, isOptimizing }) {
   const missingAlt = images.filter(i => !i.alt_text).length;
   const tooLarge = images.filter(i => i.file_size > 500000).length;
   const wrongFormat = images.filter(i => !['webp', 'avif'].includes(i.format?.toLowerCase())).length;
@@ -260,8 +261,8 @@ function OptimizationPanel({ images, onOptimize }) {
               <FileWarning className="w-4 h-4 text-danger" />
               <span className="text-sm text-white">{missingAlt} images sans alt text</span>
             </div>
-            <Button size="sm" variant="secondary" onClick={() => onOptimize('alt')}>
-              Corriger
+            <Button size="sm" variant="secondary" onClick={() => onOptimize('alt')} disabled={isOptimizing}>
+              {isOptimizing ? 'En cours...' : 'Corriger'}
             </Button>
           </div>
         )}
@@ -271,8 +272,8 @@ function OptimizationPanel({ images, onOptimize }) {
               <Zap className="w-4 h-4 text-warning" />
               <span className="text-sm text-white">{tooLarge} images trop volumineuses (&gt;500KB)</span>
             </div>
-            <Button size="sm" variant="secondary" onClick={() => onOptimize('compress')}>
-              Compresser
+            <Button size="sm" variant="secondary" onClick={() => onOptimize('compress')} disabled={isOptimizing}>
+              {isOptimizing ? 'En cours...' : 'Compresser'}
             </Button>
           </div>
         )}
@@ -282,8 +283,8 @@ function OptimizationPanel({ images, onOptimize }) {
               <Image className="w-4 h-4 text-info" />
               <span className="text-sm text-white">{wrongFormat} images pas en WebP/AVIF</span>
             </div>
-            <Button size="sm" variant="secondary" onClick={() => onOptimize('convert')}>
-              Convertir
+            <Button size="sm" variant="secondary" onClick={() => onOptimize('convert')} disabled={isOptimizing}>
+              {isOptimizing ? 'En cours...' : 'Convertir'}
             </Button>
           </div>
         )}
@@ -301,6 +302,8 @@ export default function ImagesSeo() {
   const [selectedSiteId, setSelectedSiteId] = useState('all');
   const [issueFilter, setIssueFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
+  const [isOptimizing, setIsOptimizing] = useState(false);
+  const [isScanning, setIsScanning] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -365,14 +368,75 @@ export default function ImagesSeo() {
     }
   };
 
-  const handleOptimize = (type) => {
-    // TODO: Trigger n8n workflow for bulk optimization
-    alert(`Optimisation "${type}" en cours via n8n...`);
+  const handleOptimize = async (type) => {
+    const site = selectedSiteId !== 'all' ? sites.find(s => s.id === selectedSiteId) : null;
+
+    const typeLabels = {
+      alt: 'génération des textes alt',
+      compress: 'compression des images',
+      convert: 'conversion en WebP/AVIF'
+    };
+
+    if (!confirm(`Lancer l'optimisation "${typeLabels[type]}" ?\n\nCette opération peut prendre quelques minutes.`)) {
+      return;
+    }
+
+    setIsOptimizing(true);
+    try {
+      const result = await n8nApi.triggerWebhook('images-optimize', {
+        type,
+        site_alias: site?.mcp_alias || 'all',
+        images: images.filter(i => {
+          if (type === 'alt') return !i.alt_text;
+          if (type === 'compress') return i.file_size > 500000;
+          if (type === 'convert') return !['webp', 'avif'].includes(i.format?.toLowerCase());
+          return true;
+        }).map(i => i.id)
+      });
+
+      if (result.success) {
+        alert(`Optimisation "${typeLabels[type]}" lancée ! Les images seront mises à jour dans quelques minutes.`);
+        setTimeout(loadData, 5000);
+      } else {
+        alert('Erreur: ' + result.error);
+      }
+    } catch (err) {
+      alert('Erreur: ' + err.message);
+    } finally {
+      setIsOptimizing(false);
+    }
   };
 
-  const handleScanSite = () => {
-    // TODO: Trigger n8n workflow to scan site for images
-    alert('Scan du site en cours via n8n...');
+  const handleScanSite = async () => {
+    const site = selectedSiteId !== 'all' ? sites.find(s => s.id === selectedSiteId) : null;
+
+    if (!site) {
+      alert('Veuillez d\'abord sélectionner un site à scanner');
+      return;
+    }
+
+    if (!confirm(`Scanner les images de ${site.domain} ?\n\nCette opération va analyser toutes les images du site.`)) {
+      return;
+    }
+
+    setIsScanning(true);
+    try {
+      const result = await n8nApi.triggerWebhook('images-scan', {
+        site_alias: site.mcp_alias,
+        site_url: site.url
+      });
+
+      if (result.success) {
+        alert(`Scan de ${site.domain} lancé ! Les images seront indexées dans quelques minutes.`);
+        setTimeout(loadData, 10000);
+      } else {
+        alert('Erreur: ' + result.error);
+      }
+    } catch (err) {
+      alert('Erreur: ' + err.message);
+    } finally {
+      setIsScanning(false);
+    }
   };
 
   // Filter images
@@ -417,9 +481,9 @@ export default function ImagesSeo() {
           <p className="text-dark-muted mt-1">Optimisez vos images: alt text, compression, lazy loading</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="secondary" onClick={handleScanSite}>
-            <RefreshCw className="w-4 h-4 mr-2" />
-            Scanner un site
+          <Button variant="secondary" onClick={handleScanSite} disabled={isScanning}>
+            <RefreshCw className={`w-4 h-4 mr-2 ${isScanning ? 'animate-spin' : ''}`} />
+            {isScanning ? 'Scan...' : 'Scanner un site'}
           </Button>
         </div>
       </div>
@@ -484,7 +548,7 @@ export default function ImagesSeo() {
       </div>
 
       {/* Optimization panel */}
-      <OptimizationPanel images={images} onOptimize={handleOptimize} />
+      <OptimizationPanel images={images} onOptimize={handleOptimize} isOptimizing={isOptimizing} />
 
       {/* Filters */}
       <Card className="p-4">

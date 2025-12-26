@@ -4,6 +4,7 @@ import Card from '../../components/common/Card';
 import Badge from '../../components/common/Badge';
 import Button from '../../components/common/Button';
 import { sitesApi, supabase } from '../../lib/supabase';
+import { n8nApi } from '../../lib/n8n';
 
 // Source badges
 const sourceConfig = {
@@ -228,6 +229,7 @@ export default function Idees() {
   const [selectedStatus, setSelectedStatus] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -289,14 +291,54 @@ export default function Idees() {
     }
   };
 
-  const handleCreateBrief = (idea) => {
-    // TODO: Navigate to brief creation with idea data
-    alert(`Creation du brief pour "${idea.title}"`);
+  const handleCreateBrief = async (idea) => {
+    // Update idea status to in_progress
+    await handleUpdateStatus(idea, 'in_progress');
+
+    const site = sites.find(s => s.id === idea.site_id);
+    if (site) {
+      // Trigger brief generation
+      try {
+        const result = await n8nApi.generateBrief(idea.keyword || idea.title, site.mcp_alias, {
+          intent: 'informational',
+          content_type: 'article'
+        });
+        if (result.success) {
+          alert(`Brief en cours de création pour "${idea.title}" ! Rendez-vous dans l'onglet Briefs.`);
+        }
+      } catch (err) {
+        console.error('Error creating brief:', err);
+      }
+    }
   };
 
-  const handleGenerate = () => {
-    // TODO: Trigger n8n workflow for idea generation
-    alert('Generation d\'idees via PAA et concurrents (n8n workflow)');
+  const handleGenerate = async () => {
+    const site = selectedSiteId !== 'all' ? sites.find(s => s.id === selectedSiteId) : null;
+
+    if (!site) {
+      alert('Veuillez d\'abord sélectionner un site');
+      return;
+    }
+
+    if (!confirm(`Générer des idées de contenu pour ${site.domain} ?\n\nCela analysera les PAA et concurrents (~0.10€).`)) {
+      return;
+    }
+
+    setIsGenerating(true);
+    try {
+      const result = await n8nApi.extractPAA(site.domain, site.mcp_alias);
+
+      if (result.success) {
+        alert(`Génération d'idées lancée pour ${site.domain} ! Les nouvelles idées apparaîtront dans quelques minutes.`);
+        setTimeout(loadData, 5000);
+      } else {
+        alert('Erreur: ' + result.error);
+      }
+    } catch (err) {
+      alert('Erreur: ' + err.message);
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   // Filter ideas
@@ -333,9 +375,9 @@ export default function Idees() {
           <p className="text-dark-muted mt-1">Generez et gerez vos idees d'articles</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="ghost" onClick={handleGenerate}>
-            <Sparkles className="w-4 h-4 mr-2" />
-            Generer
+          <Button variant="ghost" onClick={handleGenerate} disabled={isGenerating}>
+            <Sparkles className={`w-4 h-4 mr-2 ${isGenerating ? 'animate-pulse' : ''}`} />
+            {isGenerating ? 'Génération...' : 'Generer'}
           </Button>
           <Button onClick={() => setShowAddModal(true)}>
             <Plus className="w-4 h-4 mr-2" />
@@ -410,9 +452,9 @@ export default function Idees() {
           <h3 className="text-lg font-medium text-white mb-2">Aucune idee</h3>
           <p className="text-dark-muted mb-6">Generez des idees ou ajoutez-en manuellement</p>
           <div className="flex gap-3 justify-center">
-            <Button variant="ghost" onClick={handleGenerate}>
-              <Sparkles className="w-4 h-4 mr-2" />
-              Generer des idees
+            <Button variant="ghost" onClick={handleGenerate} disabled={isGenerating}>
+              <Sparkles className={`w-4 h-4 mr-2 ${isGenerating ? 'animate-pulse' : ''}`} />
+              {isGenerating ? 'Génération...' : 'Generer des idees'}
             </Button>
             <Button onClick={() => setShowAddModal(true)}>
               <Plus className="w-4 h-4 mr-2" />
