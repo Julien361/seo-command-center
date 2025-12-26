@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import Sidebar from './components/layout/Sidebar';
 import Header from './components/layout/Header';
-import { Dashboard, Sites, Keywords, Workflows, QuickWins, Articles } from './views';
+import { Dashboard, Sites, Keywords, Workflows, QuickWins, Articles, AddSite } from './views';
 
 const viewTitles = {
   dashboard: 'Dashboard',
@@ -10,6 +10,7 @@ const viewTitles = {
   quickwins: 'Quick Wins',
   articles: 'Articles',
   workflows: 'Workflows',
+  'add-site': 'Ajouter un site',
 };
 
 function App() {
@@ -35,6 +36,8 @@ function App() {
         return <Workflows />;
       case 'articles':
         return <Articles />;
+      case 'add-site':
+        return <AddSite onNavigate={setActiveView} />;
       default:
         return <Dashboard />;
     }
