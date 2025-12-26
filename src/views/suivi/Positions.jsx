@@ -4,6 +4,7 @@ import Card from '../../components/common/Card';
 import Badge from '../../components/common/Badge';
 import Button from '../../components/common/Button';
 import { sitesApi, supabase } from '../../lib/supabase';
+import { n8nApi } from '../../lib/n8n';
 
 // Position change indicator
 function PositionChange({ before, after }) {
@@ -142,9 +143,25 @@ export default function Positions() {
     }
   };
 
-  const handleSync = () => {
-    // TODO: Trigger GSC sync via n8n
-    alert('Synchronisation GSC en cours...');
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  const handleSync = async () => {
+    setIsSyncing(true);
+    try {
+      const siteId = selectedSiteId !== 'all' ? selectedSiteId : null;
+      const result = await n8nApi.syncGSC(siteId);
+
+      if (result.success) {
+        alert('Synchronisation GSC lancée ! Les données seront mises à jour dans quelques minutes.');
+        setTimeout(loadData, 5000);
+      } else {
+        alert('Erreur: ' + result.error);
+      }
+    } catch (err) {
+      alert('Erreur: ' + err.message);
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
   // Filter keywords
@@ -190,9 +207,9 @@ export default function Positions() {
             <option value="28d">28 derniers jours</option>
             <option value="3m">3 derniers mois</option>
           </select>
-          <Button onClick={handleSync}>
-            <RefreshCw className="w-4 h-4 mr-2" />
-            Sync GSC
+          <Button onClick={handleSync} disabled={isSyncing}>
+            <RefreshCw className={`w-4 h-4 mr-2 ${isSyncing ? 'animate-spin' : ''}`} />
+            {isSyncing ? 'Sync...' : 'Sync GSC'}
           </Button>
         </div>
       </div>

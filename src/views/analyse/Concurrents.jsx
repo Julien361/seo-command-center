@@ -4,6 +4,7 @@ import Card from '../../components/common/Card';
 import Badge from '../../components/common/Badge';
 import Button from '../../components/common/Button';
 import { sitesApi, supabase } from '../../lib/supabase';
+import { n8nApi } from '../../lib/n8n';
 
 // Competitor Card Component
 function CompetitorCard({ competitor, onAnalyze, onDelete }) {
@@ -264,8 +265,37 @@ export default function Concurrents() {
   };
 
   const handleAnalyzeCompetitor = async (competitor) => {
-    // TODO: Trigger n8n workflow for competitor analysis
-    alert(`Analyse du concurrent ${competitor.domain} (via n8n workflow)`);
+    const site = sites.find(s => s.id === competitor.site_id);
+    if (!site) {
+      alert('Site non trouvé');
+      return;
+    }
+
+    if (!confirm(`Analyser ${competitor.domain} ?\n\nAttention: Cette opération utilise l'API Firecrawl (~0.10€).`)) {
+      return;
+    }
+
+    try {
+      const result = await n8nApi.analyzeCompetitor(
+        `https://${competitor.domain}`,
+        site.mcp_alias,
+        competitor.focus_keyword
+      );
+
+      if (result.success) {
+        alert(`Analyse de ${competitor.domain} lancée ! Les résultats seront disponibles dans quelques minutes.`);
+        // Mettre à jour la date d'analyse
+        await supabase
+          .from('competitors')
+          .update({ last_analyzed_at: new Date().toISOString() })
+          .eq('id', competitor.id);
+        loadData();
+      } else {
+        alert('Erreur: ' + result.error);
+      }
+    } catch (err) {
+      alert('Erreur: ' + err.message);
+    }
   };
 
   // Filter competitors

@@ -3,6 +3,7 @@ import Card from '../../components/common/Card';
 import Badge from '../../components/common/Badge';
 import Button from '../../components/common/Button';
 import { sitesApi, supabase } from '../../lib/supabase';
+import { n8nApi } from '../../lib/n8n';
 import {
   Send,
   Globe,
@@ -369,6 +370,16 @@ export default function Publication() {
   };
 
   const handlePublish = async (publication) => {
+    const site = sites.find(s => s.id === publication.site_id);
+    if (!site) {
+      alert('Site non trouvé');
+      return;
+    }
+
+    if (!confirm(`Publier "${publication.title}" sur ${site.domain} ?\n\nL'article sera publié sur WordPress.`)) {
+      return;
+    }
+
     // Update status to publishing
     const { error } = await supabase
       .from('articles')
@@ -381,27 +392,37 @@ export default function Publication() {
     }
 
     // Add to queue
-    const site = sites.find(s => s.id === publication.site_id);
     setQueue(prev => [...prev, { ...publication, status: 'publishing', site_domain: site?.domain }]);
 
-    // TODO: Trigger n8n workflow for WordPress publication
-    // n8nApi.publishToWordPress({ article_id: publication.id, site_alias: site?.mcp_alias });
+    try {
+      // Trigger n8n workflow for WordPress publication
+      const result = await n8nApi.publishToWordPress(publication.id, site.mcp_alias, {
+        status: 'publish',
+        scheduled_at: publication.scheduled_at
+      });
 
-    // Simulate publication (in real app, this would be handled by n8n callback)
-    setTimeout(async () => {
-      const { error: updateError } = await supabase
-        .from('articles')
-        .update({
-          status: 'published',
-          published_at: new Date().toISOString(),
-          wp_post_id: Math.floor(Math.random() * 10000) + 1000,
-        })
-        .eq('id', publication.id);
-
-      if (!updateError) {
+      if (result.success) {
+        alert(`Publication lancée pour "${publication.title}" !`);
+        // n8n will update the article status via callback
+        setTimeout(loadData, 5000);
+      } else {
+        // Rollback status on error
+        await supabase
+          .from('articles')
+          .update({ status: 'failed', error_message: result.error })
+          .eq('id', publication.id);
+        alert('Erreur: ' + result.error);
         loadData();
       }
-    }, 3000);
+    } catch (err) {
+      // Rollback status on error
+      await supabase
+        .from('articles')
+        .update({ status: 'failed', error_message: err.message })
+        .eq('id', publication.id);
+      alert('Erreur: ' + err.message);
+      loadData();
+    }
   };
 
   const handleSchedule = async (publication, scheduledAt) => {

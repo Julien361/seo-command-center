@@ -4,6 +4,7 @@ import Card from '../../components/common/Card';
 import Badge from '../../components/common/Badge';
 import Button from '../../components/common/Button';
 import { sitesApi, supabase } from '../../lib/supabase';
+import { n8nApi } from '../../lib/n8n';
 
 // Brief status
 const statusConfig = {
@@ -258,18 +259,42 @@ function BriefFormModal({ brief, sites, onClose, onSave, onGenerate }) {
       alert('Entrez d\'abord le keyword principal');
       return;
     }
+
+    const site = sites.find(s => s.id === formData.site_id);
+    if (!site) {
+      alert('Veuillez d\'abord sélectionner un site');
+      return;
+    }
+
+    if (!confirm(`Générer un brief SEO pour "${formData.main_keyword}" ?\n\nCette opération utilise l'API (~0.05€).`)) {
+      return;
+    }
+
     setIsGenerating(true);
-    // TODO: Call n8n workflow to generate brief content
-    setTimeout(() => {
-      setFormData({
-        ...formData,
-        title: formData.title || `Guide complet: ${formData.main_keyword}`,
-        title_suggestions: `Comment ${formData.main_keyword} : Guide complet 2025\n${formData.main_keyword.charAt(0).toUpperCase() + formData.main_keyword.slice(1)} : Tout ce que vous devez savoir\nLe guide ultime pour ${formData.main_keyword}`,
-        structure: `H1: [Titre optimise]\n\nIntroduction (100-150 mots)\n- Accroche\n- Contexte\n- Promesse de valeur\n\nH2: Qu'est-ce que ${formData.main_keyword} ?\n- Definition\n- Contexte\n\nH2: Pourquoi ${formData.main_keyword} est important\n- Avantages\n- Statistiques\n\nH2: Comment ${formData.main_keyword} : etapes\n- H3: Etape 1\n- H3: Etape 2\n- H3: Etape 3\n\nH2: Conseils d'experts\n- Tips pratiques\n\nH2: FAQ\n- Questions PAA\n\nConclusion + CTA`,
-        questions: `Qu'est-ce que ${formData.main_keyword} ?\nComment fonctionne ${formData.main_keyword} ?\nQuels sont les avantages de ${formData.main_keyword} ?\nCombien coute ${formData.main_keyword} ?`,
+    try {
+      const result = await n8nApi.generateBrief(formData.main_keyword, site.mcp_alias, {
+        intent: formData.search_intent,
+        content_type: formData.content_type
       });
+
+      if (result.success) {
+        // Update form with generated content (n8n will return data via callback or we use defaults)
+        setFormData({
+          ...formData,
+          title: formData.title || `Guide complet: ${formData.main_keyword}`,
+          title_suggestions: `Comment ${formData.main_keyword} : Guide complet 2025\n${formData.main_keyword.charAt(0).toUpperCase() + formData.main_keyword.slice(1)} : Tout ce que vous devez savoir\nLe guide ultime pour ${formData.main_keyword}`,
+          structure: `H1: [Titre optimise]\n\nIntroduction (100-150 mots)\n- Accroche\n- Contexte\n- Promesse de valeur\n\nH2: Qu'est-ce que ${formData.main_keyword} ?\n- Definition\n- Contexte\n\nH2: Pourquoi ${formData.main_keyword} est important\n- Avantages\n- Statistiques\n\nH2: Comment ${formData.main_keyword} : etapes\n- H3: Etape 1\n- H3: Etape 2\n- H3: Etape 3\n\nH2: Conseils d'experts\n- Tips pratiques\n\nH2: FAQ\n- Questions PAA\n\nConclusion + CTA`,
+          questions: `Qu'est-ce que ${formData.main_keyword} ?\nComment fonctionne ${formData.main_keyword} ?\nQuels sont les avantages de ${formData.main_keyword} ?\nCombien coute ${formData.main_keyword} ?`,
+        });
+        alert('Brief généré ! Le workflow n8n enrichira les données dans quelques minutes.');
+      } else {
+        alert('Erreur: ' + result.error);
+      }
+    } catch (err) {
+      alert('Erreur: ' + err.message);
+    } finally {
       setIsGenerating(false);
-    }, 1500);
+    }
   };
 
   return (

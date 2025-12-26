@@ -4,6 +4,7 @@ import Card from '../../components/common/Card';
 import Badge from '../../components/common/Badge';
 import Button from '../../components/common/Button';
 import { clustersApi, sitesApi } from '../../lib/supabase';
+import { n8nApi } from '../../lib/n8n';
 
 // Status colors
 const statusColors = {
@@ -181,6 +182,8 @@ export default function Cocons() {
   const [selectedStatus, setSelectedStatus] = useState('all');
   const [expandedClusters, setExpandedClusters] = useState({});
   const [selectedCluster, setSelectedCluster] = useState(null);
+  const [isCreating, setIsCreating] = useState(false);
+  const [showNewCoconModal, setShowNewCoconModal] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -208,6 +211,34 @@ export default function Cocons() {
       ...prev,
       [clusterId]: !prev[clusterId]
     }));
+  };
+
+  const handleCreateCocon = async (keyword, siteId) => {
+    const site = sites.find(s => s.id === siteId);
+    if (!site) {
+      alert('Veuillez sélectionner un site');
+      return;
+    }
+
+    if (!confirm(`Créer un cocon sémantique pour "${keyword}" ?\n\nCette opération utilise l'API de clustering (~0.05€).`)) {
+      return;
+    }
+
+    setIsCreating(true);
+    try {
+      const result = await n8nApi.clusterKeywords(keyword, site.mcp_alias);
+      if (result.success) {
+        alert(`Clustering lancé pour "${keyword}" ! Les résultats seront disponibles dans quelques minutes.`);
+        setShowNewCoconModal(false);
+        setTimeout(loadData, 5000);
+      } else {
+        alert('Erreur: ' + result.error);
+      }
+    } catch (err) {
+      alert('Erreur: ' + err.message);
+    } finally {
+      setIsCreating(false);
+    }
   };
 
   // Filter clusters
@@ -244,9 +275,9 @@ export default function Cocons() {
           <h1 className="text-2xl font-bold text-white">Cocons Semantiques</h1>
           <p className="text-dark-muted mt-1">Organisez votre contenu en cocons thematiques</p>
         </div>
-        <Button>
+        <Button onClick={() => setShowNewCoconModal(true)} disabled={isCreating}>
           <Plus className="w-4 h-4 mr-2" />
-          Nouveau Cocon
+          {isCreating ? 'Création...' : 'Nouveau Cocon'}
         </Button>
       </div>
 
@@ -399,6 +430,59 @@ export default function Cocons() {
                   </Button>
                 </div>
               </div>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* New Cocon Modal */}
+      {showNewCoconModal && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={() => setShowNewCoconModal(false)}>
+          <Card className="w-full max-w-md" onClick={e => e.stopPropagation()}>
+            <div className="p-6">
+              <h2 className="text-xl font-bold text-white mb-4">Nouveau Cocon Sémantique</h2>
+              <form onSubmit={(e) => {
+                e.preventDefault();
+                const formData = new FormData(e.target);
+                handleCreateCocon(formData.get('keyword'), formData.get('siteId'));
+              }}>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm text-dark-muted mb-1">Keyword principal *</label>
+                    <input
+                      name="keyword"
+                      type="text"
+                      placeholder="Ex: maprimeadapt"
+                      className="w-full px-4 py-2 bg-dark-border border border-dark-border rounded-lg text-white"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm text-dark-muted mb-1">Site *</label>
+                    <select
+                      name="siteId"
+                      className="w-full px-4 py-2 bg-dark-border border border-dark-border rounded-lg text-white"
+                      required
+                    >
+                      <option value="">Sélectionner un site</option>
+                      {sites.map(site => (
+                        <option key={site.id} value={site.id}>{site.mcp_alias || site.domain}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <p className="text-xs text-dark-muted">
+                    Le workflow n8n va analyser le keyword et créer automatiquement un cocon avec les satellites recommandés.
+                  </p>
+                </div>
+                <div className="flex gap-2 justify-end mt-6">
+                  <Button type="button" variant="ghost" onClick={() => setShowNewCoconModal(false)}>
+                    Annuler
+                  </Button>
+                  <Button type="submit" disabled={isCreating}>
+                    {isCreating ? 'Création...' : 'Créer le cocon'}
+                  </Button>
+                </div>
+              </form>
             </div>
           </Card>
         </div>
