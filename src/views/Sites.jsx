@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { ExternalLink, Search, Plus, TrendingUp, TrendingDown, MoreVertical, RefreshCw, Loader2, CloudDownload, CheckCircle } from 'lucide-react';
+import { ExternalLink, Search, Plus, TrendingUp, TrendingDown, MoreVertical, RefreshCw, Loader2, CloudDownload, CheckCircle, Zap } from 'lucide-react';
 import { Card, Badge, Button } from '../components/common';
-import { sitesApi } from '../lib/supabase';
+import { sitesApi, keywordsApi } from '../lib/supabase';
+import { n8nApi } from '../lib/n8n';
 
 const entityColors = {
   'SRAT': 'primary',
@@ -15,6 +16,7 @@ export default function Sites({ onNavigate }) {
   const [sites, setSites] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isSyncingGSC, setIsSyncingGSC] = useState(false);
   const [syncStatus, setSyncStatus] = useState({ done: 0, total: 0, lastSync: null });
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -24,28 +26,74 @@ export default function Sites({ onNavigate }) {
     setIsLoading(true);
     setError(null);
     try {
-      const data = await sitesApi.getAll();
+      // Charger sites et keywords en parallele
+      const [sitesData, keywordsData] = await Promise.all([
+        sitesApi.getAll(),
+        keywordsApi.getAll()
+      ]);
+
+      // Compter les keywords par site
+      const keywordsPerSite = {};
+      const positionsPerSite = {};
+      keywordsData.forEach(kw => {
+        if (kw.site_id) {
+          keywordsPerSite[kw.site_id] = (keywordsPerSite[kw.site_id] || 0) + 1;
+          // Calculer la position moyenne (si position disponible)
+          if (kw.current_position && kw.current_position > 0) {
+            if (!positionsPerSite[kw.site_id]) {
+              positionsPerSite[kw.site_id] = { sum: 0, count: 0 };
+            }
+            positionsPerSite[kw.site_id].sum += kw.current_position;
+            positionsPerSite[kw.site_id].count += 1;
+          }
+        }
+      });
+
       // Mapper les données Supabase vers le format attendu
-      const mappedSites = data.map(site => ({
-        id: site.id,
-        alias: site.mcp_alias,
-        domain: site.domain,
-        entity: site.entity_id,
-        focus: site.seo_focus || '',
-        status: site.is_active ? 'active' : 'inactive',
-        keywords: site.total_keywords_tracked || 0,
-        articles: site.total_articles || 0,
-        avgPos: site.avg_position || '-',
-        trend: site.trend || 'neutral',
-        traffic: site.monthly_traffic || 0,
-        priority: site.priority || 3,
-      }));
+      const mappedSites = sitesData.map(site => {
+        const avgPos = positionsPerSite[site.id]
+          ? Math.round(positionsPerSite[site.id].sum / positionsPerSite[site.id].count * 10) / 10
+          : site.avg_position;
+
+        return {
+          id: site.id,
+          alias: site.mcp_alias,
+          domain: site.domain,
+          entity: site.entity_id,
+          focus: site.seo_focus || '',
+          status: site.is_active ? 'active' : 'inactive',
+          keywords: keywordsPerSite[site.id] || 0,
+          articles: site.total_articles || 0,
+          avgPos: avgPos || '-',
+          trend: site.trend || 'neutral',
+          traffic: site.monthly_traffic || 0,
+          priority: site.priority || 3,
+        };
+      });
       setSites(mappedSites);
     } catch (err) {
       console.error('Erreur chargement sites:', err);
       setError(err.message);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Synchroniser GSC via n8n
+  const syncGSC = async () => {
+    setIsSyncingGSC(true);
+    try {
+      const result = await n8nApi.syncGSC();
+      if (result.success) {
+        // Recharger après un délai pour laisser le workflow s'exécuter
+        setTimeout(loadSites, 5000);
+      } else {
+        setError('Erreur sync GSC: ' + result.error);
+      }
+    } catch (err) {
+      setError('Erreur sync GSC: ' + err.message);
+    } finally {
+      setIsSyncingGSC(false);
     }
   };
 
@@ -110,6 +158,16 @@ export default function Sites({ onNavigate }) {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            icon={isSyncingGSC ? Loader2 : Zap}
+            onClick={syncGSC}
+            disabled={isSyncingGSC || isLoading}
+            className={isSyncingGSC ? 'animate-pulse' : ''}
+            title="Synchronise les positions depuis Google Search Console"
+          >
+            {isSyncingGSC ? 'Sync GSC...' : 'Sync GSC'}
+          </Button>
           <Button
             variant="secondary"
             icon={isSyncing ? Loader2 : CloudDownload}
