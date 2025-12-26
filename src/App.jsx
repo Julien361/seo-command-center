@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import Sidebar from './components/layout/Sidebar';
 import Header from './components/layout/Header';
-import { Dashboard, Sites, Keywords, Workflows, QuickWins, Articles, AddSite, Settings, Cocons, Concurrents, Backlinks, AuditContenu, Idees, Calendrier, Positions, Performance, Alertes, Credentials } from './views';
+import { Dashboard, Sites, Keywords, Workflows, QuickWins, Articles, AddSite, Settings, Cocons, Concurrents, Backlinks, AuditContenu, Idees, Calendrier, Positions, Performance, Alertes, Revenus, SeoLocal, Credentials } from './views';
 import PlaceholderView from './views/PlaceholderView';
 import { sitesApi } from './lib/supabase';
 
@@ -176,11 +176,11 @@ function App() {
       case 'seo-technique':
         return <PlaceholderView title="SEO Technique" description="Core Web Vitals, erreurs 404, indexation." icon={SettingsIcon} />;
       case 'seo-local':
-        return <PlaceholderView title="SEO Local" description="Google Business Profile, avis, citations NAP." icon={MapPin} />;
+        return <SeoLocal />;
       case 'alertes':
         return <Alertes />;
       case 'revenus':
-        return <PlaceholderView title="Revenus" description="Suivez vos leads, ventes et revenus par site." icon={DollarSign} />;
+        return <Revenus />;
 
       // Config
       case 'workflows':

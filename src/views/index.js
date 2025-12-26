@@ -21,6 +21,8 @@ export { default as Calendrier } from './creation/Calendrier';
 export { default as Positions } from './suivi/Positions';
 export { default as Performance } from './suivi/Performance';
 export { default as Alertes } from './suivi/Alertes';
+export { default as Revenus } from './suivi/Revenus';
+export { default as SeoLocal } from './suivi/SeoLocal';
 
 // Config views
 export { default as Credentials } from './config/Credentials';
