@@ -3,40 +3,212 @@ import {
   LayoutDashboard,
   Globe,
   Search,
-  Workflow,
-  TrendingUp,
-  Settings,
-  FileText,
-  Target,
   Zap,
+  Target,
+  Link,
+  FileSearch,
+  GitBranch,
+  Lightbulb,
+  FileText,
+  File,
+  PenTool,
+  Link2,
+  Code,
+  Image,
+  Calendar,
+  Send,
+  TrendingUp,
+  LineChart,
   BarChart3,
+  Settings,
+  MapPin,
+  Bell,
+  DollarSign,
+  Workflow,
+  Key,
+  Terminal,
   Sparkles,
   RotateCcw,
   ChevronUp,
   ChevronDown,
-  Plus
+  ChevronRight,
+  Plus,
+  ExternalLink
 } from 'lucide-react';
 import { Terminal as XTerm } from 'xterm';
 import { FitAddon } from 'xterm-addon-fit';
 import 'xterm/css/xterm.css';
+import { sitesApi } from '../../lib/supabase';
 
-const menuItems = [
-  { icon: LayoutDashboard, label: 'Dashboard', id: 'dashboard' },
-  { icon: Globe, label: 'Sites', id: 'sites' },
-  { icon: Search, label: 'Keywords', id: 'keywords' },
-  { icon: Target, label: 'Quick Wins', id: 'quickwins' },
-  { icon: FileText, label: 'Articles', id: 'articles' },
-  { icon: Workflow, label: 'Workflows', id: 'workflows' },
-];
+// Navigation configuration
+const navigation = {
+  analyse: {
+    label: 'ANALYSE',
+    items: [
+      { id: 'keywords', icon: Search, label: 'Recherche KW' },
+      { id: 'quickwins', icon: Zap, label: 'Quick Wins' },
+      { id: 'concurrents', icon: Target, label: 'Concurrents' },
+      { id: 'backlinks', icon: Link, label: 'Backlinks' },
+      { id: 'audit-contenu', icon: FileSearch, label: 'Audit Contenu' },
+      { id: 'cocons', icon: GitBranch, label: 'Cocons' }
+    ]
+  },
+  creation: {
+    label: 'CREATION',
+    items: [
+      { id: 'idees', icon: Lightbulb, label: 'Idees' },
+      { id: 'briefs', icon: FileText, label: 'Briefs' },
+      { id: 'pages', icon: File, label: 'Pages' },
+      { id: 'articles', icon: PenTool, label: 'Articles' },
+      { id: 'liens-internes', icon: Link2, label: 'Liens Internes' },
+      { id: 'schema-markup', icon: Code, label: 'Schema Markup' },
+      { id: 'images-seo', icon: Image, label: 'Images SEO' },
+      { id: 'calendrier', icon: Calendar, label: 'Calendrier' },
+      { id: 'publication', icon: Send, label: 'Publication' }
+    ]
+  },
+  suivi: {
+    label: 'SUIVI',
+    items: [
+      { id: 'ameliorations', icon: TrendingUp, label: 'Ameliorations' },
+      { id: 'positions', icon: LineChart, label: 'Positions' },
+      { id: 'performance', icon: BarChart3, label: 'Performance' },
+      { id: 'seo-technique', icon: Settings, label: 'SEO Technique' },
+      { id: 'seo-local', icon: MapPin, label: 'SEO Local' },
+      { id: 'alertes', icon: Bell, label: 'Alertes' },
+      { id: 'revenus', icon: DollarSign, label: 'Revenus' }
+    ]
+  },
+  config: {
+    label: 'CONFIG',
+    items: [
+      { id: 'workflows', icon: Workflow, label: 'Workflows n8n' },
+      { id: 'credentials', icon: Key, label: 'Credentials & APIs' }
+    ]
+  }
+};
+
+// NavSection component
+function NavSection({ section, items, activeView, onViewChange, isExpanded, onToggle }) {
+  return (
+    <div className="mb-2">
+      <button
+        onClick={onToggle}
+        className="w-full flex items-center justify-between px-3 py-1.5 text-xs font-semibold text-dark-muted uppercase tracking-wider hover:text-white transition-colors"
+      >
+        <span>{section}</span>
+        <ChevronRight className={`w-3 h-3 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+      </button>
+      {isExpanded && (
+        <ul className="space-y-0.5 mt-1">
+          {items.map((item) => {
+            const Icon = item.icon;
+            const isActive = activeView === item.id;
+            return (
+              <li key={item.id}>
+                <button
+                  onClick={() => onViewChange(item.id)}
+                  className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-md text-sm transition-all ${
+                    isActive
+                      ? 'bg-primary text-white'
+                      : 'text-dark-muted hover:bg-dark-border hover:text-white'
+                  }`}
+                >
+                  <Icon className="w-4 h-4 flex-shrink-0" />
+                  <span className="truncate">{item.label}</span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+// Sites list component
+function SitesList({ sites, activeView, onViewChange, isExpanded, onToggle }) {
+  return (
+    <div className="mb-2">
+      <button
+        onClick={onToggle}
+        className="w-full flex items-center justify-between px-3 py-1.5 text-xs font-semibold text-dark-muted uppercase tracking-wider hover:text-white transition-colors"
+      >
+        <span className="flex items-center gap-1">
+          <Globe className="w-3 h-3" />
+          Sites ({sites.length})
+        </span>
+        <ChevronRight className={`w-3 h-3 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+      </button>
+      {isExpanded && (
+        <ul className="space-y-0.5 mt-1 max-h-48 overflow-y-auto">
+          {sites.map((site) => {
+            const isActive = activeView === `site-${site.id}`;
+            return (
+              <li key={site.id}>
+                <button
+                  onClick={() => onViewChange(`site-${site.id}`)}
+                  className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-md text-sm transition-all group ${
+                    isActive
+                      ? 'bg-primary text-white'
+                      : 'text-dark-muted hover:bg-dark-border hover:text-white'
+                  }`}
+                >
+                  <span className={`w-2 h-2 rounded-full flex-shrink-0 ${site.is_active ? 'bg-success' : 'bg-dark-muted'}`} />
+                  <span className="truncate flex-1 text-left">{site.mcp_alias || site.domain}</span>
+                  <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-50 flex-shrink-0" />
+                </button>
+              </li>
+            );
+          })}
+          <li>
+            <button
+              onClick={() => onViewChange('add-site')}
+              className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-md text-sm transition-all ${
+                activeView === 'add-site'
+                  ? 'bg-primary text-white'
+                  : 'text-primary/70 hover:bg-dark-border hover:text-primary'
+              }`}
+            >
+              <Plus className="w-4 h-4" />
+              <span>Ajouter un site</span>
+            </button>
+          </li>
+        </ul>
+      )}
+    </div>
+  );
+}
 
 export default function Sidebar({ activeView, onViewChange }) {
   const terminalRef = useRef(null);
   const xtermRef = useRef(null);
   const fitAddonRef = useRef(null);
   const [isConnected, setIsConnected] = useState(false);
-  const [isExpanded, setIsExpanded] = useState(true);
+  const [isTerminalExpanded, setIsTerminalExpanded] = useState(true);
   const [appVersion, setAppVersion] = useState('');
+  const [sites, setSites] = useState([]);
+  const [expandedSections, setExpandedSections] = useState({
+    sites: true,
+    analyse: true,
+    creation: false,
+    suivi: false,
+    config: false
+  });
   const isElectron = typeof window !== 'undefined' && window.electronAPI?.isElectron;
+
+  // Load sites
+  useEffect(() => {
+    const loadSites = async () => {
+      try {
+        const data = await sitesApi.getAll();
+        setSites(data || []);
+      } catch (error) {
+        console.error('Error loading sites:', error);
+      }
+    };
+    loadSites();
+  }, []);
 
   // Fetch app version
   useEffect(() => {
@@ -59,8 +231,8 @@ export default function Sidebar({ activeView, onViewChange }) {
         selectionBackground: '#334155',
       },
       fontFamily: 'Menlo, Monaco, monospace',
-      fontSize: 12,
-      lineHeight: 1.3,
+      fontSize: 11,
+      lineHeight: 1.2,
       cursorBlink: true,
       cursorStyle: 'bar',
       scrollback: 5000,
@@ -139,11 +311,18 @@ export default function Sidebar({ activeView, onViewChange }) {
     }
   };
 
+  const toggleSection = (section) => {
+    setExpandedSections(prev => ({
+      ...prev,
+      [section]: !prev[section]
+    }));
+  };
+
   return (
-    <aside className="w-80 bg-dark-card border-r border-dark-border h-screen flex flex-col">
+    <aside className="w-72 bg-dark-card border-r border-dark-border h-screen flex flex-col">
       {/* Header */}
-      <div className="p-4 border-b border-dark-border">
-        <h1 className="text-lg font-bold text-white flex items-center gap-2">
+      <div className="p-3 border-b border-dark-border flex-shrink-0">
+        <h1 className="text-base font-bold text-white flex items-center gap-2">
           <TrendingUp className="w-5 h-5 text-primary" />
           <span>SEO Command Center</span>
           {appVersion && (
@@ -153,50 +332,79 @@ export default function Sidebar({ activeView, onViewChange }) {
       </div>
 
       {/* Navigation */}
-      <nav className="p-3">
-        <ul className="space-y-1">
-          {menuItems.map((item) => {
-            const Icon = item.icon;
-            const isActive = activeView === item.id;
-            return (
-              <li key={item.id}>
-                <button
-                  onClick={() => onViewChange(item.id)}
-                  className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${
-                    isActive
-                      ? 'bg-primary text-white'
-                      : 'text-dark-muted hover:bg-dark-border hover:text-white'
-                  }`}
-                >
-                  <Icon className="w-4 h-4" />
-                  <span className="font-medium">{item.label}</span>
-                </button>
-              </li>
-            );
-          })}
-          {/* Add Site Button */}
-          <li>
-          <button
-            onClick={() => onViewChange('add-site')}
-            className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${
-              activeView === 'add-site'
-                ? 'bg-primary text-white'
-                : 'text-dark-muted hover:bg-dark-border hover:text-white'
-            }`}
-          >
-            <Plus className="w-4 h-4" />
-            <span className="font-medium">Ajouter un site</span>
-          </button>
-          </li>
-        </ul>
+      <nav className="flex-1 overflow-y-auto p-2 space-y-1">
+        {/* Dashboard */}
+        <button
+          onClick={() => onViewChange('dashboard')}
+          className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all mb-2 ${
+            activeView === 'dashboard'
+              ? 'bg-primary text-white'
+              : 'text-dark-muted hover:bg-dark-border hover:text-white'
+          }`}
+        >
+          <LayoutDashboard className="w-4 h-4" />
+          <span className="font-medium">Dashboard</span>
+        </button>
+
+        {/* Sites */}
+        <SitesList
+          sites={sites}
+          activeView={activeView}
+          onViewChange={onViewChange}
+          isExpanded={expandedSections.sites}
+          onToggle={() => toggleSection('sites')}
+        />
+
+        {/* Divider */}
+        <div className="border-t border-dark-border my-2" />
+
+        {/* Analyse */}
+        <NavSection
+          section={navigation.analyse.label}
+          items={navigation.analyse.items}
+          activeView={activeView}
+          onViewChange={onViewChange}
+          isExpanded={expandedSections.analyse}
+          onToggle={() => toggleSection('analyse')}
+        />
+
+        {/* Creation */}
+        <NavSection
+          section={navigation.creation.label}
+          items={navigation.creation.items}
+          activeView={activeView}
+          onViewChange={onViewChange}
+          isExpanded={expandedSections.creation}
+          onToggle={() => toggleSection('creation')}
+        />
+
+        {/* Suivi */}
+        <NavSection
+          section={navigation.suivi.label}
+          items={navigation.suivi.items}
+          activeView={activeView}
+          onViewChange={onViewChange}
+          isExpanded={expandedSections.suivi}
+          onToggle={() => toggleSection('suivi')}
+        />
+
+        {/* Config */}
+        <NavSection
+          section={navigation.config.label}
+          items={navigation.config.items}
+          activeView={activeView}
+          onViewChange={onViewChange}
+          isExpanded={expandedSections.config}
+          onToggle={() => toggleSection('config')}
+        />
       </nav>
 
       {/* Claude Code Section */}
-      <div className="flex-1 flex flex-col border-t border-dark-border min-h-0">
+      <div className="flex flex-col border-t border-dark-border min-h-0 flex-shrink-0" style={{ height: isTerminalExpanded ? '280px' : 'auto' }}>
         {/* Claude Header */}
-        <div className="flex items-center justify-between px-3 py-2 border-b border-dark-border">
+        <div className="flex items-center justify-between px-3 py-2 border-b border-dark-border flex-shrink-0">
           <div className="flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-primary" />
+            <Terminal className="w-4 h-4 text-primary" />
             <span className="text-sm font-medium text-white">Claude Code</span>
             <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-success' : 'bg-warning'}`} />
           </div>
@@ -209,46 +417,31 @@ export default function Sidebar({ activeView, onViewChange }) {
               <RotateCcw className="w-3 h-3" />
             </button>
             <button
-              onClick={() => setIsExpanded(!isExpanded)}
+              onClick={() => setIsTerminalExpanded(!isTerminalExpanded)}
               className="p-1 rounded hover:bg-dark-border text-dark-muted hover:text-white"
             >
-              {isExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />}
+              {isTerminalExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />}
             </button>
           </div>
         </div>
 
         {/* Terminal */}
-        {isExpanded && (
+        {isTerminalExpanded && (
           <div
             ref={terminalRef}
             className="flex-1 overflow-hidden"
-            style={{ backgroundColor: '#0f172a', minHeight: '200px' }}
+            style={{ backgroundColor: '#0f172a' }}
             onClick={() => xtermRef.current?.focus()}
           />
         )}
 
-        {!isElectron && isExpanded && (
+        {!isElectron && isTerminalExpanded && (
           <div className="flex-1 flex items-center justify-center p-4">
             <p className="text-xs text-dark-muted text-center">
               npm run electron:dev
             </p>
           </div>
         )}
-      </div>
-
-      {/* Settings */}
-      <div className="p-3 border-t border-dark-border">
-        <button
-          onClick={() => onViewChange('settings')}
-          className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${
-            activeView === 'settings'
-              ? 'bg-primary text-white'
-              : 'text-dark-muted hover:bg-dark-border hover:text-white'
-          }`}
-        >
-          <Settings className="w-4 h-4" />
-          <span className="font-medium">Settings</span>
-        </button>
       </div>
     </aside>
   );
