@@ -232,6 +232,7 @@ ipcMain.handle('updater-get-status', async () => {
 
 // App lifecycle
 app.whenReady().then(() => {
+  console.log('[App] Starting SEO Command Center v' + app.getVersion());
   createWindow();
 
   // Check for updates (only in production)
