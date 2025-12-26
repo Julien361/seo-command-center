@@ -209,7 +209,15 @@ ipcMain.handle('updater-download', async () => {
 
 ipcMain.handle('updater-install', async () => {
   console.log('[AutoUpdater] Install requested');
-  autoUpdater.quitAndInstall();
+  // Kill PTY process before quitting
+  if (ptyProcess) {
+    ptyProcess.kill();
+    ptyProcess = null;
+  }
+  // Force quit and install: isSilent=false, isForceRunAfter=true
+  setImmediate(() => {
+    autoUpdater.quitAndInstall(false, true);
+  });
   return { success: true };
 });
 
@@ -289,7 +297,15 @@ autoUpdater.on('update-downloaded', (info) => {
     buttons: ['Redémarrer maintenant', 'Plus tard'],
   }).then((result) => {
     if (result.response === 0) {
-      autoUpdater.quitAndInstall();
+      // Kill PTY process before quitting
+      if (ptyProcess) {
+        ptyProcess.kill();
+        ptyProcess = null;
+      }
+      // Force quit and install: isSilent=false, isForceRunAfter=true
+      setImmediate(() => {
+        autoUpdater.quitAndInstall(false, true);
+      });
     }
   });
 });

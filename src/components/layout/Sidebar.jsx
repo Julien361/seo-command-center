@@ -174,16 +174,21 @@ export default function Sidebar({ activeView, onViewChange }) {
               </li>
             );
           })}
+          {/* Add Site Button */}
+          <li>
+          <button
+            onClick={() => onViewChange('add-site')}
+            className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${
+              activeView === 'add-site'
+                ? 'bg-primary text-white'
+                : 'text-dark-muted hover:bg-dark-border hover:text-white'
+            }`}
+          >
+            <Plus className="w-4 h-4" />
+            <span className="font-medium">Ajouter un site</span>
+          </button>
+          </li>
         </ul>
-
-        {/* Add Site Button */}
-        <button
-          onClick={() => onViewChange('add-site')}
-          className="w-full mt-4 flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg text-sm bg-primary text-white hover:bg-primary-dark transition-all font-medium shadow-lg shadow-primary/25"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Ajouter un site</span>
-        </button>
       </nav>
 
       {/* Claude Code Section */}
