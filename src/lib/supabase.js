@@ -363,6 +363,576 @@ export const gscApi = {
   }
 };
 
+// Articles API
+export const articlesApi = {
+  async getAll(filters = {}) {
+    let query = supabase
+      .from('articles')
+      .select(`*, sites (mcp_alias, domain)`)
+      .order('created_at', { ascending: false });
+
+    if (filters.siteId) query = query.eq('site_id', filters.siteId);
+    if (filters.status) query = query.eq('status', filters.status);
+
+    const { data, error } = await query;
+    if (error) throw error;
+    return data || [];
+  },
+
+  async create(article) {
+    const { data, error } = await supabase
+      .from('articles')
+      .insert([article])
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  },
+
+  async update(id, article) {
+    const { data, error } = await supabase
+      .from('articles')
+      .update({ ...article, updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  },
+
+  async delete(id) {
+    const { error } = await supabase.from('articles').delete().eq('id', id);
+    if (error) throw error;
+  }
+};
+
+// Backlinks API
+export const backlinksApi = {
+  async getAll(filters = {}) {
+    let query = supabase
+      .from('backlinks')
+      .select(`*, sites (mcp_alias, domain)`)
+      .order('created_at', { ascending: false });
+
+    if (filters.siteId) query = query.eq('site_id', filters.siteId);
+    if (filters.status) query = query.eq('status', filters.status);
+
+    const { data, error } = await query;
+    if (error) throw error;
+    return data || [];
+  },
+
+  async create(backlink) {
+    const { data, error } = await supabase
+      .from('backlinks')
+      .insert([backlink])
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  },
+
+  async update(id, backlink) {
+    const { data, error } = await supabase
+      .from('backlinks')
+      .update({ ...backlink, updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  },
+
+  async delete(id) {
+    const { error } = await supabase.from('backlinks').delete().eq('id', id);
+    if (error) throw error;
+  }
+};
+
+// Competitors API
+export const competitorsApi = {
+  async getAll(filters = {}) {
+    let query = supabase
+      .from('competitors')
+      .select(`*, sites (mcp_alias, domain)`)
+      .order('created_at', { ascending: false });
+
+    if (filters.siteId) query = query.eq('site_id', filters.siteId);
+
+    const { data, error } = await query;
+    if (error) throw error;
+    return data || [];
+  },
+
+  async create(competitor) {
+    const { data, error } = await supabase
+      .from('competitors')
+      .insert([competitor])
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  },
+
+  async update(id, competitor) {
+    const { data, error } = await supabase
+      .from('competitors')
+      .update({ ...competitor, updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  },
+
+  async delete(id) {
+    const { error } = await supabase.from('competitors').delete().eq('id', id);
+    if (error) throw error;
+  }
+};
+
+// Content Ideas API
+export const ideasApi = {
+  async getAll(filters = {}) {
+    let query = supabase
+      .from('content_ideas')
+      .select(`*, sites (mcp_alias, domain)`)
+      .order('created_at', { ascending: false });
+
+    if (filters.siteId) query = query.eq('site_id', filters.siteId);
+    if (filters.status) query = query.eq('status', filters.status);
+
+    const { data, error } = await query;
+    if (error) throw error;
+    return data || [];
+  },
+
+  async create(idea) {
+    const { data, error } = await supabase
+      .from('content_ideas')
+      .insert([idea])
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  },
+
+  async update(id, idea) {
+    const { data, error } = await supabase
+      .from('content_ideas')
+      .update({ ...idea, updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  },
+
+  async delete(id) {
+    const { error } = await supabase.from('content_ideas').delete().eq('id', id);
+    if (error) throw error;
+  }
+};
+
+// Content Briefs API
+export const briefsApi = {
+  async getAll(filters = {}) {
+    let query = supabase
+      .from('content_briefs')
+      .select(`*, sites (mcp_alias, domain)`)
+      .order('created_at', { ascending: false });
+
+    if (filters.siteId) query = query.eq('site_id', filters.siteId);
+    if (filters.status) query = query.eq('status', filters.status);
+
+    const { data, error } = await query;
+    if (error) throw error;
+    return data || [];
+  },
+
+  async create(brief) {
+    const { data, error } = await supabase
+      .from('content_briefs')
+      .insert([brief])
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  },
+
+  async update(id, brief) {
+    const { data, error } = await supabase
+      .from('content_briefs')
+      .update({ ...brief, updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  },
+
+  async delete(id) {
+    const { error } = await supabase.from('content_briefs').delete().eq('id', id);
+    if (error) throw error;
+  }
+};
+
+// Internal Links API
+export const internalLinksApi = {
+  async getAll(filters = {}) {
+    let query = supabase
+      .from('internal_links')
+      .select(`*, sites (mcp_alias, domain)`)
+      .order('created_at', { ascending: false });
+
+    if (filters.siteId) query = query.eq('site_id', filters.siteId);
+    if (filters.status) query = query.eq('status', filters.status);
+
+    const { data, error } = await query;
+    if (error) throw error;
+    return data || [];
+  },
+
+  async create(link) {
+    const { data, error } = await supabase
+      .from('internal_links')
+      .insert([link])
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  },
+
+  async update(id, link) {
+    const { data, error } = await supabase
+      .from('internal_links')
+      .update({ ...link, updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  },
+
+  async delete(id) {
+    const { error } = await supabase.from('internal_links').delete().eq('id', id);
+    if (error) throw error;
+  }
+};
+
+// Pages API
+export const pagesApi = {
+  async getAll(filters = {}) {
+    let query = supabase
+      .from('pages')
+      .select(`*, sites (mcp_alias, domain)`)
+      .order('created_at', { ascending: false });
+
+    if (filters.siteId) query = query.eq('site_id', filters.siteId);
+    if (filters.type) query = query.eq('page_type', filters.type);
+    if (filters.status) query = query.eq('status', filters.status);
+
+    const { data, error } = await query;
+    if (error) throw error;
+    return data || [];
+  },
+
+  async create(page) {
+    const { data, error } = await supabase
+      .from('pages')
+      .insert([page])
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  },
+
+  async update(id, page) {
+    const { data, error } = await supabase
+      .from('pages')
+      .update({ ...page, updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  },
+
+  async delete(id) {
+    const { error } = await supabase.from('pages').delete().eq('id', id);
+    if (error) throw error;
+  }
+};
+
+// Images API
+export const imagesApi = {
+  async getAll(filters = {}) {
+    let query = supabase
+      .from('images')
+      .select(`*, sites (mcp_alias, domain)`)
+      .order('created_at', { ascending: false });
+
+    if (filters.siteId) query = query.eq('site_id', filters.siteId);
+    if (filters.status) query = query.eq('optimization_status', filters.status);
+
+    const { data, error } = await query;
+    if (error) throw error;
+    return data || [];
+  },
+
+  async create(image) {
+    const { data, error } = await supabase
+      .from('images')
+      .insert([image])
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  },
+
+  async update(id, image) {
+    const { data, error } = await supabase
+      .from('images')
+      .update({ ...image, updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  },
+
+  async delete(id) {
+    const { error } = await supabase.from('images').delete().eq('id', id);
+    if (error) throw error;
+  }
+};
+
+// Alerts API
+export const alertsApi = {
+  async getAll(filters = {}) {
+    let query = supabase
+      .from('alerts')
+      .select(`*, sites (mcp_alias, domain)`)
+      .order('created_at', { ascending: false });
+
+    if (filters.siteId) query = query.eq('site_id', filters.siteId);
+    if (filters.type) query = query.eq('alert_type', filters.type);
+    if (filters.isRead !== undefined) query = query.eq('is_read', filters.isRead);
+
+    const { data, error } = await query;
+    if (error) throw error;
+    return data || [];
+  },
+
+  async create(alert) {
+    const { data, error } = await supabase
+      .from('alerts')
+      .insert([alert])
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  },
+
+  async markAsRead(id) {
+    const { data, error } = await supabase
+      .from('alerts')
+      .update({ is_read: true, read_at: new Date().toISOString() })
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  },
+
+  async delete(id) {
+    const { error } = await supabase.from('alerts').delete().eq('id', id);
+    if (error) throw error;
+  }
+};
+
+// Editorial Calendar API
+export const calendarApi = {
+  async getAll(filters = {}) {
+    let query = supabase
+      .from('editorial_calendar')
+      .select(`*, sites (mcp_alias, domain)`)
+      .order('scheduled_date', { ascending: true });
+
+    if (filters.siteId) query = query.eq('site_id', filters.siteId);
+    if (filters.status) query = query.eq('status', filters.status);
+    if (filters.startDate) query = query.gte('scheduled_date', filters.startDate);
+    if (filters.endDate) query = query.lte('scheduled_date', filters.endDate);
+
+    const { data, error } = await query;
+    if (error) throw error;
+    return data || [];
+  },
+
+  async create(event) {
+    const { data, error } = await supabase
+      .from('editorial_calendar')
+      .insert([event])
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  },
+
+  async update(id, event) {
+    const { data, error } = await supabase
+      .from('editorial_calendar')
+      .update({ ...event, updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  },
+
+  async delete(id) {
+    const { error } = await supabase.from('editorial_calendar').delete().eq('id', id);
+    if (error) throw error;
+  }
+};
+
+// Revenues API
+export const revenuesApi = {
+  async getAll(filters = {}) {
+    let query = supabase
+      .from('revenues')
+      .select(`*, sites (mcp_alias, domain)`)
+      .order('date', { ascending: false });
+
+    if (filters.siteId) query = query.eq('site_id', filters.siteId);
+    if (filters.type) query = query.eq('revenue_type', filters.type);
+    if (filters.startDate) query = query.gte('date', filters.startDate);
+    if (filters.endDate) query = query.lte('date', filters.endDate);
+
+    const { data, error } = await query;
+    if (error) throw error;
+    return data || [];
+  },
+
+  async create(revenue) {
+    const { data, error } = await supabase
+      .from('revenues')
+      .insert([revenue])
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  },
+
+  async update(id, revenue) {
+    const { data, error } = await supabase
+      .from('revenues')
+      .update({ ...revenue, updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  },
+
+  async delete(id) {
+    const { error } = await supabase.from('revenues').delete().eq('id', id);
+    if (error) throw error;
+  },
+
+  async getStats(siteId = null) {
+    let query = supabase.from('revenues').select('amount, revenue_type, date');
+    if (siteId) query = query.eq('site_id', siteId);
+
+    const { data, error } = await query;
+    if (error) throw error;
+
+    const total = (data || []).reduce((sum, r) => sum + (r.amount || 0), 0);
+    const byType = {};
+    (data || []).forEach(r => {
+      byType[r.revenue_type] = (byType[r.revenue_type] || 0) + (r.amount || 0);
+    });
+
+    return { total, byType, count: data?.length || 0 };
+  }
+};
+
+// Improvements API
+export const improvementsApi = {
+  async getAll(filters = {}) {
+    let query = supabase
+      .from('improvements')
+      .select(`*, sites (mcp_alias, domain)`)
+      .order('created_at', { ascending: false });
+
+    if (filters.siteId) query = query.eq('site_id', filters.siteId);
+    if (filters.status) query = query.eq('status', filters.status);
+    if (filters.type) query = query.eq('improvement_type', filters.type);
+
+    const { data, error } = await query;
+    if (error) throw error;
+    return data || [];
+  },
+
+  async create(improvement) {
+    const { data, error } = await supabase
+      .from('improvements')
+      .insert([improvement])
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  },
+
+  async update(id, improvement) {
+    const { data, error } = await supabase
+      .from('improvements')
+      .update({ ...improvement, updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  },
+
+  async delete(id) {
+    const { error } = await supabase.from('improvements').delete().eq('id', id);
+    if (error) throw error;
+  }
+};
+
+// Positions API (from GSC history)
+export const positionsApi = {
+  async getHistory(filters = {}) {
+    let query = supabase
+      .from('gsc_keyword_history')
+      .select(`*, sites (mcp_alias, domain)`)
+      .order('recorded_at', { ascending: false });
+
+    if (filters.siteId) query = query.eq('site_id', filters.siteId);
+    if (filters.keyword) query = query.ilike('keyword', `%${filters.keyword}%`);
+    if (filters.limit) query = query.limit(filters.limit);
+
+    const { data, error } = await query;
+    if (error) throw error;
+    return data || [];
+  },
+
+  async getTopKeywords(siteId, limit = 20) {
+    let query = supabase
+      .from('gsc_keyword_history')
+      .select('keyword, position, clicks, impressions, ctr, page_url')
+      .order('clicks', { ascending: false })
+      .limit(limit);
+
+    if (siteId) query = query.eq('site_id', siteId);
+
+    const { data, error } = await query;
+    if (error) throw error;
+    return data || [];
+  }
+};
+
 // Dashboard Stats API
 export const statsApi = {
   async getDashboardStats() {
