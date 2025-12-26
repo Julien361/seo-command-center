@@ -1,19 +1,8 @@
-import { useState } from 'react';
-import { Search, Filter, Download, TrendingUp, TrendingDown, Target, AlertCircle } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Search, Filter, Download, TrendingUp, TrendingDown, Target, AlertCircle, RefreshCw, Loader2, Sparkles } from 'lucide-react';
 import { Card, Badge, Button } from '../components/common';
-
-const KEYWORDS_DATA = [
-  { keyword: 'diagnostic immobilier paris', site: 'srat.fr', volume: 2400, difficulty: 45, position: 8, prevPosition: 12, intent: 'transactional', quickWin: false },
-  { keyword: 'formation diagnostiqueur immobilier', site: 'pro-formation', volume: 1900, difficulty: 38, position: 5, prevPosition: 7, intent: 'commercial', quickWin: false },
-  { keyword: 'maprimeadapt 2025', site: 'srat.fr', volume: 3200, difficulty: 28, position: 3, prevPosition: 6, intent: 'informational', quickWin: false },
-  { keyword: 'aide adaptation logement senior', site: 'bien-vieillir', volume: 890, difficulty: 22, position: 12, prevPosition: 18, intent: 'informational', quickWin: true },
-  { keyword: 'audit energetique obligatoire', site: 'srat-energies', volume: 1600, difficulty: 52, position: 15, prevPosition: 14, intent: 'informational', quickWin: true },
-  { keyword: 'certification qualiopi formation', site: 'annuaire-qualiopi', volume: 720, difficulty: 35, position: 4, prevPosition: 5, intent: 'commercial', quickWin: false },
-  { keyword: 'assurance chien prix', site: 'assurance-animal', volume: 2100, difficulty: 48, position: 18, prevPosition: 22, intent: 'transactional', quickWin: true },
-  { keyword: 'dpe obligatoire location', site: 'srat-energies', volume: 4500, difficulty: 55, position: 9, prevPosition: 11, intent: 'informational', quickWin: false },
-  { keyword: 'ppt copropriete', site: '3pt', volume: 1100, difficulty: 32, position: 6, prevPosition: 8, intent: 'informational', quickWin: false },
-  { keyword: 'diagnostic amiante avant travaux', site: 'srat.fr', volume: 980, difficulty: 41, position: 11, prevPosition: 15, intent: 'transactional', quickWin: true },
-];
+import { keywordsApi, sitesApi } from '../lib/supabase';
+import { n8nApi, PAID_WORKFLOWS } from '../lib/n8n';
 
 const intentColors = {
   informational: 'info',
@@ -30,15 +19,72 @@ const intentLabels = {
 };
 
 export default function Keywords() {
+  const [keywords, setKeywords] = useState([]);
+  const [sites, setSites] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterIntent, setFilterIntent] = useState('all');
+  const [filterSite, setFilterSite] = useState('all');
   const [showQuickWins, setShowQuickWins] = useState(false);
+  const [showAnalyzeModal, setShowAnalyzeModal] = useState(false);
+  const [analyzeKeyword, setAnalyzeKeyword] = useState('');
+  const [analyzeSite, setAnalyzeSite] = useState('');
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
 
-  const filteredKeywords = KEYWORDS_DATA.filter(kw => {
-    const matchesSearch = kw.keyword.toLowerCase().includes(searchTerm.toLowerCase());
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const [keywordsData, sitesData] = await Promise.all([
+        keywordsApi.getAll(),
+        sitesApi.getAll()
+      ]);
+      setKeywords(keywordsData || []);
+      setSites(sitesData || []);
+    } catch (err) {
+      console.error('Erreur chargement keywords:', err);
+      setError(err.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleAnalyze = async () => {
+    if (!analyzeKeyword || !analyzeSite) return;
+
+    const confirmMsg = `Analyser "${analyzeKeyword}" ?\n\nCette action utilise DataForSEO (payant).\nCout estime: ~0.05 EUR`;
+    if (!confirm(confirmMsg)) return;
+
+    setIsAnalyzing(true);
+    try {
+      const result = await n8nApi.analyzeKeyword(analyzeKeyword, analyzeSite);
+      if (result.success) {
+        alert('Analyse lancee ! Les resultats arriveront dans quelques minutes.');
+        setShowAnalyzeModal(false);
+        setAnalyzeKeyword('');
+        // Recharger apres un delai
+        setTimeout(loadData, 5000);
+      } else {
+        alert('Erreur: ' + result.error);
+      }
+    } catch (err) {
+      alert('Erreur: ' + err.message);
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
+  const filteredKeywords = keywords.filter(kw => {
+    const matchesSearch = (kw.keyword || '').toLowerCase().includes(searchTerm.toLowerCase());
     const matchesIntent = filterIntent === 'all' || kw.intent === filterIntent;
-    const matchesQuickWin = !showQuickWins || kw.quickWin;
-    return matchesSearch && matchesIntent && matchesQuickWin;
+    const matchesSite = filterSite === 'all' || kw.site_id === filterSite;
+    const matchesQuickWin = !showQuickWins || kw.is_quick_win;
+    return matchesSearch && matchesIntent && matchesSite && matchesQuickWin;
   });
 
   const getDifficultyColor = (diff) => {
@@ -52,13 +98,84 @@ export default function Keywords() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-white">Keywords Suivis</h2>
-          <p className="text-dark-muted mt-1">2,847 keywords sur 15 sites</p>
+          <p className="text-dark-muted mt-1">
+            {isLoading ? 'Chargement...' : `${keywords.length} keywords sur ${sites.length} sites`}
+          </p>
         </div>
         <div className="flex items-center gap-3">
-          <Button variant="outline" icon={Download}>Exporter</Button>
-          <Button icon={Search}>Rechercher Keywords</Button>
+          <Button
+            variant="secondary"
+            icon={RefreshCw}
+            onClick={loadData}
+            disabled={isLoading}
+          >
+            Actualiser
+          </Button>
+          <Button
+            icon={Sparkles}
+            onClick={() => setShowAnalyzeModal(true)}
+          >
+            Analyser Keyword
+          </Button>
         </div>
       </div>
+
+      {error && (
+        <div className="bg-danger/10 border border-danger/30 rounded-lg p-4 text-danger flex items-center gap-2">
+          <AlertCircle className="w-5 h-5" />
+          {error}
+        </div>
+      )}
+
+      {/* Modal Analyse Keyword */}
+      {showAnalyzeModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <Card className="w-full max-w-md">
+            <h3 className="text-lg font-semibold text-white mb-4">Analyser un Keyword</h3>
+            <p className="text-warning text-sm mb-4 flex items-center gap-2">
+              <AlertCircle className="w-4 h-4" />
+              Cette action utilise DataForSEO (payant ~0.05 EUR)
+            </p>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm text-dark-muted mb-1">Keyword</label>
+                <input
+                  type="text"
+                  value={analyzeKeyword}
+                  onChange={(e) => setAnalyzeKeyword(e.target.value)}
+                  placeholder="Ex: maprimeadapt conditions"
+                  className="w-full bg-dark-bg border border-dark-border rounded-lg px-4 py-2 text-white"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-dark-muted mb-1">Site</label>
+                <select
+                  value={analyzeSite}
+                  onChange={(e) => setAnalyzeSite(e.target.value)}
+                  className="w-full bg-dark-bg border border-dark-border rounded-lg px-4 py-2 text-white"
+                >
+                  <option value="">Selectionner un site</option>
+                  {sites.map(site => (
+                    <option key={site.id} value={site.mcp_alias}>{site.domain}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex gap-3 justify-end">
+                <Button variant="secondary" onClick={() => setShowAnalyzeModal(false)}>
+                  Annuler
+                </Button>
+                <Button
+                  onClick={handleAnalyze}
+                  disabled={!analyzeKeyword || !analyzeSite || isAnalyzing}
+                  icon={isAnalyzing ? Loader2 : Sparkles}
+                >
+                  {isAnalyzing ? 'Analyse...' : 'Lancer l\'analyse'}
+                </Button>
+              </div>
+            </div>
+          </Card>
+        </div>
+      )}
 
       <Card>
         <div className="flex items-center gap-4 mb-6">
@@ -73,14 +190,14 @@ export default function Keywords() {
             />
           </div>
           <select
-            value={filterIntent}
-            onChange={(e) => setFilterIntent(e.target.value)}
+            value={filterSite}
+            onChange={(e) => setFilterSite(e.target.value)}
             className="bg-dark-bg border border-dark-border rounded-lg px-4 py-2 text-white focus:outline-none focus:border-primary"
           >
-            <option value="all">Tous les intents</option>
-            <option value="informational">Informationnel</option>
-            <option value="transactional">Transactionnel</option>
-            <option value="commercial">Commercial</option>
+            <option value="all">Tous les sites</option>
+            {sites.map(site => (
+              <option key={site.id} value={site.id}>{site.mcp_alias}</option>
+            ))}
           </select>
           <button
             onClick={() => setShowQuickWins(!showQuickWins)}
@@ -95,78 +212,110 @@ export default function Keywords() {
           </button>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-dark-border">
-                <th className="text-left py-3 px-4 text-sm font-medium text-dark-muted">Keyword</th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-dark-muted">Site</th>
-                <th className="text-center py-3 px-4 text-sm font-medium text-dark-muted">Volume</th>
-                <th className="text-center py-3 px-4 text-sm font-medium text-dark-muted">Difficulté</th>
-                <th className="text-center py-3 px-4 text-sm font-medium text-dark-muted">Position</th>
-                <th className="text-center py-3 px-4 text-sm font-medium text-dark-muted">Évolution</th>
-                <th className="text-center py-3 px-4 text-sm font-medium text-dark-muted">Intent</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredKeywords.map((kw, index) => {
-                const positionChange = kw.prevPosition - kw.position;
-                return (
-                  <tr key={index} className="border-b border-dark-border/50 hover:bg-dark-border/30">
-                    <td className="py-4 px-4">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium text-white">{kw.keyword}</span>
-                        {kw.quickWin && (
-                          <Target className="w-4 h-4 text-warning" title="Quick Win" />
-                        )}
-                      </div>
-                    </td>
-                    <td className="py-4 px-4 text-dark-muted">{kw.site}</td>
-                    <td className="py-4 px-4 text-center text-white">{kw.volume.toLocaleString()}</td>
-                    <td className="py-4 px-4 text-center">
-                      <div className="flex items-center justify-center gap-2">
-                        <div className="w-16 h-2 bg-dark-border rounded-full overflow-hidden">
-                          <div
-                            className={`h-full rounded-full ${kw.difficulty < 30 ? 'bg-success' : kw.difficulty < 50 ? 'bg-warning' : 'bg-danger'}`}
-                            style={{ width: `${kw.difficulty}%` }}
-                          />
+        {isLoading ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="w-8 h-8 text-primary animate-spin" />
+          </div>
+        ) : filteredKeywords.length === 0 ? (
+          <div className="text-center py-12">
+            <Target className="w-12 h-12 text-dark-muted mx-auto mb-4" />
+            <p className="text-dark-muted">Aucun keyword trouve</p>
+            <Button
+              className="mt-4"
+              icon={Sparkles}
+              onClick={() => setShowAnalyzeModal(true)}
+            >
+              Analyser un keyword
+            </Button>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-dark-border">
+                  <th className="text-left py-3 px-4 text-sm font-medium text-dark-muted">Keyword</th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-dark-muted">Site</th>
+                  <th className="text-center py-3 px-4 text-sm font-medium text-dark-muted">Volume</th>
+                  <th className="text-center py-3 px-4 text-sm font-medium text-dark-muted">Difficulte</th>
+                  <th className="text-center py-3 px-4 text-sm font-medium text-dark-muted">Position</th>
+                  <th className="text-center py-3 px-4 text-sm font-medium text-dark-muted">Evolution</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredKeywords.map((kw) => {
+                  const positionChange = (kw.previous_position || 0) - (kw.current_position || 0);
+                  const difficulty = kw.difficulty || 0;
+                  const volume = kw.search_volume || 0;
+                  const position = kw.current_position;
+                  const siteName = kw.sites?.mcp_alias || kw.sites?.domain || '-';
+
+                  return (
+                    <tr key={kw.id} className="border-b border-dark-border/50 hover:bg-dark-border/30">
+                      <td className="py-4 px-4">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium text-white">{kw.keyword}</span>
+                          {kw.is_quick_win && (
+                            <Target className="w-4 h-4 text-warning" title="Quick Win" />
+                          )}
+                          {kw.has_featured_snippet && (
+                            <Badge variant="info" size="sm">Snippet</Badge>
+                          )}
                         </div>
-                        <span className={`text-sm ${getDifficultyColor(kw.difficulty)}`}>{kw.difficulty}</span>
-                      </div>
-                    </td>
-                    <td className="py-4 px-4 text-center">
-                      <Badge variant={kw.position <= 3 ? 'success' : kw.position <= 10 ? 'primary' : 'warning'}>
-                        {kw.position}
-                      </Badge>
-                    </td>
-                    <td className="py-4 px-4 text-center">
-                      <div className={`flex items-center justify-center gap-1 ${positionChange > 0 ? 'text-success' : positionChange < 0 ? 'text-danger' : 'text-dark-muted'}`}>
-                        {positionChange > 0 ? (
-                          <>
-                            <TrendingUp className="w-4 h-4" />
-                            <span>+{positionChange}</span>
-                          </>
-                        ) : positionChange < 0 ? (
-                          <>
-                            <TrendingDown className="w-4 h-4" />
-                            <span>{positionChange}</span>
-                          </>
+                      </td>
+                      <td className="py-4 px-4 text-dark-muted">{siteName}</td>
+                      <td className="py-4 px-4 text-center text-white">
+                        {volume > 0 ? volume.toLocaleString() : '-'}
+                      </td>
+                      <td className="py-4 px-4 text-center">
+                        {difficulty > 0 ? (
+                          <div className="flex items-center justify-center gap-2">
+                            <div className="w-16 h-2 bg-dark-border rounded-full overflow-hidden">
+                              <div
+                                className={`h-full rounded-full ${difficulty < 30 ? 'bg-success' : difficulty < 50 ? 'bg-warning' : 'bg-danger'}`}
+                                style={{ width: `${difficulty}%` }}
+                              />
+                            </div>
+                            <span className={`text-sm ${getDifficultyColor(difficulty)}`}>{difficulty}</span>
+                          </div>
                         ) : (
-                          <span>-</span>
+                          <span className="text-dark-muted">-</span>
                         )}
-                      </div>
-                    </td>
-                    <td className="py-4 px-4 text-center">
-                      <Badge variant={intentColors[kw.intent]} size="sm">
-                        {intentLabels[kw.intent]}
-                      </Badge>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                      </td>
+                      <td className="py-4 px-4 text-center">
+                        {position ? (
+                          <Badge variant={position <= 3 ? 'success' : position <= 10 ? 'primary' : 'warning'}>
+                            {position}
+                          </Badge>
+                        ) : (
+                          <span className="text-dark-muted">-</span>
+                        )}
+                      </td>
+                      <td className="py-4 px-4 text-center">
+                        {positionChange !== 0 ? (
+                          <div className={`flex items-center justify-center gap-1 ${positionChange > 0 ? 'text-success' : 'text-danger'}`}>
+                            {positionChange > 0 ? (
+                              <>
+                                <TrendingUp className="w-4 h-4" />
+                                <span>+{positionChange}</span>
+                              </>
+                            ) : (
+                              <>
+                                <TrendingDown className="w-4 h-4" />
+                                <span>{positionChange}</span>
+                              </>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-dark-muted">-</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </Card>
     </div>
   );

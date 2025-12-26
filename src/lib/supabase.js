@@ -158,3 +158,201 @@ export const sitesApi = {
     return results;
   }
 };
+
+// Keywords API
+export const keywordsApi = {
+  async getAll(filters = {}) {
+    let query = supabase
+      .from('keywords')
+      .select(`
+        *,
+        sites (mcp_alias, domain)
+      `)
+      .order('search_volume', { ascending: false, nullsFirst: false });
+
+    if (filters.siteId) {
+      query = query.eq('site_id', filters.siteId);
+    }
+    if (filters.isTracked !== undefined) {
+      query = query.eq('is_tracked', filters.isTracked);
+    }
+    if (filters.isQuickWin !== undefined) {
+      query = query.eq('is_quick_win', filters.isQuickWin);
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+    return data;
+  },
+
+  async getBySite(siteId) {
+    const { data, error } = await supabase
+      .from('keywords')
+      .select('*')
+      .eq('site_id', siteId)
+      .order('search_volume', { ascending: false, nullsFirst: false });
+
+    if (error) throw error;
+    return data;
+  },
+
+  async getCount() {
+    const { count, error } = await supabase
+      .from('keywords')
+      .select('*', { count: 'exact', head: true });
+
+    if (error) throw error;
+    return count;
+  }
+};
+
+// Quick Wins API
+export const quickWinsApi = {
+  async getAll(filters = {}) {
+    let query = supabase
+      .from('quick_wins')
+      .select(`
+        *,
+        sites (mcp_alias, domain)
+      `)
+      .order('opportunity_score', { ascending: false });
+
+    if (filters.siteId) {
+      query = query.eq('site_id', filters.siteId);
+    }
+    if (filters.status) {
+      query = query.eq('status', filters.status);
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+    return data;
+  },
+
+  async updateStatus(id, status) {
+    const { data, error } = await supabase
+      .from('quick_wins')
+      .update({ status, updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  async getCount() {
+    const { count, error } = await supabase
+      .from('quick_wins')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'pending');
+
+    if (error) throw error;
+    return count;
+  }
+};
+
+// SERP Results API
+export const serpApi = {
+  async getByKeyword(keyword, siteId = null) {
+    let query = supabase
+      .from('serp_results')
+      .select('*')
+      .eq('keyword', keyword)
+      .order('position', { ascending: true });
+
+    if (siteId) {
+      query = query.eq('site_id', siteId);
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+    return data;
+  },
+
+  async getRecent(limit = 50) {
+    const { data, error } = await supabase
+      .from('serp_results')
+      .select(`
+        *,
+        sites (mcp_alias, domain)
+      `)
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (error) throw error;
+    return data;
+  }
+};
+
+// Semantic Clusters API
+export const clustersApi = {
+  async getAll(siteId = null) {
+    let query = supabase
+      .from('semantic_clusters')
+      .select(`
+        *,
+        sites (mcp_alias, domain)
+      `)
+      .order('created_at', { ascending: false });
+
+    if (siteId) {
+      query = query.eq('site_id', siteId);
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+    return data;
+  },
+
+  async getById(id) {
+    const { data, error } = await supabase
+      .from('semantic_clusters')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  async getCount() {
+    const { count, error } = await supabase
+      .from('semantic_clusters')
+      .select('*', { count: 'exact', head: true });
+
+    if (error) throw error;
+    return count;
+  }
+};
+
+// Dashboard Stats API
+export const statsApi = {
+  async getDashboardStats() {
+    const [sites, keywords, quickWins, clusters] = await Promise.all([
+      supabase.from('sites').select('*', { count: 'exact', head: true }),
+      supabase.from('keywords').select('*', { count: 'exact', head: true }),
+      supabase.from('quick_wins').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
+      supabase.from('semantic_clusters').select('*', { count: 'exact', head: true }),
+    ]);
+
+    return {
+      totalSites: sites.count || 0,
+      totalKeywords: keywords.count || 0,
+      pendingQuickWins: quickWins.count || 0,
+      totalClusters: clusters.count || 0,
+    };
+  },
+
+  async getRecentActivity(limit = 10) {
+    const { data, error } = await supabase
+      .from('sites')
+      .select('mcp_alias, domain, last_monitored_at, total_articles')
+      .not('last_monitored_at', 'is', null)
+      .order('last_monitored_at', { ascending: false })
+      .limit(limit);
+
+    if (error) throw error;
+    return data;
+  }
+};

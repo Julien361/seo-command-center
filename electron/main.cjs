@@ -120,6 +120,8 @@ function startClaude() {
     isStarting = false;
 
     ptyProcess.onData((data) => {
+      // Log PTY output for debugging
+      console.log('[PTY] Output:', JSON.stringify(data.substring(0, 200)));
       if (mainWindow) {
         mainWindow.webContents.send('terminal-data', data);
       }
@@ -137,10 +139,10 @@ function startClaude() {
     // Auto-launch claude after shell is ready
     setTimeout(() => {
       if (ptyProcess) {
-        console.log('[PTY] Sending claude command with permission mode');
-        ptyProcess.write('claude --permission-mode bypassPermissions\r');
+        console.log('[PTY] Sending claude command');
+        ptyProcess.write('claude\r');
       }
-    }, 500);
+    }, 1000);
 
   } catch (error) {
     console.error('[PTY] Error starting:', error);

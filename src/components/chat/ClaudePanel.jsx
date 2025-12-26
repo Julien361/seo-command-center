@@ -67,14 +67,23 @@ export default function ClaudePanel({ onClose }) {
 
     // Handle user input
     xterm.onData((data) => {
-      console.log('[ClaudePanel] User typed:', JSON.stringify(data));
+      console.log('[ClaudePanel] User typed:', JSON.stringify(data), 'charCode:', data.charCodeAt(0));
       console.log('[ClaudePanel] window.terminal exists:', !!window.terminal);
       if (window.terminal) {
-        window.terminal.write(data);
+        console.log('[ClaudePanel] Sending to PTY...');
+        window.terminal.write(data).then((result) => {
+          console.log('[ClaudePanel] PTY write result:', result);
+        }).catch((err) => {
+          console.error('[ClaudePanel] PTY write error:', err);
+        });
       } else {
         console.error('[ClaudePanel] window.terminal is undefined!');
       }
     });
+
+    // Focus the terminal to receive input
+    xterm.focus();
+    console.log('[ClaudePanel] Terminal focused');
 
     // Handle terminal output
     window.terminal.onData((data) => {
@@ -204,6 +213,12 @@ export default function ClaudePanel({ onClose }) {
         ref={terminalRef}
         className="flex-1 overflow-hidden p-2"
         style={{ backgroundColor: '#0f172a' }}
+        onClick={() => {
+          if (xtermRef.current) {
+            xtermRef.current.focus();
+            console.log('[ClaudePanel] Terminal clicked and focused');
+          }
+        }}
       />
     </aside>
   );
