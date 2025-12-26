@@ -89,5 +89,59 @@ export const sitesApi = {
       .eq('id', id);
 
     if (error) throw error;
+  },
+
+  // Synchroniser les stats d'un site depuis WordPress
+  async syncSiteStats(site) {
+    if (!site.wp_api_url || !site.wp_username || !site.wp_app_password) {
+      return { success: false, error: 'Credentials WordPress manquants' };
+    }
+
+    try {
+      const authHeader = 'Basic ' + btoa(`${site.wp_username}:${site.wp_app_password}`);
+
+      // Récupérer le nombre total d'articles
+      const postsResponse = await fetch(`${site.wp_api_url}/posts?per_page=1&status=publish`, {
+        headers: { 'Authorization': authHeader }
+      });
+
+      if (!postsResponse.ok) {
+        throw new Error(`HTTP ${postsResponse.status}`);
+      }
+
+      const totalArticles = parseInt(postsResponse.headers.get('X-WP-Total')) || 0;
+
+      // Mettre à jour dans Supabase
+      const { error } = await supabase
+        .from('sites')
+        .update({
+          total_articles: totalArticles,
+          last_monitored_at: new Date().toISOString()
+        })
+        .eq('id', site.id);
+
+      if (error) throw error;
+
+      return { success: true, total_articles: totalArticles };
+    } catch (error) {
+      console.error(`Sync error for ${site.domain}:`, error);
+      return { success: false, error: error.message };
+    }
+  },
+
+  // Synchroniser tous les sites
+  async syncAllSites() {
+    const sites = await this.getAll();
+    const results = [];
+
+    for (const site of sites) {
+      const result = await this.syncSiteStats(site);
+      results.push({
+        domain: site.domain,
+        ...result
+      });
+    }
+
+    return results;
   }
 };

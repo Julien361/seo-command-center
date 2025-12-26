@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ExternalLink, Search, Plus, TrendingUp, TrendingDown, MoreVertical, RefreshCw, Loader2 } from 'lucide-react';
+import { ExternalLink, Search, Plus, TrendingUp, TrendingDown, MoreVertical, RefreshCw, Loader2, CloudDownload, CheckCircle } from 'lucide-react';
 import { Card, Badge, Button } from '../components/common';
 import { sitesApi } from '../lib/supabase';
 
@@ -14,6 +14,8 @@ const entityColors = {
 export default function Sites({ onNavigate }) {
   const [sites, setSites] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncStatus, setSyncStatus] = useState({ done: 0, total: 0, lastSync: null });
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterEntity, setFilterEntity] = useState('all');
@@ -47,9 +49,47 @@ export default function Sites({ onNavigate }) {
     }
   };
 
+  // Synchroniser les stats WordPress de tous les sites
+  const syncAllSites = async () => {
+    setIsSyncing(true);
+    setSyncStatus({ done: 0, total: 0, lastSync: null });
+
+    try {
+      const allSites = await sitesApi.getAll();
+      const sitesWithWP = allSites.filter(s => s.wp_api_url && s.wp_username && s.wp_app_password);
+      setSyncStatus(prev => ({ ...prev, total: sitesWithWP.length }));
+
+      for (let i = 0; i < sitesWithWP.length; i++) {
+        const site = sitesWithWP[i];
+        await sitesApi.syncSiteStats(site);
+        setSyncStatus(prev => ({ ...prev, done: i + 1 }));
+      }
+
+      setSyncStatus(prev => ({ ...prev, lastSync: new Date() }));
+      // Recharger les sites après la sync
+      await loadSites();
+    } catch (err) {
+      console.error('Sync error:', err);
+      setError('Erreur lors de la synchronisation');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   useEffect(() => {
     loadSites();
   }, []);
+
+  // Sync automatique au premier chargement (après que les sites soient chargés)
+  useEffect(() => {
+    if (sites.length > 0 && !isSyncing && syncStatus.lastSync === null) {
+      // Lancer la sync en arrière-plan après 1 seconde
+      const timer = setTimeout(() => {
+        syncAllSites();
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [sites.length]);
 
   const entities = [...new Set(sites.map(s => s.entity).filter(Boolean))];
 
@@ -70,6 +110,20 @@ export default function Sites({ onNavigate }) {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Button
+            variant="secondary"
+            icon={isSyncing ? Loader2 : CloudDownload}
+            onClick={syncAllSites}
+            disabled={isSyncing || isLoading}
+            className={isSyncing ? 'animate-pulse' : ''}
+          >
+            {isSyncing
+              ? `Sync ${syncStatus.done}/${syncStatus.total}`
+              : syncStatus.lastSync
+                ? 'Re-synchroniser'
+                : 'Sync WordPress'
+            }
+          </Button>
           <Button
             variant="secondary"
             icon={RefreshCw}
