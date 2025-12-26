@@ -326,6 +326,43 @@ export const clustersApi = {
   }
 };
 
+// GSC Keyword History API
+export const gscApi = {
+  async getPositionsBySite() {
+    const { data, error } = await supabase
+      .from('gsc_keyword_history')
+      .select('site_id, position, clicks, impressions');
+
+    if (error) throw error;
+
+    // Calculer les stats par site
+    const statsBySite = {};
+    data.forEach(row => {
+      if (!statsBySite[row.site_id]) {
+        statsBySite[row.site_id] = { positions: [], clicks: 0, impressions: 0 };
+      }
+      statsBySite[row.site_id].positions.push(row.position);
+      statsBySite[row.site_id].clicks += row.clicks || 0;
+      statsBySite[row.site_id].impressions += row.impressions || 0;
+    });
+
+    // Calculer la position moyenne par site
+    const result = {};
+    for (const [siteId, stats] of Object.entries(statsBySite)) {
+      const avgPosition = stats.positions.length > 0
+        ? Math.round((stats.positions.reduce((a, b) => a + b, 0) / stats.positions.length) * 10) / 10
+        : null;
+      result[siteId] = {
+        avgPosition,
+        totalClicks: stats.clicks,
+        totalImpressions: stats.impressions,
+        keywordsTracked: stats.positions.length
+      };
+    }
+    return result;
+  }
+};
+
 // Dashboard Stats API
 export const statsApi = {
   async getDashboardStats() {

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { ExternalLink, Search, Plus, MoreVertical, RefreshCw, Loader2, CloudDownload, Zap } from 'lucide-react';
 import { Card, Badge, Button } from '../components/common';
-import { sitesApi, keywordsApi } from '../lib/supabase';
+import { sitesApi, keywordsApi, gscApi } from '../lib/supabase';
 import { n8nApi } from '../lib/n8n';
 
 const entityColors = {
@@ -26,14 +26,13 @@ export default function Sites({ onNavigate }) {
     setIsLoading(true);
     setError(null);
     try {
-      // Charger sites et keywords en parallele
-      const [sitesData, keywordsData] = await Promise.all([
+      // Charger sites, keywords, quick wins et GSC en parallele
+      const [sitesData, keywordsData, quickWinsData, gscData] = await Promise.all([
         sitesApi.getAll(),
-        keywordsApi.getAll()
+        keywordsApi.getAll(),
+        import('../lib/supabase').then(m => m.quickWinsApi.getAll()),
+        gscApi.getPositionsBySite().catch(() => ({}))
       ]);
-
-      // Charger aussi les quick wins
-      const quickWinsData = await import('../lib/supabase').then(m => m.quickWinsApi.getAll());
 
       // Calculer les stats par site
       const statsPerSite = {};
@@ -58,6 +57,7 @@ export default function Sites({ onNavigate }) {
       // Mapper les données Supabase vers le format attendu
       const mappedSites = sitesData.map(site => {
         const stats = statsPerSite[site.id] || { keywords: 0, volume: 0 };
+        const gsc = gscData[site.id] || {};
 
         return {
           id: site.id,
@@ -70,6 +70,9 @@ export default function Sites({ onNavigate }) {
           volume: stats.volume,
           quickWins: quickWinsPerSite[site.id] || 0,
           articles: site.total_articles || 0,
+          avgPosition: gsc.avgPosition || null,
+          clicks: gsc.totalClicks || 0,
+          impressions: gsc.totalImpressions || 0,
           priority: site.priority || 3,
           lastSync: site.last_monitored_at,
         };
@@ -253,10 +256,10 @@ export default function Sites({ onNavigate }) {
                   <th className="text-left py-3 px-4 text-sm font-medium text-dark-muted">Site</th>
                   <th className="text-left py-3 px-4 text-sm font-medium text-dark-muted">Entité</th>
                   <th className="text-center py-3 px-4 text-sm font-medium text-dark-muted">Keywords</th>
-                  <th className="text-center py-3 px-4 text-sm font-medium text-dark-muted">Volume</th>
+                  <th className="text-center py-3 px-4 text-sm font-medium text-dark-muted">Pos. Moy.</th>
+                  <th className="text-center py-3 px-4 text-sm font-medium text-dark-muted">Clics GSC</th>
                   <th className="text-center py-3 px-4 text-sm font-medium text-dark-muted">Quick Wins</th>
                   <th className="text-center py-3 px-4 text-sm font-medium text-dark-muted">Articles</th>
-                  <th className="text-center py-3 px-4 text-sm font-medium text-dark-muted">Priorité</th>
                   <th className="text-center py-3 px-4 text-sm font-medium text-dark-muted">Actions</th>
                 </tr>
               </thead>
@@ -283,8 +286,17 @@ export default function Sites({ onNavigate }) {
                       <Badge variant={entityColors[site.entity] || 'secondary'}>{site.entity || '-'}</Badge>
                     </td>
                     <td className="py-4 px-4 text-center text-white">{site.keywords}</td>
+                    <td className="py-4 px-4 text-center">
+                      {site.avgPosition ? (
+                        <Badge variant={site.avgPosition <= 10 ? 'success' : site.avgPosition <= 30 ? 'warning' : 'secondary'}>
+                          {site.avgPosition}
+                        </Badge>
+                      ) : (
+                        <span className="text-dark-muted">-</span>
+                      )}
+                    </td>
                     <td className="py-4 px-4 text-center text-white">
-                      {site.volume > 0 ? site.volume.toLocaleString() : '-'}
+                      {site.clicks > 0 ? site.clicks.toLocaleString() : '-'}
                     </td>
                     <td className="py-4 px-4 text-center">
                       {site.quickWins > 0 ? (
@@ -294,16 +306,6 @@ export default function Sites({ onNavigate }) {
                       )}
                     </td>
                     <td className="py-4 px-4 text-center text-white">{site.articles}</td>
-                    <td className="py-4 px-4 text-center">
-                      <div className="flex items-center justify-center gap-1">
-                        {[1, 2, 3, 4, 5].map(star => (
-                          <div
-                            key={star}
-                            className={`w-2 h-2 rounded-full ${star <= site.priority ? 'bg-primary' : 'bg-dark-border'}`}
-                          />
-                        ))}
-                      </div>
-                    </td>
                     <td className="py-4 px-4 text-center">
                       <button className="p-2 rounded-lg hover:bg-dark-border">
                         <MoreVertical className="w-4 h-4 text-dark-muted" />
