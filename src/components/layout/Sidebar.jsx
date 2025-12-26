@@ -13,7 +13,8 @@ import {
   Sparkles,
   RotateCcw,
   ChevronUp,
-  ChevronDown
+  ChevronDown,
+  Plus
 } from 'lucide-react';
 import { Terminal as XTerm } from 'xterm';
 import { FitAddon } from 'xterm-addon-fit';
@@ -161,6 +162,15 @@ export default function Sidebar({ activeView, onViewChange }) {
             );
           })}
         </ul>
+
+        {/* Add Site Button */}
+        <button
+          onClick={() => onViewChange('add-site')}
+          className="w-full mt-3 flex items-center gap-2 px-3 py-2 rounded-lg text-sm bg-primary/10 text-primary hover:bg-primary/20 transition-all border border-primary/30"
+        >
+          <Plus className="w-4 h-4" />
+          <span className="font-medium">Ajouter un site</span>
+        </button>
       </nav>
 
       {/* Claude Code Section */}
