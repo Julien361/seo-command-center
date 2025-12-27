@@ -215,6 +215,9 @@ function SiteDetailView({ site, onBack, onRefresh }) {
         case 'technical-audit':
           result = await n8nApi.triggerWebhook('technical-audit', { site_alias: site.alias, max_pages: 10 });
           break;
+        case 'backlink-analysis':
+          result = await n8nApi.triggerWebhook('backlinks-sync', { site_alias: site.alias });
+          break;
         case 'quick-wins':
           result = await n8nApi.triggerWebhook('wf7', { site_id: site.id });
           break;
@@ -1020,9 +1023,13 @@ function SiteDetailView({ site, onBack, onRefresh }) {
                 </p>
               )}
             </div>
-            <Button disabled variant={backlinks.length > 0 ? 'ghost' : 'primary'}>
-              <LinkIcon className="w-4 h-4 mr-2" />
-              Analyser
+            <Button
+              onClick={() => handleAction('backlink-analysis')}
+              disabled={isRunningAction === 'backlink-analysis'}
+              variant={backlinks.length > 0 ? 'ghost' : 'primary'}
+            >
+              <LinkIcon className={`w-4 h-4 mr-2 ${isRunningAction === 'backlink-analysis' ? 'animate-spin' : ''}`} />
+              {isRunningAction === 'backlink-analysis' ? 'Analyse...' : backlinks.length > 0 ? 'Actualiser' : 'Analyser'}
               <span className="ml-2 text-xs opacity-70 bg-warning/20 text-warning px-1.5 py-0.5 rounded">~0.30€</span>
             </Button>
           </div>
