@@ -1594,12 +1594,17 @@ export default function Sites({ onNavigate, selectedSite: propSelectedSite }) {
     setIsLoading(true);
     setError(null);
     try {
-      const [sitesData, keywordsData, quickWinsData, gscData] = await Promise.all([
+      const [sitesData, keywordsData, quickWinsData, gscData, entitiesData] = await Promise.all([
         sitesApi.getAll(),
         keywordsApi.getAll(),
         import('../lib/supabase').then(m => m.quickWinsApi.getAll()),
-        gscApi.getPositionsBySite().catch(() => ({}))
+        gscApi.getPositionsBySite().catch(() => ({})),
+        supabase.from('entities').select('id, name').then(r => r.data || [])
       ]);
+
+      // Map entity IDs to names
+      const entityMap = {};
+      entitiesData.forEach(e => { entityMap[e.id] = e.name; });
 
       const statsPerSite = {};
       keywordsData.forEach(kw => {
@@ -1636,8 +1641,8 @@ export default function Sites({ onNavigate, selectedSite: propSelectedSite }) {
           id: site.id,
           alias: site.mcp_alias,
           domain: site.domain,
-          entity: site.entity_id,
-          focus: site.seo_focus || '',
+          entity: entityMap[site.entity_id] || site.entity_id || 'Non assigné',
+          focus: Array.isArray(site.seo_focus) ? site.seo_focus.join(' • ') : (site.seo_focus || ''),
           status: site.is_active ? 'active' : 'inactive',
           keywords: stats.keywords,
           keywordsWithPosition: stats.hasPosition,
