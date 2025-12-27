@@ -87,20 +87,21 @@ export const WORKFLOWS = {
   WF7_QUICKWINS: {
     id: 'iDw93XnHfycbcLJb',
     name: 'Quick Wins Scoring',
-    webhook: 'wf7',
-    description: 'Détection et scoring des opportunités quick win',
+    webhook: null, // Sub-workflow only, pas de webhook direct
+    description: 'Détection et scoring des opportunités quick win (sub-workflow)',
     category: 'processing',
     isPaid: false,
     estimatedCost: 0,
+    isSubWorkflow: true,
   },
   COCON_BUILDER: {
     id: 'DEJfmARt6NcjqE3S',
     name: 'Cocon Sémantique Builder',
-    webhook: 'cocon-builder',
-    description: 'Construction de cocons sémantiques',
+    webhook: 'wf-setup-3',
+    description: 'Construction de cocons sémantiques (pages piliers + satellites)',
     category: 'processing',
     isPaid: true,
-    estimatedCost: 0.05,
+    estimatedCost: 0.10,
   },
 
   // === Monitoring ===
@@ -507,14 +508,17 @@ export const n8nApi = {
   // ===================
 
   /**
-   * Recalculer les Quick Wins (WF7)
-   * GRATUIT
+   * Recalculer les Quick Wins
+   * NOTE: WF7 est un sub-workflow, pas de webhook direct
+   * Les quick wins sont calculés via WF0 ou directement depuis Supabase
    */
   async recalculateQuickWins(siteId = null) {
-    return triggerWebhook('wf7', {
-      site_id: siteId,
-      action: 'recalculate',
-    });
+    // WF7 n'a pas de webhook - c'est un sub-workflow
+    // Pour recalculer, il faudrait soit:
+    // 1. Relancer WF0 (seo-cascade-start) qui appelle WF7
+    // 2. Ou créer un workflow wrapper avec webhook
+    console.warn('WF7 Quick Wins est un sub-workflow sans webhook direct');
+    return { success: false, error: 'WF7 est un sub-workflow. Utilisez seo-cascade-start pour une analyse complète.' };
   },
 
   /**
@@ -540,14 +544,13 @@ export const n8nApi = {
   },
 
   /**
-   * Construire un cocon sémantique
-   * ATTENTION: Coûte ~0.05€
+   * Construire un cocon sémantique (pages piliers + satellites)
+   * ATTENTION: Coûte ~0.10€
    */
-  async buildCocon(siteId, mainKeyword, satelliteKeywords = []) {
-    return triggerWebhook('cocon-builder', {
-      site_id: siteId,
+  async buildCocon(siteAlias, mainKeyword) {
+    return triggerWebhook('wf-setup-3', {
+      site_alias: siteAlias,
       main_keyword: mainKeyword,
-      satellites: satelliteKeywords,
     });
   },
 

@@ -223,7 +223,10 @@ function SiteDetailView({ site, onBack, onRefresh }) {
           result = await n8nApi.triggerWebhook('wf-setup-3', { site_alias: site.alias, main_keyword: site.focus });
           break;
         case 'quick-wins':
-          result = await n8nApi.triggerWebhook('wf7', { site_id: site.id });
+          // Quick Wins Scoring est un sub-workflow, pas un webhook
+          // On navigue simplement vers l'onglet Quick Wins qui affiche les données Supabase
+          setActiveTab('quickwins');
+          result = { success: true, message: 'Navigation vers Quick Wins' };
           break;
         case 'gsc-sync':
           result = await n8nApi.syncGSC();
@@ -233,8 +236,11 @@ function SiteDetailView({ site, onBack, onRefresh }) {
           return;
       }
       if (result?.success !== false) {
-        alert('Action lancée ! Les résultats seront disponibles dans quelques instants.');
-        setTimeout(loadAllData, 10000);
+        // Pas d'alert pour la navigation quick-wins
+        if (actionType !== 'quick-wins') {
+          alert('Action lancée ! Les résultats seront disponibles dans quelques instants.');
+          setTimeout(loadAllData, 10000);
+        }
       } else {
         alert('Erreur: ' + (result?.error || 'Échec'));
       }
