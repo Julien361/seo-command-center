@@ -194,7 +194,7 @@ function SiteDetailView({ site, onBack, onRefresh }) {
   const [isSavingStrategy, setIsSavingStrategy] = useState(false);
   const [siteStrategy, setSiteStrategy] = useState({
     objective: site?.seo_focus?.[0] || site?.focus || '',
-    monetization: site?.monetization_type || 'lead_gen',
+    monetization: [], // Array pour sélection multiple
     targetAudience: site?.target_audience || '',
     geoFocus: site?.geographic_focus || 'France',
     competitors: site?.main_competitors || [],
@@ -218,10 +218,10 @@ function SiteDetailView({ site, onBack, onRefresh }) {
   const saveStrategy = async () => {
     setIsSavingStrategy(true);
     try {
-      // Store full strategy in seo_focus array: [objective, monetization:type, seeds:kw1,kw2]
+      // Store full strategy in seo_focus array: [objective, monetization:type1,type2, seeds:kw1,kw2]
       const seoFocusArray = [
         siteStrategy.objective,
-        `monetization:${siteStrategy.monetization}`,
+        siteStrategy.monetization.length > 0 ? `monetization:${siteStrategy.monetization.join(',')}` : null,
         siteStrategy.seedKeywords.length > 0 ? `seeds:${siteStrategy.seedKeywords.join(',')}` : null
       ].filter(Boolean);
 
@@ -247,6 +247,16 @@ function SiteDetailView({ site, onBack, onRefresh }) {
     }
   };
 
+  // Toggle monetization type selection
+  const toggleMonetization = (value) => {
+    setSiteStrategy(s => ({
+      ...s,
+      monetization: s.monetization.includes(value)
+        ? s.monetization.filter(m => m !== value)
+        : [...s.monetization, value]
+    }));
+  };
+
   // Parse strategy from seo_focus on mount
   useEffect(() => {
     if (site?.seo_focus && Array.isArray(site.seo_focus)) {
@@ -258,7 +268,7 @@ function SiteDetailView({ site, onBack, onRefresh }) {
       setSiteStrategy(s => ({
         ...s,
         objective: objective,
-        monetization: monetizationItem ? monetizationItem.replace('monetization:', '') : 'lead_gen',
+        monetization: monetizationItem ? monetizationItem.replace('monetization:', '').split(',') : [],
         seedKeywords: seedsItem ? seedsItem.replace('seeds:', '').split(',') : [],
         targetAudience: site.target_audience || '',
         geoFocus: site.geographic_focus || 'France'
@@ -358,7 +368,7 @@ function SiteDetailView({ site, onBack, onRefresh }) {
         url: `https://${site.domain}`,
         // Stratégie SEO complète pour orienter les workflows
         site_objective: siteStrategy.objective || site.focus,
-        monetization_type: siteStrategy.monetization,
+        monetization_types: siteStrategy.monetization, // Array: ["lead_gen", "sponsored", ...]
         target_audience: siteStrategy.targetAudience,
         geographic_focus: siteStrategy.geoFocus,
         seed_keywords: siteStrategy.seedKeywords,
@@ -898,24 +908,29 @@ function SiteDetailView({ site, onBack, onRefresh }) {
                 Monétisation
               </label>
               <div className="grid grid-cols-3 gap-2">
-                {monetizationTypes.map(type => (
-                  <button
-                    key={type.value}
-                    onClick={() => setSiteStrategy(s => ({ ...s, monetization: type.value }))}
-                    className={`flex items-center gap-2 p-2 rounded-lg border text-left transition-all ${
-                      siteStrategy.monetization === type.value
-                        ? 'border-primary bg-primary/20 text-white'
-                        : 'border-dark-border bg-dark-bg text-dark-muted hover:border-dark-muted'
-                    }`}
-                  >
-                    <span className="text-lg">{type.icon}</span>
-                    <div>
-                      <div className="text-sm font-medium">{type.label}</div>
-                      <div className="text-xs opacity-70">{type.description}</div>
-                    </div>
-                  </button>
-                ))}
+                {monetizationTypes.map(type => {
+                  const isSelected = siteStrategy.monetization.includes(type.value);
+                  return (
+                    <button
+                      key={type.value}
+                      onClick={() => toggleMonetization(type.value)}
+                      className={`flex items-center gap-2 p-2 rounded-lg border text-left transition-all ${
+                        isSelected
+                          ? 'border-primary bg-primary/20 text-white'
+                          : 'border-dark-border bg-dark-bg text-dark-muted hover:border-dark-muted'
+                      }`}
+                    >
+                      <span className="text-lg">{type.icon}</span>
+                      <div className="flex-1">
+                        <div className="text-sm font-medium">{type.label}</div>
+                        <div className="text-xs opacity-70">{type.description}</div>
+                      </div>
+                      {isSelected && <Check className="w-4 h-4 text-primary flex-shrink-0" />}
+                    </button>
+                  );
+                })}
               </div>
+              <p className="text-xs text-dark-muted mt-1">Sélectionnez un ou plusieurs types</p>
             </div>
 
             {/* Audience cible */}
@@ -993,10 +1008,17 @@ function SiteDetailView({ site, onBack, onRefresh }) {
               </div>
             </div>
             <div className="flex items-center gap-4">
-              {siteStrategy.monetization && (
-                <div className="text-center">
-                  <span className="text-lg">{monetizationTypes.find(t => t.value === siteStrategy.monetization)?.icon || '🎯'}</span>
-                  <div className="text-xs text-dark-muted">{monetizationTypes.find(t => t.value === siteStrategy.monetization)?.label || 'Lead gen'}</div>
+              {siteStrategy.monetization?.length > 0 && (
+                <div className="flex items-center gap-2">
+                  {siteStrategy.monetization.slice(0, 4).map(m => {
+                    const type = monetizationTypes.find(t => t.value === m);
+                    return type ? (
+                      <span key={m} className="text-lg" title={type.label}>{type.icon}</span>
+                    ) : null;
+                  })}
+                  {siteStrategy.monetization.length > 4 && (
+                    <span className="text-xs text-dark-muted">+{siteStrategy.monetization.length - 4}</span>
+                  )}
                 </div>
               )}
               <Pencil className="w-4 h-4 text-dark-muted group-hover:text-primary transition-colors" />
