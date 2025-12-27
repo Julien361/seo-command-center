@@ -21,59 +21,100 @@ const entityColors = {
   'Cabinet': 'secondary',
 };
 
-// Progress Step Component
-function WorkflowStep({ step, isActive, isCompleted, isLast, onAction }) {
-  const getStatusIcon = () => {
-    if (isCompleted) return <Check className="w-5 h-5" />;
-    if (isActive) return <Play className="w-5 h-5" />;
-    return <Circle className="w-5 h-5" />;
-  };
-
+// SEO Pipeline Step Component - Version améliorée avec workflows
+function PipelineStep({ step, isActive, isCompleted, isLocked, onWorkflowLaunch, isRunning }) {
   const getStatusColor = () => {
-    if (isCompleted) return 'bg-success text-white';
-    if (isActive) return 'bg-primary text-white animate-pulse';
-    return 'bg-dark-border text-dark-muted';
+    if (isLocked) return 'bg-dark-border/50 border-dark-border';
+    if (isCompleted) return 'bg-success/20 border-success';
+    if (isActive) return 'bg-primary/20 border-primary';
+    return 'bg-dark-border/30 border-dark-border';
   };
 
-  const getProgressColor = () => {
-    if (step.progress >= 100) return 'bg-success';
-    if (step.progress >= 50) return 'bg-primary';
-    if (step.progress > 0) return 'bg-warning';
-    return 'bg-dark-border';
+  const getIconColor = () => {
+    if (isLocked) return 'text-dark-muted';
+    if (isCompleted) return 'text-success';
+    if (isActive) return 'text-primary';
+    return 'text-dark-muted';
   };
 
   return (
-    <div className="flex-1">
-      <div className="flex items-center">
-        {/* Step indicator */}
-        <div className={`w-10 h-10 rounded-full flex items-center justify-center ${getStatusColor()}`}>
-          {getStatusIcon()}
-        </div>
-        {/* Connector line */}
-        {!isLast && (
-          <div className="flex-1 h-1 mx-2">
-            <div className={`h-full rounded ${isCompleted ? 'bg-success' : 'bg-dark-border'}`} />
-          </div>
-        )}
-      </div>
-      <div className="mt-3 pr-4">
+    <div className={`rounded-xl border-2 p-4 transition-all ${getStatusColor()} ${isLocked ? 'opacity-60' : ''}`}>
+      {/* Header */}
+      <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
-          <step.icon className={`w-4 h-4 ${isCompleted ? 'text-success' : isActive ? 'text-primary' : 'text-dark-muted'}`} />
-          <span className={`text-sm font-medium ${isCompleted ? 'text-success' : isActive ? 'text-white' : 'text-dark-muted'}`}>
-            {step.label}
-          </span>
+          <div className={`p-2 rounded-lg ${isCompleted ? 'bg-success/20' : isActive ? 'bg-primary/20' : 'bg-dark-border'}`}>
+            <step.icon className={`w-5 h-5 ${getIconColor()}`} />
+          </div>
+          <div>
+            <h4 className={`font-semibold ${isLocked ? 'text-dark-muted' : 'text-white'}`}>{step.label}</h4>
+            <p className="text-xs text-dark-muted">{step.description}</p>
+          </div>
         </div>
-        {/* Progress bar */}
-        <div className="mt-2 h-1.5 bg-dark-border rounded-full overflow-hidden">
-          <div
-            className={`h-full rounded-full transition-all ${getProgressColor()}`}
-            style={{ width: `${step.progress}%` }}
-          />
-        </div>
-        <div className="mt-1 text-xs text-dark-muted">
-          {step.done}/{step.total} • {step.progress}%
+        <div className="text-right">
+          <div className={`text-lg font-bold ${isCompleted ? 'text-success' : isActive ? 'text-primary' : 'text-dark-muted'}`}>
+            {step.progress}%
+          </div>
         </div>
       </div>
+
+      {/* Metrics */}
+      <div className="grid grid-cols-2 gap-2 mb-3">
+        {step.metrics?.map((metric, i) => (
+          <div key={i} className="flex items-center justify-between text-xs bg-dark-bg/50 rounded px-2 py-1">
+            <span className="text-dark-muted">{metric.label}</span>
+            <span className={metric.ok ? 'text-success font-medium' : 'text-white'}>{metric.value}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* Progress bar */}
+      <div className="h-2 bg-dark-border rounded-full overflow-hidden mb-3">
+        <div
+          className={`h-full rounded-full transition-all ${isCompleted ? 'bg-success' : isActive ? 'bg-primary' : 'bg-dark-muted'}`}
+          style={{ width: `${step.progress}%` }}
+        />
+      </div>
+
+      {/* Workflow buttons */}
+      {step.workflows && step.workflows.length > 0 && !isLocked && (
+        <div className="flex flex-wrap gap-2">
+          {step.workflows.map((wf, i) => (
+            <button
+              key={i}
+              onClick={() => !wf.done && !wf.isSubWorkflow && onWorkflowLaunch(wf.key)}
+              disabled={wf.done || wf.isSubWorkflow || isRunning}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                wf.done
+                  ? 'bg-success/20 text-success cursor-default'
+                  : wf.isSubWorkflow
+                  ? 'bg-dark-border text-dark-muted cursor-not-allowed'
+                  : 'bg-primary/20 text-primary hover:bg-primary/30 cursor-pointer'
+              }`}
+              title={wf.isSubWorkflow ? 'Sub-workflow (automatique)' : wf.done ? 'Terminé' : 'Lancer ce workflow'}
+            >
+              {wf.done ? <Check className="w-3 h-3" /> : isRunning ? <Loader2 className="w-3 h-3 animate-spin" /> : <Play className="w-3 h-3" />}
+              {wf.label}
+              {wf.isPaid && !wf.done && <span className="text-warning">€</span>}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Locked message */}
+      {isLocked && step.requires && (
+        <div className="flex items-center gap-2 text-xs text-warning bg-warning/10 rounded-lg px-3 py-2">
+          <AlertTriangle className="w-3 h-3" />
+          {step.requires}
+        </div>
+      )}
+
+      {/* Next action */}
+      {!isLocked && step.nextAction && !isCompleted && (
+        <div className="mt-2 text-xs text-primary bg-primary/10 rounded-lg px-3 py-2 flex items-center gap-2">
+          <ChevronRight className="w-3 h-3" />
+          {step.nextAction}
+        </div>
+      )}
     </div>
   );
 }
@@ -192,60 +233,65 @@ function SiteDetailView({ site, onBack, onRefresh }) {
 
   // Action handlers
   const handleAction = async (actionType, data = {}) => {
-    const cost = actionCosts[actionType];
+    // Mapping des workflow keys vers leurs configs
+    const workflowConfigs = {
+      // Pipeline workflows
+      GSC_SYNC: { webhook: 'gsc-sync', label: 'Sync GSC', isPaid: false },
+      WF0_CASCADE: { webhook: 'seo-cascade-start', label: 'Analyse SEO Complète', isPaid: true, cost: '~0.15€' },
+      WF1_DATAFORSEO: { webhook: 'wf1', label: 'DataForSEO Keywords', isPaid: true, cost: '~0.05€' },
+      WF2_PERPLEXITY: { webhook: 'wf2', label: 'Perplexity Research', isPaid: true, cost: '~0.02€' },
+      WF3_FIRECRAWL: { webhook: 'wf3', label: 'Firecrawl Scraping', isPaid: true, cost: '~0.10€' },
+      WF6_CLUSTERING: { webhook: 'wf6', label: 'Clustering Sémantique', isPaid: false },
+      COCON_BUILDER: { webhook: 'wf-setup-3', label: 'Construction Cocons', isPaid: true, cost: '~0.10€' },
+      CONTENT_BRIEF: { webhook: 'content-brief', label: 'Générer Brief', isPaid: true, cost: '~0.05€' },
+      ARTICLE_GENERATOR: { webhook: 'article-generator', label: 'Rédiger Article', isPaid: true, cost: '~0.10€' },
+      WP_PUBLISHER: { webhook: 'wp-publish', label: 'Publier WordPress', isPaid: false },
+      POSITION_MONITOR: { webhook: 'position-monitor', label: 'Suivi Positions', isPaid: false },
+      PAA_EXTRACTION: { webhook: 'paa', label: 'PAA Extraction', isPaid: true, cost: '~0.02€' },
+      // Legacy actions
+      'keyword-research': { webhook: 'seo-cascade-start', label: 'Recherche Keywords', isPaid: true },
+      'technical-audit': { webhook: 'technical-audit', label: 'Audit Technique', isPaid: false },
+      'backlink-analysis': { webhook: 'backlinks-sync', label: 'Analyse Backlinks', isPaid: false },
+      'gsc-sync': { webhook: 'gsc-sync', label: 'Sync GSC', isPaid: false },
+    };
+
+    const config = workflowConfigs[actionType];
+    if (!config) {
+      console.log('Unknown action:', actionType);
+      return;
+    }
 
     // Confirmation for paid actions
-    if (cost?.isPaid) {
+    if (config.isPaid) {
       const confirmed = confirm(
-        `🔍 ${actionType === 'keyword-research' ? 'Recherche de keywords' : actionType === 'technical-audit' ? 'Audit technique' : 'Analyse backlinks'}\n\n` +
+        `🚀 ${config.label}\n\n` +
         `Site: ${site.domain}\n` +
-        `API: ${cost.api}\n` +
-        `Coût estimé: ${cost.price}\n\n` +
-        `Confirmer ?`
+        `Coût estimé: ${config.cost || 'Variable'}\n\n` +
+        `Lancer ce workflow ?`
       );
       if (!confirmed) return;
     }
 
     setIsRunningAction(actionType);
     try {
-      let result;
-      switch (actionType) {
-        case 'keyword-research':
-          result = await n8nApi.triggerWebhook('seo-cascade-start', { url: `https://${site.domain}`, site_objective: data.keyword || site.focus, site_alias: site.alias });
-          break;
-        case 'technical-audit':
-          result = await n8nApi.triggerWebhook('technical-audit', { site_alias: site.alias });
-          break;
-        case 'backlink-analysis':
-          result = await n8nApi.triggerWebhook('backlinks-sync', { site_alias: site.alias });
-          break;
-        case 'cocon-create':
-          result = await n8nApi.triggerWebhook('wf-setup-3', { site_alias: site.alias, main_keyword: site.focus });
-          break;
-        case 'quick-wins':
-          // Quick Wins Scoring est un sub-workflow, pas un webhook
-          // On navigue simplement vers l'onglet Quick Wins qui affiche les données Supabase
-          setActiveTab('quickwins');
-          result = { success: true, message: 'Navigation vers Quick Wins' };
-          break;
-        case 'gsc-sync':
-          result = await n8nApi.syncGSC();
-          break;
-        default:
-          console.log('Unknown action:', actionType);
-          return;
-      }
+      const payload = {
+        site_alias: site.alias,
+        site_id: site.id,
+        url: `https://${site.domain}`,
+        site_objective: site.focus,
+        ...data
+      };
+
+      const result = await n8nApi.triggerWebhook(config.webhook, payload);
+
       if (result?.success !== false) {
-        // Pas d'alert pour la navigation quick-wins
-        if (actionType !== 'quick-wins') {
-          alert('Action lancée ! Les résultats seront disponibles dans quelques instants.');
-          setTimeout(loadAllData, 10000);
-        }
+        alert(`✅ ${config.label} lancé !\n\nLes résultats seront disponibles dans quelques instants.`);
+        setTimeout(loadAllData, 10000);
       } else {
-        alert('Erreur: ' + (result?.error || 'Échec'));
+        alert('❌ Erreur: ' + (result?.error || 'Échec du workflow'));
       }
     } catch (err) {
-      alert('Erreur: ' + err.message);
+      alert('❌ Erreur: ' + err.message);
     } finally {
       setIsRunningAction(null);
     }
@@ -253,62 +299,145 @@ function SiteDetailView({ site, onBack, onRefresh }) {
 
   // Calculate workflow progress
   const calculateWorkflowSteps = () => {
+    // Calculs pour chaque étape
+    const hasGSCData = gscData.length > 0;
     const keywordsAnalyzed = keywords.filter(k => k.search_volume !== null).length;
-    const keywordsWithPosition = keywords.filter(k => k.current_position !== null).length;
+    const keywordsWithVolume = keywords.filter(k => k.search_volume > 0).length;
+    const keywordsTotal = keywords.length;
     const clustersCreated = clusters.length;
     const clustersComplete = clusters.filter(c => c.status === 'complete').length;
-    const articlesWritten = articles.filter(a => a.status === 'published' || a.status === 'draft').length;
-    const articlesPlanned = articles.length;
-    const pagesAudited = pages.filter(p => p.seo_score !== null).length;
-    const pagesTotal = pages.length || 1;
+    const articlesPublished = articles.filter(a => a.status === 'published').length;
+    const articlesDraft = articles.filter(a => a.status === 'draft').length;
+    const articlesTotal = articles.length;
+    const pagesOptimized = pages.filter(p => p.seo_score && p.seo_score >= 80).length;
     const quickWinsDone = quickWins.filter(q => q.status === 'done').length;
     const quickWinsTotal = quickWins.length;
+    const keywordsTop3 = keywords.filter(k => k.current_position && k.current_position <= 3).length;
+    const keywordsTop10 = keywords.filter(k => k.current_position && k.current_position <= 10).length;
+    const keywordsP0 = keywords.filter(k => k.featured_snippet).length;
 
     return [
       {
-        id: 'keywords',
-        label: 'Recherche Keywords',
-        icon: Target,
-        done: keywordsAnalyzed,
-        total: Math.max(keywords.length, 10),
-        progress: keywords.length > 0 ? Math.round((keywordsAnalyzed / keywords.length) * 100) : 0,
-        status: keywordsAnalyzed > 0 ? (keywordsAnalyzed >= 10 ? 'complete' : 'in_progress') : 'pending'
+        id: 'data',
+        label: '1. Collecte Données',
+        shortLabel: 'Data',
+        icon: CloudDownload,
+        description: 'GSC + Analyse marché',
+        done: (hasGSCData ? 1 : 0) + (keywordsWithVolume > 0 ? 1 : 0),
+        total: 2,
+        progress: ((hasGSCData ? 50 : 0) + (keywordsWithVolume > 0 ? 50 : 0)),
+        status: hasGSCData && keywordsWithVolume > 0 ? 'complete' : (hasGSCData || keywordsWithVolume > 0 ? 'in_progress' : 'pending'),
+        workflows: [
+          { key: 'GSC_SYNC', label: 'Sync GSC', done: hasGSCData },
+          { key: 'WF0_CASCADE', label: 'Analyse SEO', done: keywordsWithVolume >= 10, isPaid: true },
+        ],
+        metrics: [
+          { label: 'Données GSC', value: hasGSCData ? 'OK' : 'Non', ok: hasGSCData },
+          { label: 'Keywords analysés', value: keywordsWithVolume, ok: keywordsWithVolume >= 10 },
+        ],
+        nextAction: !hasGSCData ? 'Lancer Sync GSC' : (keywordsWithVolume < 10 ? 'Lancer WF0 Cascade' : null),
       },
       {
-        id: 'clusters',
-        label: 'Cocons Sémantiques',
-        icon: Network,
+        id: 'strategy',
+        label: '2. Stratégie',
+        shortLabel: 'Stratégie',
+        icon: Target,
+        description: 'Clustering + Cocons',
         done: clustersComplete,
         total: Math.max(clustersCreated, 3),
         progress: clustersCreated > 0 ? Math.round((clustersComplete / clustersCreated) * 100) : 0,
-        status: clustersComplete > 0 ? (clustersComplete >= clustersCreated ? 'complete' : 'in_progress') : 'pending'
+        status: clustersComplete >= 3 ? 'complete' : (clustersCreated > 0 ? 'in_progress' : 'pending'),
+        workflows: [
+          { key: 'WF6_CLUSTERING', label: 'Clustering', done: clustersCreated > 0 },
+          { key: 'COCON_BUILDER', label: 'Cocons', done: clustersComplete > 0, isPaid: true },
+        ],
+        metrics: [
+          { label: 'Cocons créés', value: clustersCreated, ok: clustersCreated >= 3 },
+          { label: 'Cocons complets', value: clustersComplete, ok: clustersComplete >= 1 },
+        ],
+        requires: keywordsWithVolume < 10 ? 'Étape 1 requise' : null,
+        nextAction: clustersCreated === 0 ? 'Lancer Clustering' : (clustersComplete === 0 ? 'Compléter cocons' : null),
       },
       {
         id: 'content',
-        label: 'Rédaction Contenu',
+        label: '3. Création Contenu',
+        shortLabel: 'Contenu',
         icon: PenTool,
-        done: articlesWritten,
-        total: Math.max(articlesPlanned, 5),
-        progress: articlesPlanned > 0 ? Math.round((articlesWritten / articlesPlanned) * 100) : 0,
-        status: articlesWritten > 0 ? (articlesWritten >= articlesPlanned ? 'complete' : 'in_progress') : 'pending'
+        description: 'Briefs + Articles',
+        done: articlesPublished,
+        total: Math.max(articlesTotal, 5),
+        progress: articlesTotal > 0 ? Math.round((articlesPublished / articlesTotal) * 100) : 0,
+        status: articlesPublished >= 5 ? 'complete' : (articlesTotal > 0 ? 'in_progress' : 'pending'),
+        workflows: [
+          { key: 'CONTENT_BRIEF', label: 'Générer Brief', done: articlesDraft > 0 || articlesPublished > 0, isPaid: true },
+          { key: 'ARTICLE_GENERATOR', label: 'Rédiger Article', done: articlesPublished > 0, isPaid: true },
+        ],
+        metrics: [
+          { label: 'Briefs/Drafts', value: articlesDraft, ok: articlesDraft >= 1 },
+          { label: 'Publiés', value: articlesPublished, ok: articlesPublished >= 5 },
+        ],
+        requires: clustersCreated === 0 ? 'Étape 2 requise' : null,
+        nextAction: articlesDraft === 0 ? 'Générer un brief' : (articlesPublished === 0 ? 'Rédiger un article' : null),
       },
       {
-        id: 'audit',
-        label: 'Audit Technique',
-        icon: FileSearch,
-        done: pagesAudited,
-        total: pagesTotal,
-        progress: Math.round((pagesAudited / pagesTotal) * 100),
-        status: pagesAudited > 0 ? (pagesAudited >= pagesTotal ? 'complete' : 'in_progress') : 'pending'
+        id: 'publish',
+        label: '4. Publication',
+        shortLabel: 'Publier',
+        icon: Send,
+        description: 'WordPress',
+        done: articlesPublished,
+        total: Math.max(articlesDraft + articlesPublished, 1),
+        progress: (articlesDraft + articlesPublished) > 0 ? Math.round((articlesPublished / (articlesDraft + articlesPublished)) * 100) : 0,
+        status: articlesPublished >= 5 ? 'complete' : (articlesPublished > 0 ? 'in_progress' : 'pending'),
+        workflows: [
+          { key: 'WP_PUBLISHER', label: 'Publier WP', done: articlesPublished > 0 },
+        ],
+        metrics: [
+          { label: 'En attente', value: articlesDraft, ok: true },
+          { label: 'Publiés', value: articlesPublished, ok: articlesPublished >= 5 },
+        ],
+        requires: articlesDraft === 0 && articlesPublished === 0 ? 'Étape 3 requise' : null,
+        nextAction: articlesDraft > 0 ? `Publier ${articlesDraft} article(s)` : null,
       },
       {
-        id: 'optimization',
-        label: 'Optimisation',
-        icon: TrendingUp,
-        done: quickWinsDone,
-        total: Math.max(quickWinsTotal, 1),
-        progress: quickWinsTotal > 0 ? Math.round((quickWinsDone / quickWinsTotal) * 100) : 0,
-        status: quickWinsDone > 0 ? (quickWinsDone >= quickWinsTotal ? 'complete' : 'in_progress') : 'pending'
+        id: 'optimize',
+        label: '5. Optimisation',
+        shortLabel: 'Optimiser',
+        icon: Zap,
+        description: 'Quick Wins + Audit',
+        done: quickWinsDone + pagesOptimized,
+        total: Math.max(quickWinsTotal + pages.length, 1),
+        progress: quickWinsTotal > 0 ? Math.round((quickWinsDone / quickWinsTotal) * 100) : (pagesOptimized > 0 ? 50 : 0),
+        status: quickWinsDone >= quickWinsTotal && pagesOptimized > 0 ? 'complete' : (quickWinsTotal > 0 || pagesOptimized > 0 ? 'in_progress' : 'pending'),
+        workflows: [
+          { key: 'POSITION_MONITOR', label: 'Suivi Positions', done: hasGSCData },
+          { key: 'WF7_QUICKWINS', label: 'Quick Wins', done: quickWinsTotal > 0, isSubWorkflow: true },
+        ],
+        metrics: [
+          { label: 'Quick Wins', value: `${quickWinsDone}/${quickWinsTotal}`, ok: quickWinsDone === quickWinsTotal && quickWinsTotal > 0 },
+          { label: 'Pages optimisées', value: pagesOptimized, ok: pagesOptimized >= 1 },
+        ],
+        requires: articlesPublished === 0 ? 'Étape 4 requise' : null,
+        nextAction: quickWinsTotal > quickWinsDone ? `${quickWinsTotal - quickWinsDone} quick wins à traiter` : null,
+      },
+      {
+        id: 'position0',
+        label: '6. Position 0',
+        shortLabel: 'P0',
+        icon: Sparkles,
+        description: 'Featured Snippets',
+        done: keywordsP0,
+        total: Math.max(keywordsTop10, 1),
+        progress: keywordsTop10 > 0 ? Math.round((keywordsP0 / keywordsTop10) * 100) : 0,
+        status: keywordsP0 > 0 ? 'complete' : (keywordsTop3 > 0 ? 'in_progress' : 'pending'),
+        workflows: [],
+        metrics: [
+          { label: 'Top 3', value: keywordsTop3, ok: keywordsTop3 >= 1 },
+          { label: 'Top 10', value: keywordsTop10, ok: keywordsTop10 >= 5 },
+          { label: 'Position 0', value: keywordsP0, ok: keywordsP0 >= 1 },
+        ],
+        requires: keywordsTop10 === 0 ? 'Atteindre Top 10 d\'abord' : null,
+        nextAction: keywordsTop3 > 0 && keywordsP0 === 0 ? 'Cibler Featured Snippets' : null,
       }
     ];
   };
@@ -751,12 +880,15 @@ function SiteDetailView({ site, onBack, onRefresh }) {
         </Card>
       </div>
 
-      {/* Overall Progress */}
+      {/* SEO Pipeline - Parcours vers Position 0 */}
       <Card className="p-6">
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h2 className="text-lg font-semibold text-white">Progression SEO</h2>
-            <p className="text-sm text-dark-muted mt-1">Avancement global du projet</p>
+            <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-primary" />
+              Parcours vers Position 0
+            </h2>
+            <p className="text-sm text-dark-muted mt-1">6 étapes pour dominer les SERPs</p>
           </div>
           <div className="text-right">
             <div className="text-3xl font-bold text-primary">{overallProgress}%</div>
@@ -764,18 +896,24 @@ function SiteDetailView({ site, onBack, onRefresh }) {
           </div>
         </div>
 
-        {/* Workflow Steps */}
-        <div className="flex items-start">
-          {workflowSteps.map((step, i) => (
-            <WorkflowStep
-              key={step.id}
-              step={step}
-              isActive={step.status === 'in_progress'}
-              isCompleted={step.status === 'complete'}
-              isLast={i === workflowSteps.length - 1}
-              onAction={() => handleAction(step.id)}
-            />
-          ))}
+        {/* Pipeline Steps - Grille 3x2 */}
+        <div className="grid grid-cols-3 gap-4">
+          {workflowSteps.map((step, i) => {
+            const prevStep = i > 0 ? workflowSteps[i - 1] : null;
+            const isLocked = prevStep && prevStep.status === 'pending' && step.requires;
+
+            return (
+              <PipelineStep
+                key={step.id}
+                step={step}
+                isActive={step.status === 'in_progress'}
+                isCompleted={step.status === 'complete'}
+                isLocked={isLocked}
+                onWorkflowLaunch={(wfKey) => handleAction(wfKey)}
+                isRunning={isRunningAction !== null}
+              />
+            );
+          })}
         </div>
       </Card>
 
