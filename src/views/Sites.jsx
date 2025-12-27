@@ -1019,107 +1019,277 @@ function SiteDetailView({ site, onBack, onRefresh }) {
 
       {/* Cocons Tab */}
       {activeTab === 'cocons' && (
-        <div className="space-y-4">
+        <div className="space-y-6">
+          {/* Header */}
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-lg font-semibold text-white">Cocons Sémantiques ({clusters.length})</h2>
-              {clusters.length > 0 ? (
-                <p className="text-sm text-success flex items-center gap-1 mt-1">
-                  <CheckCircle className="w-3 h-3" /> {clusters.filter(c => c.status === 'complete').length}/{clusters.length} cocon(s) complet(s)
-                </p>
-              ) : (
-                <p className="text-sm text-dark-muted flex items-center gap-1 mt-1">
-                  <Circle className="w-3 h-3" /> Aucun cocon créé
-                </p>
-              )}
+              <h2 className="text-lg font-semibold text-white">Cocons Sémantiques</h2>
+              <p className="text-sm text-dark-muted mt-1">
+                Suivi de la couverture thématique - Keywords couverts par vos pages
+              </p>
             </div>
-            <Button
-              onClick={() => handleAction('cocon-create')}
-              disabled={isRunningAction === 'cocon-create' || keywords.length < 5}
-              variant={clusters.length > 0 ? 'ghost' : 'primary'}
-              title={keywords.length < 5 ? 'Minimum 5 keywords requis' : ''}
-            >
-              <Network className={`w-4 h-4 mr-2 ${isRunningAction === 'cocon-create' ? 'animate-spin' : ''}`} />
-              {isRunningAction === 'cocon-create' ? 'Génération...' : clusters.length > 0 ? 'Nouvelles pages' : 'Créer pages piliers & satellites'}
-              <span className="ml-2 text-xs opacity-70 bg-warning/20 text-warning px-1.5 py-0.5 rounded">~0.10€</span>
-            </Button>
           </div>
-          {clusters.length === 0 ? (
-            <Card className="p-8 text-center">
-              <Network className="w-12 h-12 mx-auto text-dark-muted mb-3" />
-              <h3 className="font-medium text-white">Aucune page générée</h3>
-              <p className="text-dark-muted text-sm mt-1">Générez des pages piliers et satellites pour structurer votre contenu</p>
-            </Card>
-          ) : (
-            <div className="grid grid-cols-2 gap-4">
-              {clusters.map(cluster => (
-                <Card key={cluster.id} className="p-4">
-                  <div className="flex items-center justify-between mb-3">
-                    <h3 className="font-medium text-white">{cluster.name}</h3>
-                    <Badge variant={cluster.status === 'complete' ? 'success' : 'warning'}>{cluster.status}</Badge>
-                  </div>
-                  <p className="text-sm text-dark-muted mb-3">Pilier: {cluster.pillar_keyword}</p>
-                  <div className="flex items-center gap-2 text-sm text-dark-muted">
-                    <span>{cluster.cluster_satellites?.length || 0} satellites</span>
-                  </div>
-                </Card>
-              ))}
+
+          {/* Couverture Keywords */}
+          <Card className="p-4">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-medium text-white flex items-center gap-2">
+                <Target className="w-4 h-4 text-primary" />
+                Keywords à couvrir ({keywords.length})
+              </h3>
+              <div className="flex items-center gap-2 text-sm">
+                <span className="text-success flex items-center gap-1">
+                  <CheckCircle className="w-3 h-3" />
+                  {keywords.filter(k => articles.some(a => a.keyword_id === k.id && a.status === 'published')).length} couverts
+                </span>
+                <span className="text-dark-muted">|</span>
+                <span className="text-warning">
+                  {keywords.filter(k => !articles.some(a => a.keyword_id === k.id)).length} à créer
+                </span>
+              </div>
             </div>
+
+            {keywords.length === 0 ? (
+              <div className="text-center py-6">
+                <Target className="w-10 h-10 mx-auto text-dark-muted mb-2" />
+                <p className="text-dark-muted">Aucun keyword. Lancez une recherche d'abord.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-2 max-h-[400px] overflow-y-auto">
+                {keywords.sort((a, b) => (b.search_volume || 0) - (a.search_volume || 0)).map(kw => {
+                  const hasArticle = articles.some(a => a.keyword_id === kw.id);
+                  const isPublished = articles.some(a => a.keyword_id === kw.id && a.status === 'published');
+                  const isDraft = articles.some(a => a.keyword_id === kw.id && a.status === 'draft');
+
+                  return (
+                    <div
+                      key={kw.id}
+                      className={`flex items-center gap-3 p-2 rounded-lg border transition-colors ${
+                        isPublished ? 'border-success/30 bg-success/5' :
+                        isDraft ? 'border-warning/30 bg-warning/5' :
+                        'border-dark-border bg-dark-bg hover:border-primary/30'
+                      }`}
+                    >
+                      <div className={`w-5 h-5 rounded flex items-center justify-center flex-shrink-0 ${
+                        isPublished ? 'bg-success text-white' :
+                        isDraft ? 'bg-warning text-dark-bg' :
+                        'border border-dark-muted'
+                      }`}>
+                        {isPublished && <Check className="w-3 h-3" />}
+                        {isDraft && <Clock className="w-3 h-3" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className={`text-sm truncate ${isPublished ? 'text-success' : isDraft ? 'text-warning' : 'text-white'}`}>
+                          {kw.keyword}
+                        </p>
+                        <div className="flex items-center gap-2 text-xs text-dark-muted">
+                          <span>{kw.search_volume?.toLocaleString() || 0}/mois</span>
+                          {kw.current_position && (
+                            <Badge variant={kw.current_position <= 10 ? 'success' : kw.current_position <= 20 ? 'warning' : 'secondary'} size="sm">
+                              P{kw.current_position}
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </Card>
+
+          {/* Clusters existants */}
+          {clusters.length > 0 && (
+            <Card className="p-4">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-medium text-white flex items-center gap-2">
+                  <Network className="w-4 h-4 text-info" />
+                  Clusters sémantiques ({clusters.length})
+                </h3>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                {clusters.map(cluster => {
+                  const satellites = cluster.cluster_satellites || [];
+                  const completedSatellites = satellites.filter(s => s.status === 'published').length;
+
+                  return (
+                    <div key={cluster.id} className="p-4 rounded-lg border border-dark-border bg-dark-bg">
+                      <div className="flex items-center justify-between mb-2">
+                        <h4 className="font-medium text-white">{cluster.name}</h4>
+                        <Badge variant={cluster.status === 'complete' ? 'success' : 'warning'} size="sm">
+                          {completedSatellites}/{satellites.length}
+                        </Badge>
+                      </div>
+                      <p className="text-sm text-primary mb-3">Pilier: {cluster.pillar_keyword}</p>
+                      {satellites.length > 0 && (
+                        <div className="space-y-1">
+                          {satellites.slice(0, 5).map((sat, i) => (
+                            <div key={i} className="flex items-center gap-2 text-xs">
+                              {sat.status === 'published' ? (
+                                <CheckCircle className="w-3 h-3 text-success" />
+                              ) : (
+                                <Circle className="w-3 h-3 text-dark-muted" />
+                              )}
+                              <span className="text-dark-muted truncate">{sat.keyword || `Satellite ${i + 1}`}</span>
+                            </div>
+                          ))}
+                          {satellites.length > 5 && (
+                            <p className="text-xs text-dark-muted">+{satellites.length - 5} autres</p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </Card>
           )}
+
+          {/* Légende */}
+          <div className="flex items-center gap-6 text-sm text-dark-muted">
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 rounded bg-success flex items-center justify-center">
+                <Check className="w-2.5 h-2.5 text-white" />
+              </div>
+              <span>Publié</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 rounded bg-warning flex items-center justify-center">
+                <Clock className="w-2.5 h-2.5 text-dark-bg" />
+              </div>
+              <span>Brouillon</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 rounded border border-dark-muted" />
+              <span>À créer</span>
+            </div>
+          </div>
         </div>
       )}
 
       {/* Content Tab */}
       {activeTab === 'content' && (
-        <div className="space-y-4">
+        <div className="space-y-6">
+          {/* Header avec accès WordPress */}
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-lg font-semibold text-white">Articles ({articles.length})</h2>
-              {articles.length > 0 ? (
-                <p className="text-sm text-success flex items-center gap-1 mt-1">
-                  <CheckCircle className="w-3 h-3" /> {articles.filter(a => a.status === 'published').length} publié(s), {articles.filter(a => a.status === 'draft').length} brouillon(s)
-                </p>
-              ) : (
-                <p className="text-sm text-dark-muted flex items-center gap-1 mt-1">
-                  <Circle className="w-3 h-3" /> Aucun article
-                </p>
-              )}
+              <h2 className="text-lg font-semibold text-white">Création de contenu</h2>
+              <p className="text-sm text-dark-muted mt-1">
+                {articles.filter(a => a.status === 'published').length} publié(s), {articles.filter(a => a.status === 'draft').length} brouillon(s)
+              </p>
             </div>
-            <Button disabled variant="ghost">
-              <PenTool className="w-4 h-4 mr-2" />
-              Nouvel article
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                onClick={() => window.open(`https://${site.domain}/wp-admin/edit.php`, '_blank')}
+              >
+                <Globe className="w-4 h-4 mr-2" />
+                WordPress
+              </Button>
+              <Button
+                onClick={() => handleAction('cocon-create')}
+                disabled={isRunningAction === 'cocon-create' || keywords.length < 3}
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Générer pages
+                <span className="ml-2 text-xs opacity-70">~0.10€</span>
+              </Button>
+            </div>
           </div>
-          {articles.length === 0 ? (
-            <Card className="p-8 text-center">
-              <PenTool className="w-12 h-12 mx-auto text-dark-muted mb-3" />
-              <h3 className="font-medium text-white">Aucun article</h3>
-              <p className="text-dark-muted text-sm mt-1">Créez du contenu pour améliorer votre SEO</p>
-            </Card>
-          ) : (
-            <div className="space-y-3">
-              {articles.map(article => (
-                <Card key={article.id} className="p-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="font-medium text-white">{article.title}</h3>
-                      <div className="flex items-center gap-2 mt-1">
-                        <Badge variant={article.status === 'published' ? 'success' : article.status === 'draft' ? 'warning' : 'secondary'} size="sm">
-                          {article.status}
-                        </Badge>
-                        {article.word_count && <span className="text-xs text-dark-muted">{article.word_count} mots</span>}
+
+          {/* Propositions d'articles basées sur les keywords non couverts */}
+          {(() => {
+            const uncoveredKeywords = keywords
+              .filter(k => !articles.some(a => a.keyword_id === k.id))
+              .sort((a, b) => (b.search_volume || 0) - (a.search_volume || 0))
+              .slice(0, 6);
+
+            return uncoveredKeywords.length > 0 && (
+              <Card className="p-4 border-primary/30 bg-primary/5">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="font-medium text-white flex items-center gap-2">
+                    <Lightbulb className="w-4 h-4 text-primary" />
+                    Propositions d'articles ({uncoveredKeywords.length})
+                  </h3>
+                  <span className="text-xs text-dark-muted">Basé sur vos keywords non couverts</span>
+                </div>
+                <div className="grid grid-cols-3 gap-3">
+                  {uncoveredKeywords.map(kw => (
+                    <div
+                      key={kw.id}
+                      className="p-3 rounded-lg border border-dark-border bg-dark-bg hover:border-primary/50 cursor-pointer transition-colors"
+                    >
+                      <p className="text-sm font-medium text-white truncate">{kw.keyword}</p>
+                      <div className="flex items-center gap-2 mt-1 text-xs text-dark-muted">
+                        <span>{kw.search_volume?.toLocaleString() || 0}/mois</span>
+                        {kw.keyword_difficulty && (
+                          <Badge variant={kw.keyword_difficulty < 30 ? 'success' : kw.keyword_difficulty < 60 ? 'warning' : 'danger'} size="sm">
+                            KD {kw.keyword_difficulty}
+                          </Badge>
+                        )}
                       </div>
                     </div>
-                    {article.wp_post_id && (
-                      <a href={`https://${site.domain}/?p=${article.wp_post_id}`} target="_blank" rel="noopener noreferrer" className="text-dark-muted hover:text-primary">
-                        <ExternalLink className="w-4 h-4" />
-                      </a>
-                    )}
-                  </div>
-                </Card>
-              ))}
+                  ))}
+                </div>
+              </Card>
+            );
+          })()}
+
+          {/* Articles existants */}
+          <Card className="p-4">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-medium text-white flex items-center gap-2">
+                <FileText className="w-4 h-4 text-info" />
+                Articles ({articles.length})
+              </h3>
             </div>
-          )}
+
+            {articles.length === 0 ? (
+              <div className="text-center py-8">
+                <PenTool className="w-10 h-10 mx-auto text-dark-muted mb-2" />
+                <p className="text-dark-muted">Aucun article. Générez des pages piliers pour commencer.</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {articles.map(article => (
+                  <div key={article.id} className="flex items-center justify-between p-3 rounded-lg border border-dark-border hover:border-primary/30 transition-colors">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <h4 className="font-medium text-white truncate">{article.title}</h4>
+                        <Badge variant={article.status === 'published' ? 'success' : article.status === 'draft' ? 'warning' : 'secondary'} size="sm">
+                          {article.status === 'published' ? 'Publié' : article.status === 'draft' ? 'Brouillon' : article.status}
+                        </Badge>
+                      </div>
+                      <div className="flex items-center gap-3 mt-1 text-xs text-dark-muted">
+                        {article.word_count && <span>{article.word_count} mots</span>}
+                        {article.created_at && <span>{new Date(article.created_at).toLocaleDateString('fr-FR')}</span>}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {article.wp_post_id && (
+                        <>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => window.open(`https://${site.domain}/?p=${article.wp_post_id}`, '_blank')}
+                          >
+                            <Eye className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => window.open(`https://${site.domain}/wp-admin/post.php?post=${article.wp_post_id}&action=edit`, '_blank')}
+                          >
+                            <PenTool className="w-4 h-4" />
+                          </Button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
         </div>
       )}
 
@@ -1435,10 +1605,14 @@ export default function Sites({ onNavigate, selectedSite: propSelectedSite }) {
       keywordsData.forEach(kw => {
         if (kw.site_id) {
           if (!statsPerSite[kw.site_id]) {
-            statsPerSite[kw.site_id] = { keywords: 0, volume: 0 };
+            statsPerSite[kw.site_id] = { keywords: 0, volume: 0, positions: [], hasPosition: 0 };
           }
           statsPerSite[kw.site_id].keywords += 1;
           statsPerSite[kw.site_id].volume += (kw.search_volume || 0);
+          if (kw.current_position && kw.current_position > 0) {
+            statsPerSite[kw.site_id].positions.push(kw.current_position);
+            statsPerSite[kw.site_id].hasPosition += 1;
+          }
         }
       });
 
@@ -1450,8 +1624,13 @@ export default function Sites({ onNavigate, selectedSite: propSelectedSite }) {
       });
 
       const mappedSites = sitesData.map(site => {
-        const stats = statsPerSite[site.id] || { keywords: 0, volume: 0 };
+        const stats = statsPerSite[site.id] || { keywords: 0, volume: 0, positions: [], hasPosition: 0 };
         const gsc = gscData[site.id] || {};
+
+        // Calculer la position moyenne depuis les keywords si pas de données GSC
+        const avgFromKeywords = stats.positions.length > 0
+          ? Math.round(stats.positions.reduce((a, b) => a + b, 0) / stats.positions.length * 10) / 10
+          : null;
 
         return {
           id: site.id,
@@ -1461,10 +1640,11 @@ export default function Sites({ onNavigate, selectedSite: propSelectedSite }) {
           focus: site.seo_focus || '',
           status: site.is_active ? 'active' : 'inactive',
           keywords: stats.keywords,
+          keywordsWithPosition: stats.hasPosition,
           volume: stats.volume,
           quickWins: quickWinsPerSite[site.id] || 0,
           articles: site.total_articles || 0,
-          avgPosition: gsc.avgPosition || null,
+          avgPosition: gsc.avgPosition || avgFromKeywords,
           clicks: gsc.totalClicks || 0,
           impressions: gsc.totalImpressions || 0,
           priority: site.priority || 3,
@@ -1666,10 +1846,11 @@ export default function Sites({ onNavigate, selectedSite: propSelectedSite }) {
                   <th className="text-left py-3 px-4 text-sm font-medium text-dark-muted">Site</th>
                   <th className="text-left py-3 px-4 text-sm font-medium text-dark-muted">Entité</th>
                   <th className="text-center py-3 px-4 text-sm font-medium text-dark-muted">Keywords</th>
+                  <th className="text-center py-3 px-4 text-sm font-medium text-dark-muted">Volume</th>
                   <th className="text-center py-3 px-4 text-sm font-medium text-dark-muted">Pos. Moy.</th>
-                  <th className="text-center py-3 px-4 text-sm font-medium text-dark-muted">Clics GSC</th>
-                  <th className="text-center py-3 px-4 text-sm font-medium text-dark-muted">Quick Wins</th>
-                  <th className="text-center py-3 px-4 text-sm font-medium text-dark-muted">Articles</th>
+                  <th className="text-center py-3 px-4 text-sm font-medium text-dark-muted">Clics</th>
+                  <th className="text-center py-3 px-4 text-sm font-medium text-dark-muted">QW</th>
+                  <th className="text-center py-3 px-4 text-sm font-medium text-dark-muted">Statut</th>
                 </tr>
               </thead>
               <tbody>
@@ -1689,17 +1870,28 @@ export default function Sites({ onNavigate, selectedSite: propSelectedSite }) {
                             <span className="font-medium text-white">{site.domain}</span>
                             <ExternalLink className="w-3 h-3 text-dark-muted" />
                           </div>
-                          <span className="text-xs text-dark-muted">{site.alias}</span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-dark-muted">{site.alias}</span>
+                            {site.focus && <span className="text-xs text-primary truncate max-w-[150px]">{site.focus}</span>}
+                          </div>
                         </div>
                       </div>
                     </td>
                     <td className="py-4 px-4">
                       <Badge variant={entityColors[site.entity] || 'secondary'}>{site.entity || '-'}</Badge>
                     </td>
-                    <td className="py-4 px-4 text-center text-white">{site.keywords}</td>
+                    <td className="py-4 px-4 text-center">
+                      <div className="text-white">{site.keywords}</div>
+                      {site.keywordsWithPosition > 0 && (
+                        <div className="text-xs text-dark-muted">{site.keywordsWithPosition} avec pos.</div>
+                      )}
+                    </td>
+                    <td className="py-4 px-4 text-center text-white">
+                      {site.volume > 0 ? site.volume.toLocaleString() : '-'}
+                    </td>
                     <td className="py-4 px-4 text-center">
                       {site.avgPosition ? (
-                        <Badge variant={site.avgPosition <= 10 ? 'success' : site.avgPosition <= 30 ? 'warning' : 'secondary'}>
+                        <Badge variant={site.avgPosition <= 10 ? 'success' : site.avgPosition <= 20 ? 'warning' : 'danger'}>
                           {site.avgPosition}
                         </Badge>
                       ) : (
@@ -1713,10 +1905,22 @@ export default function Sites({ onNavigate, selectedSite: propSelectedSite }) {
                       {site.quickWins > 0 ? (
                         <Badge variant="warning">{site.quickWins}</Badge>
                       ) : (
-                        <span className="text-dark-muted">-</span>
+                        <span className="text-dark-muted">0</span>
                       )}
                     </td>
-                    <td className="py-4 px-4 text-center text-white">{site.articles}</td>
+                    <td className="py-4 px-4 text-center">
+                      {site.keywords === 0 ? (
+                        <Badge variant="danger" size="sm">À analyser</Badge>
+                      ) : site.avgPosition === null ? (
+                        <Badge variant="warning" size="sm">Sync requis</Badge>
+                      ) : site.avgPosition <= 10 ? (
+                        <Badge variant="success" size="sm">Page 1</Badge>
+                      ) : site.avgPosition <= 20 ? (
+                        <Badge variant="warning" size="sm">Page 2</Badge>
+                      ) : (
+                        <Badge variant="danger" size="sm">Page 3+</Badge>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
