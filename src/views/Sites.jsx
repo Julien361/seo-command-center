@@ -725,8 +725,8 @@ function SiteDetailView({ site, onBack, onRefresh }) {
                 onClick={() => handleAction('technical-audit')}
                 disabled={isRunningAction === 'technical-audit'}
               >
-                <FileSearch className="w-4 h-4 mr-2" />
-                Audit technique
+                <FileSearch className={`w-4 h-4 mr-2 ${isRunningAction === 'technical-audit' ? 'animate-spin' : ''}`} />
+                {isRunningAction === 'technical-audit' ? 'Scan...' : 'Audit technique'}
               </Button>
               <Button
                 variant="ghost"
@@ -981,9 +981,13 @@ function SiteDetailView({ site, onBack, onRefresh }) {
                 </p>
               )}
             </div>
-            <Button onClick={() => handleAction('technical-audit')} disabled={isRunningAction} variant={pages.filter(p => p.seo_score !== null).length > 0 ? 'ghost' : 'primary'}>
-              <FileSearch className="w-4 h-4 mr-2" />
-              {pages.filter(p => p.seo_score !== null).length > 0 ? 'Re-scanner' : 'Scanner'}
+            <Button
+              onClick={() => handleAction('technical-audit')}
+              disabled={isRunningAction === 'technical-audit'}
+              variant={pages.filter(p => p.seo_score !== null).length > 0 ? 'ghost' : 'primary'}
+            >
+              <FileSearch className={`w-4 h-4 mr-2 ${isRunningAction === 'technical-audit' ? 'animate-spin' : ''}`} />
+              {isRunningAction === 'technical-audit' ? 'Scan en cours...' : pages.filter(p => p.seo_score !== null).length > 0 ? 'Re-scanner' : 'Scanner'}
               <span className="ml-2 text-xs opacity-70 bg-warning/20 text-warning px-1.5 py-0.5 rounded">~0.10€</span>
             </Button>
           </div>
