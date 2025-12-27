@@ -39,28 +39,20 @@ export default function Workflows() {
     setError(null);
 
     try {
-      // Construire la liste des workflows a partir des constantes
-      // En production, on pourrait appeler l'API n8n directement
-      const workflowsList = Object.entries(WORKFLOWS).map(([key, id]) => {
-        // Trouver la categorie
-        let category = 'other';
-        for (const [catKey, catData] of Object.entries(WORKFLOW_CATEGORIES)) {
-          if (catData.workflows.includes(key)) {
-            category = catKey;
-            break;
-          }
-        }
-
+      // Construire la liste des workflows a partir de la constante WORKFLOWS
+      const workflowsList = Object.entries(WORKFLOWS).map(([key, wf]) => {
         return {
           key,
-          id,
-          name: getWorkflowName(key),
-          description: getWorkflowDescription(key),
-          category,
-          isPaid: PAID_WORKFLOWS.includes(key),
-          hasWebhook: !!WEBHOOK_PATHS[key],
-          webhookPath: WEBHOOK_PATHS[key],
-          active: true, // Par defaut actif, sera mis a jour si on a les vraies donnees
+          id: wf.id,
+          name: wf.name,
+          description: wf.description,
+          category: wf.category || 'utilities',
+          isPaid: wf.isPaid || false,
+          estimatedCost: wf.estimatedCost || 0,
+          hasWebhook: !!wf.webhook,
+          webhookPath: wf.webhook,
+          isSubWorkflow: wf.isSubWorkflow || false,
+          active: !wf.isSubWorkflow,
         };
       });
 
@@ -120,6 +112,11 @@ export default function Workflows() {
   };
 
   const handleRun = async (workflow) => {
+    if (workflow.isSubWorkflow) {
+      alert(`"${workflow.name}" est un sub-workflow.\nIl est appelé automatiquement par d'autres workflows.`);
+      return;
+    }
+
     if (!workflow.hasWebhook) {
       window.open(`${N8N_BASE_URL}/workflow/${workflow.id}`, '_blank');
       return;
@@ -127,7 +124,7 @@ export default function Workflows() {
 
     if (workflow.isPaid) {
       const confirm = window.confirm(
-        `Executer "${workflow.name}" ?\n\nAttention: Ce workflow utilise des APIs payantes (DataForSEO).`
+        `Executer "${workflow.name}" ?\n\nCoût estimé: ~${workflow.estimatedCost.toFixed(2)}€\nAttention: Ce workflow utilise des APIs payantes.`
       );
       if (!confirm) return;
     }
@@ -137,7 +134,7 @@ export default function Workflows() {
     try {
       const result = await triggerWebhook(workflow.webhookPath, { source: 'dashboard' });
       if (result.success) {
-        alert(`Workflow "${workflow.name}" lance avec succes !`);
+        alert(`Workflow "${workflow.name}" lancé avec succès !`);
       } else {
         alert(`Erreur: ${result.error}`);
       }
@@ -267,7 +264,10 @@ export default function Workflows() {
                             <div className="flex items-center gap-2">
                               <p className="font-medium text-white">{wf.name}</p>
                               {wf.isPaid && (
-                                <Badge variant="warning" size="sm">Payant</Badge>
+                                <Badge variant="warning" size="sm">~{wf.estimatedCost?.toFixed(2)}€</Badge>
+                              )}
+                              {wf.isSubWorkflow && (
+                                <Badge variant="secondary" size="sm">Sub-workflow</Badge>
                               )}
                             </div>
                             <p className="text-xs text-dark-muted">{wf.description}</p>

@@ -317,7 +317,21 @@ function SiteDetailView({ site, onBack, onRefresh }) {
   const generateTasks = () => {
     const tasks = [];
 
-    // Keywords tasks
+    // === DONNÉES GSC ===
+    if (gscData.length === 0) {
+      tasks.push({
+        id: 'gsc-sync-initial',
+        title: 'Synchroniser Google Search Console',
+        description: 'Récupérer clics, impressions et positions depuis GSC',
+        priority: 'high',
+        status: 'pending',
+        step: 'data',
+        action: 'gsc-sync',
+        actionLabel: 'Sync GSC'
+      });
+    }
+
+    // === KEYWORDS ===
     if (keywords.length === 0) {
       tasks.push({
         id: 'kw-research',
@@ -329,20 +343,79 @@ function SiteDetailView({ site, onBack, onRefresh }) {
         action: 'keyword-research',
         actionLabel: 'Rechercher'
       });
-    } else if (keywords.filter(k => !k.current_position).length > 5) {
-      tasks.push({
-        id: 'kw-track',
-        title: `${keywords.filter(k => !k.current_position).length} keywords sans position`,
-        description: 'Synchroniser avec GSC pour obtenir les positions',
-        priority: 'medium',
-        status: 'pending',
-        step: 'keywords',
-        action: 'gsc-sync',
-        actionLabel: 'Sync GSC'
-      });
+    } else {
+      const noPosition = keywords.filter(k => !k.current_position);
+      if (noPosition.length > 5) {
+        tasks.push({
+          id: 'kw-track',
+          title: `${noPosition.length} keywords sans position`,
+          description: 'Synchroniser avec GSC pour obtenir les positions',
+          priority: 'medium',
+          status: 'pending',
+          step: 'keywords',
+          action: 'gsc-sync',
+          actionLabel: 'Sync GSC'
+        });
+      }
+
+      // Keywords avec position qui chute
+      const kwWithPosition = keywords.filter(k => k.current_position && k.current_position > 0);
+      const avgPos = kwWithPosition.length > 0
+        ? kwWithPosition.reduce((s, k) => s + k.current_position, 0) / kwWithPosition.length
+        : 0;
+      if (avgPos > 20 && kwWithPosition.length > 0) {
+        tasks.push({
+          id: 'position-improve',
+          title: `Position moyenne: ${avgPos.toFixed(1)} (page 2+)`,
+          description: 'Optimiser le contenu pour améliorer les positions',
+          priority: 'high',
+          status: 'pending',
+          step: 'optimization'
+        });
+      }
+
+      // Top 3 - à maintenir
+      const top3 = kwWithPosition.filter(k => k.current_position <= 3);
+      if (top3.length > 0) {
+        tasks.push({
+          id: 'top3-maintain',
+          title: `${top3.length} keyword(s) en Top 3`,
+          description: 'Maintenir ces positions avec du contenu frais',
+          priority: 'low',
+          status: 'done',
+          step: 'optimization',
+          meta: top3.slice(0, 3).map(k => k.keyword).join(', ')
+        });
+      }
     }
 
-    // Clusters tasks
+    // === BACKLINKS ===
+    if (backlinks.length === 0) {
+      tasks.push({
+        id: 'backlinks-sync',
+        title: 'Analyser les backlinks',
+        description: 'Découvrir le profil de liens entrants',
+        priority: 'medium',
+        status: 'pending',
+        step: 'backlinks',
+        action: 'backlink-analysis',
+        actionLabel: 'Analyser'
+      });
+    } else {
+      const toxicLinks = backlinks.filter(b => b.spam_score && b.spam_score > 30);
+      if (toxicLinks.length > 0) {
+        tasks.push({
+          id: 'backlinks-toxic',
+          title: `${toxicLinks.length} backlink(s) toxiques détectés`,
+          description: 'Liens avec spam score élevé à désavouer',
+          priority: 'high',
+          status: 'pending',
+          step: 'backlinks'
+        });
+      }
+    }
+
+    // === COCONS SÉMANTIQUES ===
     if (clusters.length === 0 && keywords.length >= 5) {
       tasks.push({
         id: 'cluster-create',
@@ -351,6 +424,8 @@ function SiteDetailView({ site, onBack, onRefresh }) {
         priority: 'high',
         status: 'pending',
         step: 'clusters',
+        action: 'cocon-create',
+        actionLabel: 'Créer',
         meta: `${keywords.length} keywords disponibles`
       });
     } else if (clusters.filter(c => c.status !== 'complete').length > 0) {
@@ -365,7 +440,7 @@ function SiteDetailView({ site, onBack, onRefresh }) {
       });
     }
 
-    // Content tasks
+    // === CONTENU ===
     const drafts = articles.filter(a => a.status === 'draft');
     const planned = articles.filter(a => a.status === 'planned' || a.status === 'brief');
     if (planned.length > 0) {
@@ -390,39 +465,66 @@ function SiteDetailView({ site, onBack, onRefresh }) {
       });
     }
 
-    // Audit tasks
-    if (pages.length === 0 || pages.filter(p => p.seo_score === null).length > 0) {
-      const unaudited = pages.filter(p => p.seo_score === null).length;
+    // === AUDIT TECHNIQUE ===
+    if (pages.length === 0) {
       tasks.push({
         id: 'audit-run',
-        title: pages.length === 0 ? 'Lancer un audit technique' : `${unaudited} page(s) non auditées`,
-        description: 'Analyser le contenu avec Firecrawl',
-        priority: pages.length === 0 ? 'high' : 'medium',
+        title: 'Lancer un audit technique complet',
+        description: 'Scanner toutes les pages du site',
+        priority: 'high',
         status: 'pending',
         step: 'audit',
         action: 'technical-audit',
         actionLabel: 'Auditer'
       });
-    }
-    const lowScore = pages.filter(p => p.seo_score !== null && p.seo_score < 50);
-    if (lowScore.length > 0) {
-      tasks.push({
-        id: 'audit-fix',
-        title: `${lowScore.length} page(s) avec score faible`,
-        description: 'Score SEO < 50, optimisation requise',
-        priority: 'high',
-        status: 'pending',
-        step: 'audit',
-        meta: lowScore.map(p => p.title).slice(0, 2).join(', ')
-      });
+    } else {
+      const unaudited = pages.filter(p => p.seo_score === null);
+      if (unaudited.length > 0) {
+        tasks.push({
+          id: 'audit-pending',
+          title: `${unaudited.length} page(s) non auditées`,
+          description: 'Analyser le contenu avec Firecrawl',
+          priority: 'medium',
+          status: 'pending',
+          step: 'audit',
+          action: 'technical-audit',
+          actionLabel: 'Auditer'
+        });
+      }
+
+      const lowScore = pages.filter(p => p.seo_score !== null && p.seo_score < 50);
+      if (lowScore.length > 0) {
+        tasks.push({
+          id: 'audit-fix',
+          title: `${lowScore.length} page(s) avec score < 50`,
+          description: 'Optimisation requise pour ces pages',
+          priority: 'high',
+          status: 'pending',
+          step: 'audit',
+          meta: lowScore.map(p => p.title || p.url).slice(0, 2).join(', ')
+        });
+      }
+
+      // Pages avec bon score
+      const goodScore = pages.filter(p => p.seo_score !== null && p.seo_score >= 80);
+      if (goodScore.length > 0) {
+        tasks.push({
+          id: 'audit-good',
+          title: `${goodScore.length} page(s) optimisées (80+)`,
+          description: 'Ces pages sont bien optimisées',
+          priority: 'low',
+          status: 'done',
+          step: 'audit'
+        });
+      }
     }
 
-    // Quick wins tasks
+    // === QUICK WINS ===
     if (quickWins.length > 0) {
       tasks.push({
         id: 'qw-optimize',
         title: `${quickWins.length} quick win(s) disponibles`,
-        description: 'Keywords en position 11-20 à optimiser',
+        description: 'Keywords P11-20 faciles à passer en page 1',
         priority: 'high',
         status: 'pending',
         step: 'optimization',
@@ -432,23 +534,42 @@ function SiteDetailView({ site, onBack, onRefresh }) {
       });
     }
 
+    // === CTR OPTIMIZATION ===
+    const ctr = gscData.length > 0
+      ? (gscData.reduce((s, r) => s + (r.clicks || 0), 0) / Math.max(gscData.reduce((s, r) => s + (r.impressions || 0), 0), 1)) * 100
+      : 0;
+    if (ctr > 0 && ctr < 2) {
+      tasks.push({
+        id: 'ctr-optimize',
+        title: `CTR faible: ${ctr.toFixed(2)}%`,
+        description: 'Optimiser les titles et meta descriptions',
+        priority: 'medium',
+        status: 'pending',
+        step: 'optimization'
+      });
+    }
+
     return tasks;
   };
 
   // Calculate KPIs
+  const totalClicks = gscData.reduce((sum, r) => sum + (r.clicks || 0), 0);
+  const totalImpressions = gscData.reduce((sum, r) => sum + (r.impressions || 0), 0);
   const kpis = {
     keywords: keywords.length,
     avgPosition: keywords.filter(k => k.current_position).length > 0
       ? (keywords.filter(k => k.current_position).reduce((s, k) => s + k.current_position, 0) / keywords.filter(k => k.current_position).length).toFixed(1)
       : '-',
-    clicks: gscData.reduce((sum, r) => sum + (r.clicks || 0), 0),
-    impressions: gscData.reduce((sum, r) => sum + (r.impressions || 0), 0),
+    clicks: totalClicks,
+    impressions: totalImpressions,
+    ctr: totalImpressions > 0 ? ((totalClicks / totalImpressions) * 100).toFixed(2) : '-',
     pages: pages.length,
     avgScore: pages.filter(p => p.seo_score !== null).length > 0
       ? Math.round(pages.filter(p => p.seo_score !== null).reduce((s, p) => s + p.seo_score, 0) / pages.filter(p => p.seo_score !== null).length)
       : '-',
     clusters: clusters.length,
     articles: articles.length,
+    backlinks: backlinks.length,
     quickWins: quickWins.length
   };
 
@@ -564,24 +685,39 @@ function SiteDetailView({ site, onBack, onRefresh }) {
       {/* Tab Content */}
       {activeTab === 'dashboard' && (
         <>
-      {/* KPIs Summary */}
-      <div className="grid grid-cols-9 gap-3">
+      {/* KPIs Summary - 2 rows */}
+      <div className="grid grid-cols-6 gap-3">
+        {/* Row 1 - GSC Metrics */}
         <Card className="p-3 text-center">
-          <div className="text-xl font-bold text-white">{kpis.keywords}</div>
-          <div className="text-xs text-dark-muted">Keywords</div>
-        </Card>
-        <Card className="p-3 text-center">
-          <div className="text-xl font-bold text-info">{kpis.avgPosition}</div>
-          <div className="text-xs text-dark-muted">Pos. moy.</div>
+          <div className={`text-xl font-bold ${kpis.avgPosition !== '-' && parseFloat(kpis.avgPosition) <= 10 ? 'text-success' : kpis.avgPosition !== '-' && parseFloat(kpis.avgPosition) <= 20 ? 'text-warning' : 'text-danger'}`}>
+            {kpis.avgPosition}
+          </div>
+          <div className="text-xs text-dark-muted">Position moy.</div>
         </Card>
         <Card className="p-3 text-center">
           <div className="text-xl font-bold text-success">{kpis.clicks.toLocaleString()}</div>
-          <div className="text-xs text-dark-muted">Clics</div>
+          <div className="text-xs text-dark-muted">Clics (28j)</div>
         </Card>
         <Card className="p-3 text-center">
           <div className="text-xl font-bold text-white">{kpis.impressions.toLocaleString()}</div>
           <div className="text-xs text-dark-muted">Impressions</div>
         </Card>
+        <Card className="p-3 text-center">
+          <div className={`text-xl font-bold ${kpis.ctr !== '-' && parseFloat(kpis.ctr) >= 5 ? 'text-success' : kpis.ctr !== '-' && parseFloat(kpis.ctr) >= 2 ? 'text-warning' : 'text-danger'}`}>
+            {kpis.ctr}{kpis.ctr !== '-' ? '%' : ''}
+          </div>
+          <div className="text-xs text-dark-muted">CTR</div>
+        </Card>
+        <Card className="p-3 text-center">
+          <div className="text-xl font-bold text-white">{kpis.keywords}</div>
+          <div className="text-xs text-dark-muted">Keywords</div>
+        </Card>
+        <Card className="p-3 text-center">
+          <div className="text-xl font-bold text-warning">{kpis.quickWins}</div>
+          <div className="text-xs text-dark-muted">Quick Wins</div>
+        </Card>
+
+        {/* Row 2 - Content & Tech Metrics */}
         <Card className="p-3 text-center">
           <div className="text-xl font-bold text-white">{kpis.pages}</div>
           <div className="text-xs text-dark-muted">Pages</div>
@@ -601,8 +737,14 @@ function SiteDetailView({ site, onBack, onRefresh }) {
           <div className="text-xs text-dark-muted">Articles</div>
         </Card>
         <Card className="p-3 text-center">
-          <div className="text-xl font-bold text-warning">{kpis.quickWins}</div>
-          <div className="text-xs text-dark-muted">Quick Wins</div>
+          <div className="text-xl font-bold text-info">{kpis.backlinks}</div>
+          <div className="text-xs text-dark-muted">Backlinks</div>
+        </Card>
+        <Card className="p-3 text-center cursor-pointer hover:border-primary/50 transition-colors" onClick={() => handleAction('gsc-sync')}>
+          <div className="text-xl font-bold text-primary">
+            <RefreshCw className={`w-5 h-5 mx-auto ${isRunningAction === 'gsc-sync' ? 'animate-spin' : ''}`} />
+          </div>
+          <div className="text-xs text-dark-muted">Actualiser</div>
         </Card>
       </div>
 
