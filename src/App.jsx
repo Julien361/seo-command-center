@@ -71,12 +71,12 @@ const viewConfig = {
 };
 
 function App() {
-  const [activeView, setActiveView] = useState('dashboard');
+  const [activeView, setActiveView] = useState('sites');
   const [isLoading, setIsLoading] = useState(false);
   const [sites, setSites] = useState([]);
   const [selectedSite, setSelectedSite] = useState(null);
 
-  // Load sites for site detail views
+  // Load sites
   useEffect(() => {
     const loadSites = async () => {
       try {
@@ -89,16 +89,20 @@ function App() {
     loadSites();
   }, []);
 
-  // Handle site-specific views
-  useEffect(() => {
-    if (activeView.startsWith('site-')) {
-      const siteId = activeView.replace('site-', '');
-      const site = sites.find(s => s.id === siteId);
+  // Handle view changes - site can be passed directly from sidebar
+  const handleViewChange = (view, site = null) => {
+    setActiveView(view);
+    if (site) {
       setSelectedSite(site);
+    } else if (view.startsWith('site-')) {
+      // Fallback: look up site by ID if not passed directly
+      const siteId = view.replace('site-', '');
+      const foundSite = sites.find(s => s.id === siteId);
+      setSelectedSite(foundSite);
     } else {
       setSelectedSite(null);
     }
-  }, [activeView, sites]);
+  };
 
   const handleRefresh = () => {
     setIsLoading(true);
@@ -114,11 +118,8 @@ function App() {
 
   const renderView = () => {
     // Site detail view
-    if (activeView.startsWith('site-')) {
-      if (selectedSite) {
-        return <Sites onNavigate={setActiveView} selectedSiteId={selectedSite.id} />;
-      }
-      return null;
+    if (activeView.startsWith('site-') && selectedSite) {
+      return <Sites onNavigate={handleViewChange} selectedSite={selectedSite} />;
     }
 
     // Main views
@@ -126,7 +127,7 @@ function App() {
       case 'dashboard':
         return <Dashboard />;
       case 'sites':
-        return <Sites onNavigate={setActiveView} />;
+        return <Sites onNavigate={handleViewChange} />;
       case 'add-site':
         return <AddSite onNavigate={setActiveView} />;
       case 'settings':
@@ -196,7 +197,7 @@ function App() {
   return (
     <div className="flex h-screen bg-dark-bg">
       {/* Sidebar with Claude Code */}
-      <Sidebar activeView={activeView} onViewChange={setActiveView} />
+      <Sidebar activeView={activeView} onViewChange={handleViewChange} />
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col overflow-hidden">

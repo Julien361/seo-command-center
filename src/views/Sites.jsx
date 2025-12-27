@@ -664,7 +664,7 @@ function SiteDetailView({ site, onBack, onRefresh }) {
 }
 
 // Main Sites List Component
-export default function Sites({ onNavigate }) {
+export default function Sites({ onNavigate, selectedSite: propSelectedSite }) {
   const [sites, setSites] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -673,7 +673,11 @@ export default function Sites({ onNavigate }) {
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterEntity, setFilterEntity] = useState('all');
-  const [selectedSite, setSelectedSite] = useState(null);
+  const [internalSelectedSite, setInternalSelectedSite] = useState(null);
+
+  // Use prop if provided, otherwise use internal state
+  const selectedSite = propSelectedSite || internalSelectedSite;
+  const setSelectedSite = propSelectedSite ? () => {} : setInternalSelectedSite;
 
   const loadSites = async () => {
     setIsLoading(true);
@@ -800,10 +804,20 @@ export default function Sites({ onNavigate }) {
 
   // If a site is selected, show the detail view
   if (selectedSite) {
+    const handleBack = () => {
+      if (propSelectedSite) {
+        // If site was passed from sidebar, navigate to sites list
+        onNavigate && onNavigate('sites');
+      } else {
+        // Otherwise just clear internal state
+        setInternalSelectedSite(null);
+      }
+    };
+
     return (
       <SiteDetailView
         site={selectedSite}
-        onBack={() => setSelectedSite(null)}
+        onBack={handleBack}
         onRefresh={loadSites}
       />
     );
