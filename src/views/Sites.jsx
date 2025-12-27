@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
 import {
-  ExternalLink, Search, Plus, MoreVertical, RefreshCw, Loader2, CloudDownload, Zap,
-  ArrowLeft, TrendingUp, TrendingDown, Target, FileText, ArrowUp, ArrowDown,
+  ExternalLink, Search, Plus, RefreshCw, Loader2, CloudDownload, Zap,
+  ArrowLeft, Target, FileText, ArrowUp, ArrowDown, ArrowRight,
   Globe, MousePointer, Eye, BarChart3, Link2, AlertTriangle, CheckCircle, XCircle,
-  Calendar, Clock, Layers, Award, Activity, PieChart, Edit3, Trash2, Settings
+  Layers, Activity, Settings, Play, Clock, Check, Circle, ChevronRight,
+  PenTool, Network, FileSearch, TrendingUp, Sparkles, ListTodo
 } from 'lucide-react';
 import { Card, Badge, Button } from '../components/common';
 import { sitesApi, keywordsApi, gscApi, supabase } from '../lib/supabase';
@@ -17,41 +18,116 @@ const entityColors = {
   'Cabinet': 'secondary',
 };
 
-// Stat Card Component
-function StatCard({ icon: Icon, value, label, subValue, color = 'primary', trend }) {
+// Progress Step Component
+function WorkflowStep({ step, isActive, isCompleted, isLast, onAction }) {
+  const getStatusIcon = () => {
+    if (isCompleted) return <Check className="w-5 h-5" />;
+    if (isActive) return <Play className="w-5 h-5" />;
+    return <Circle className="w-5 h-5" />;
+  };
+
+  const getStatusColor = () => {
+    if (isCompleted) return 'bg-success text-white';
+    if (isActive) return 'bg-primary text-white animate-pulse';
+    return 'bg-dark-border text-dark-muted';
+  };
+
+  const getProgressColor = () => {
+    if (step.progress >= 100) return 'bg-success';
+    if (step.progress >= 50) return 'bg-primary';
+    if (step.progress > 0) return 'bg-warning';
+    return 'bg-dark-border';
+  };
+
   return (
-    <Card className="p-4">
-      <div className="flex items-start justify-between">
-        <div className={`p-2 rounded-lg bg-${color}/10`}>
-          <Icon className={`w-5 h-5 text-${color}`} />
+    <div className="flex-1">
+      <div className="flex items-center">
+        {/* Step indicator */}
+        <div className={`w-10 h-10 rounded-full flex items-center justify-center ${getStatusColor()}`}>
+          {getStatusIcon()}
         </div>
-        {trend !== undefined && trend !== 0 && (
-          <div className={`flex items-center gap-1 text-xs ${trend > 0 ? 'text-success' : 'text-danger'}`}>
-            {trend > 0 ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />}
-            {Math.abs(trend)}%
+        {/* Connector line */}
+        {!isLast && (
+          <div className="flex-1 h-1 mx-2">
+            <div className={`h-full rounded ${isCompleted ? 'bg-success' : 'bg-dark-border'}`} />
           </div>
         )}
       </div>
-      <div className="mt-3">
-        <div className="text-2xl font-bold text-white">{value}</div>
-        <div className="text-sm text-dark-muted">{label}</div>
-        {subValue && <div className="text-xs text-dark-muted mt-1">{subValue}</div>}
+      <div className="mt-3 pr-4">
+        <div className="flex items-center gap-2">
+          <step.icon className={`w-4 h-4 ${isCompleted ? 'text-success' : isActive ? 'text-primary' : 'text-dark-muted'}`} />
+          <span className={`text-sm font-medium ${isCompleted ? 'text-success' : isActive ? 'text-white' : 'text-dark-muted'}`}>
+            {step.label}
+          </span>
+        </div>
+        {/* Progress bar */}
+        <div className="mt-2 h-1.5 bg-dark-border rounded-full overflow-hidden">
+          <div
+            className={`h-full rounded-full transition-all ${getProgressColor()}`}
+            style={{ width: `${step.progress}%` }}
+          />
+        </div>
+        <div className="mt-1 text-xs text-dark-muted">
+          {step.done}/{step.total} • {step.progress}%
+        </div>
       </div>
-    </Card>
+    </div>
   );
 }
 
-// Site Detail View - Full page component
+// Task Card Component
+function TaskCard({ task, onAction }) {
+  const priorityColors = {
+    high: 'border-danger/50 bg-danger/5',
+    medium: 'border-warning/50 bg-warning/5',
+    low: 'border-dark-border bg-dark-bg'
+  };
+
+  const statusIcons = {
+    pending: <Circle className="w-4 h-4 text-dark-muted" />,
+    in_progress: <Clock className="w-4 h-4 text-primary animate-pulse" />,
+    done: <CheckCircle className="w-4 h-4 text-success" />
+  };
+
+  return (
+    <div className={`p-4 rounded-lg border ${priorityColors[task.priority] || priorityColors.low}`}>
+      <div className="flex items-start gap-3">
+        {statusIcons[task.status] || statusIcons.pending}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="text-white font-medium">{task.title}</span>
+            {task.priority === 'high' && <Badge variant="danger" size="sm">Urgent</Badge>}
+          </div>
+          {task.description && (
+            <p className="text-sm text-dark-muted mt-1">{task.description}</p>
+          )}
+          {task.meta && (
+            <div className="flex items-center gap-3 mt-2 text-xs text-dark-muted">
+              {task.meta}
+            </div>
+          )}
+        </div>
+        {task.action && (
+          <Button variant="ghost" size="sm" onClick={() => onAction(task)}>
+            {task.actionLabel || 'Lancer'}
+            <ChevronRight className="w-4 h-4 ml-1" />
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Site Detail View - Workflow oriented
 function SiteDetailView({ site, onBack, onRefresh }) {
   const [isLoading, setIsLoading] = useState(true);
   const [keywords, setKeywords] = useState([]);
   const [pages, setPages] = useState([]);
+  const [clusters, setClusters] = useState([]);
+  const [articles, setArticles] = useState([]);
   const [quickWins, setQuickWins] = useState([]);
-  const [backlinks, setBacklinks] = useState([]);
   const [gscData, setGscData] = useState([]);
-  const [alerts, setAlerts] = useState([]);
-  const [activeTab, setActiveTab] = useState('overview');
-  const [isAuditing, setIsAuditing] = useState(false);
+  const [isRunningAction, setIsRunningAction] = useState(null);
 
   useEffect(() => {
     if (site?.id) {
@@ -62,21 +138,21 @@ function SiteDetailView({ site, onBack, onRefresh }) {
   const loadAllData = async () => {
     setIsLoading(true);
     try {
-      const [kwRes, pagesRes, qwRes, blRes, gscRes, alertsRes] = await Promise.all([
-        supabase.from('keywords').select('*').eq('site_id', site.id).order('current_position', { ascending: true, nullsFirst: false }),
-        supabase.from('pages').select('*').eq('site_id', site.id).order('updated_at', { ascending: false }),
-        supabase.from('quick_wins').select('*, keywords(keyword, search_volume)').eq('site_id', site.id).order('priority_score', { ascending: false }),
-        supabase.from('backlinks').select('*').eq('site_id', site.id).order('first_seen_at', { ascending: false }).limit(50),
-        supabase.from('gsc_keyword_history').select('*').eq('site_id', site.id).order('date', { ascending: false }).limit(100),
-        supabase.from('alerts').select('*').eq('site_id', site.id).is('read_at', null).order('created_at', { ascending: false }).limit(10)
+      const [kwRes, pagesRes, clustersRes, articlesRes, qwRes, gscRes] = await Promise.all([
+        supabase.from('keywords').select('*').eq('site_id', site.id),
+        supabase.from('pages').select('*').eq('site_id', site.id),
+        supabase.from('semantic_clusters').select('*, cluster_satellites(*)').eq('site_id', site.id),
+        supabase.from('articles').select('*').eq('site_id', site.id),
+        supabase.from('quick_wins').select('*, keywords(keyword)').eq('site_id', site.id).eq('status', 'pending'),
+        supabase.from('gsc_keyword_history').select('*').eq('site_id', site.id).order('date', { ascending: false }).limit(50)
       ]);
 
       setKeywords(kwRes.data || []);
       setPages(pagesRes.data || []);
+      setClusters(clustersRes.data || []);
+      setArticles(articlesRes.data || []);
       setQuickWins(qwRes.data || []);
-      setBacklinks(blRes.data || []);
       setGscData(gscRes.data || []);
-      setAlerts(alertsRes.data || []);
     } catch (err) {
       console.error('Error loading site data:', err);
     } finally {
@@ -84,80 +160,266 @@ function SiteDetailView({ site, onBack, onRefresh }) {
     }
   };
 
-  const handleTechnicalAudit = async () => {
-    if (!confirm(`Lancer un audit technique sur ${site.domain} avec Firecrawl ?\n\nCela analysera jusqu'a 10 pages du site.`)) {
-      return;
-    }
-    setIsAuditing(true);
+  // Action handlers
+  const handleAction = async (actionType, data = {}) => {
+    setIsRunningAction(actionType);
     try {
-      const result = await n8nApi.triggerWebhook('technical-audit', {
-        site_alias: site.alias,
-        max_pages: 10
-      });
-      if (result.success !== false) {
-        alert('Audit technique lance ! Les resultats seront disponibles dans ~30 secondes.');
-        setTimeout(loadAllData, 30000);
+      let result;
+      switch (actionType) {
+        case 'keyword-research':
+          if (!confirm(`Lancer une recherche de keywords pour ${site.domain} ?\n\nCela utilisera l'API DataForSEO (payant).`)) return;
+          result = await n8nApi.triggerWebhook('wf0', { site_alias: site.alias, seed_keyword: data.keyword || site.focus });
+          break;
+        case 'technical-audit':
+          if (!confirm(`Lancer un audit technique sur ${site.domain} avec Firecrawl ?`)) return;
+          result = await n8nApi.triggerWebhook('technical-audit', { site_alias: site.alias, max_pages: 10 });
+          break;
+        case 'quick-wins':
+          result = await n8nApi.triggerWebhook('wf7', { site_id: site.id });
+          break;
+        case 'gsc-sync':
+          result = await n8nApi.syncGSC();
+          break;
+        default:
+          console.log('Unknown action:', actionType);
+          return;
+      }
+      if (result?.success !== false) {
+        alert('Action lancée ! Les résultats seront disponibles dans quelques instants.');
+        setTimeout(loadAllData, 10000);
       } else {
-        alert('Erreur: ' + (result.error || 'Echec'));
+        alert('Erreur: ' + (result?.error || 'Échec'));
       }
     } catch (err) {
       alert('Erreur: ' + err.message);
     } finally {
-      setIsAuditing(false);
+      setIsRunningAction(null);
     }
   };
 
-  const getPositionColor = (pos) => {
-    if (!pos) return 'text-dark-muted';
-    if (pos <= 3) return 'text-success';
-    if (pos <= 10) return 'text-info';
-    if (pos <= 20) return 'text-warning';
-    return 'text-danger';
+  // Calculate workflow progress
+  const calculateWorkflowSteps = () => {
+    const keywordsAnalyzed = keywords.filter(k => k.search_volume !== null).length;
+    const keywordsWithPosition = keywords.filter(k => k.current_position !== null).length;
+    const clustersCreated = clusters.length;
+    const clustersComplete = clusters.filter(c => c.status === 'complete').length;
+    const articlesWritten = articles.filter(a => a.status === 'published' || a.status === 'draft').length;
+    const articlesPlanned = articles.length;
+    const pagesAudited = pages.filter(p => p.seo_score !== null).length;
+    const pagesTotal = pages.length || 1;
+    const quickWinsDone = quickWins.filter(q => q.status === 'done').length;
+    const quickWinsTotal = quickWins.length;
+
+    return [
+      {
+        id: 'keywords',
+        label: 'Recherche Keywords',
+        icon: Target,
+        done: keywordsAnalyzed,
+        total: Math.max(keywords.length, 10),
+        progress: keywords.length > 0 ? Math.round((keywordsAnalyzed / keywords.length) * 100) : 0,
+        status: keywordsAnalyzed > 0 ? (keywordsAnalyzed >= 10 ? 'complete' : 'in_progress') : 'pending'
+      },
+      {
+        id: 'clusters',
+        label: 'Cocons Sémantiques',
+        icon: Network,
+        done: clustersComplete,
+        total: Math.max(clustersCreated, 3),
+        progress: clustersCreated > 0 ? Math.round((clustersComplete / clustersCreated) * 100) : 0,
+        status: clustersComplete > 0 ? (clustersComplete >= clustersCreated ? 'complete' : 'in_progress') : 'pending'
+      },
+      {
+        id: 'content',
+        label: 'Rédaction Contenu',
+        icon: PenTool,
+        done: articlesWritten,
+        total: Math.max(articlesPlanned, 5),
+        progress: articlesPlanned > 0 ? Math.round((articlesWritten / articlesPlanned) * 100) : 0,
+        status: articlesWritten > 0 ? (articlesWritten >= articlesPlanned ? 'complete' : 'in_progress') : 'pending'
+      },
+      {
+        id: 'audit',
+        label: 'Audit Technique',
+        icon: FileSearch,
+        done: pagesAudited,
+        total: pagesTotal,
+        progress: Math.round((pagesAudited / pagesTotal) * 100),
+        status: pagesAudited > 0 ? (pagesAudited >= pagesTotal ? 'complete' : 'in_progress') : 'pending'
+      },
+      {
+        id: 'optimization',
+        label: 'Optimisation',
+        icon: TrendingUp,
+        done: quickWinsDone,
+        total: Math.max(quickWinsTotal, 1),
+        progress: quickWinsTotal > 0 ? Math.round((quickWinsDone / quickWinsTotal) * 100) : 0,
+        status: quickWinsDone > 0 ? (quickWinsDone >= quickWinsTotal ? 'complete' : 'in_progress') : 'pending'
+      }
+    ];
   };
 
-  const getScoreColor = (score) => {
-    if (score >= 80) return 'success';
-    if (score >= 50) return 'warning';
-    return 'danger';
+  // Generate tasks to do
+  const generateTasks = () => {
+    const tasks = [];
+
+    // Keywords tasks
+    if (keywords.length === 0) {
+      tasks.push({
+        id: 'kw-research',
+        title: 'Lancer une recherche de keywords',
+        description: `Identifier les opportunités SEO pour ${site.domain}`,
+        priority: 'high',
+        status: 'pending',
+        step: 'keywords',
+        action: 'keyword-research',
+        actionLabel: 'Rechercher'
+      });
+    } else if (keywords.filter(k => !k.current_position).length > 5) {
+      tasks.push({
+        id: 'kw-track',
+        title: `${keywords.filter(k => !k.current_position).length} keywords sans position`,
+        description: 'Synchroniser avec GSC pour obtenir les positions',
+        priority: 'medium',
+        status: 'pending',
+        step: 'keywords',
+        action: 'gsc-sync',
+        actionLabel: 'Sync GSC'
+      });
+    }
+
+    // Clusters tasks
+    if (clusters.length === 0 && keywords.length >= 5) {
+      tasks.push({
+        id: 'cluster-create',
+        title: 'Créer des cocons sémantiques',
+        description: `${keywords.length} keywords disponibles pour structurer en cocons`,
+        priority: 'high',
+        status: 'pending',
+        step: 'clusters',
+        meta: `${keywords.length} keywords disponibles`
+      });
+    } else if (clusters.filter(c => c.status !== 'complete').length > 0) {
+      const incomplete = clusters.filter(c => c.status !== 'complete');
+      tasks.push({
+        id: 'cluster-complete',
+        title: `${incomplete.length} cocon(s) à compléter`,
+        description: incomplete.map(c => c.name).slice(0, 3).join(', '),
+        priority: 'medium',
+        status: 'in_progress',
+        step: 'clusters'
+      });
+    }
+
+    // Content tasks
+    const drafts = articles.filter(a => a.status === 'draft');
+    const planned = articles.filter(a => a.status === 'planned' || a.status === 'brief');
+    if (planned.length > 0) {
+      tasks.push({
+        id: 'content-write',
+        title: `${planned.length} article(s) à rédiger`,
+        description: planned.map(a => a.title).slice(0, 2).join(', '),
+        priority: 'high',
+        status: 'pending',
+        step: 'content',
+        meta: `${drafts.length} brouillons en cours`
+      });
+    }
+    if (drafts.length > 0) {
+      tasks.push({
+        id: 'content-publish',
+        title: `${drafts.length} brouillon(s) à publier`,
+        description: drafts.map(a => a.title).slice(0, 2).join(', '),
+        priority: 'medium',
+        status: 'in_progress',
+        step: 'content'
+      });
+    }
+
+    // Audit tasks
+    if (pages.length === 0 || pages.filter(p => p.seo_score === null).length > 0) {
+      const unaudited = pages.filter(p => p.seo_score === null).length;
+      tasks.push({
+        id: 'audit-run',
+        title: pages.length === 0 ? 'Lancer un audit technique' : `${unaudited} page(s) non auditées`,
+        description: 'Analyser le contenu avec Firecrawl',
+        priority: pages.length === 0 ? 'high' : 'medium',
+        status: 'pending',
+        step: 'audit',
+        action: 'technical-audit',
+        actionLabel: 'Auditer'
+      });
+    }
+    const lowScore = pages.filter(p => p.seo_score !== null && p.seo_score < 50);
+    if (lowScore.length > 0) {
+      tasks.push({
+        id: 'audit-fix',
+        title: `${lowScore.length} page(s) avec score faible`,
+        description: 'Score SEO < 50, optimisation requise',
+        priority: 'high',
+        status: 'pending',
+        step: 'audit',
+        meta: lowScore.map(p => p.title).slice(0, 2).join(', ')
+      });
+    }
+
+    // Quick wins tasks
+    if (quickWins.length > 0) {
+      tasks.push({
+        id: 'qw-optimize',
+        title: `${quickWins.length} quick win(s) disponibles`,
+        description: 'Keywords en position 11-20 à optimiser',
+        priority: 'high',
+        status: 'pending',
+        step: 'optimization',
+        action: 'quick-wins',
+        actionLabel: 'Voir',
+        meta: quickWins.slice(0, 3).map(q => q.keywords?.keyword).filter(Boolean).join(', ')
+      });
+    }
+
+    return tasks;
   };
 
-  // Calculate stats
-  const stats = {
-    totalKeywords: keywords.length,
-    rankedKeywords: keywords.filter(k => k.current_position && k.current_position <= 100).length,
-    top3: keywords.filter(k => k.current_position && k.current_position <= 3).length,
-    top10: keywords.filter(k => k.current_position && k.current_position <= 10).length,
-    top20: keywords.filter(k => k.current_position && k.current_position <= 20).length,
+  // Calculate KPIs
+  const kpis = {
+    keywords: keywords.length,
     avgPosition: keywords.filter(k => k.current_position).length > 0
-      ? (keywords.filter(k => k.current_position).reduce((sum, k) => sum + k.current_position, 0) / keywords.filter(k => k.current_position).length).toFixed(1)
+      ? (keywords.filter(k => k.current_position).reduce((s, k) => s + k.current_position, 0) / keywords.filter(k => k.current_position).length).toFixed(1)
       : '-',
-    totalVolume: keywords.reduce((sum, k) => sum + (k.search_volume || 0), 0),
-    totalPages: pages.length,
-    auditedPages: pages.filter(p => p.seo_score !== null).length,
-    avgSeoScore: pages.filter(p => p.seo_score !== null).length > 0
-      ? Math.round(pages.filter(p => p.seo_score !== null).reduce((sum, p) => sum + p.seo_score, 0) / pages.filter(p => p.seo_score !== null).length)
+    clicks: gscData.reduce((sum, r) => sum + (r.clicks || 0), 0),
+    impressions: gscData.reduce((sum, r) => sum + (r.impressions || 0), 0),
+    pages: pages.length,
+    avgScore: pages.filter(p => p.seo_score !== null).length > 0
+      ? Math.round(pages.filter(p => p.seo_score !== null).reduce((s, p) => s + p.seo_score, 0) / pages.filter(p => p.seo_score !== null).length)
       : '-',
-    quickWinsCount: quickWins.filter(qw => qw.status === 'pending').length,
-    backlinksCount: backlinks.length,
-    dofollowLinks: backlinks.filter(b => b.link_type === 'dofollow').length,
-    alertsCount: alerts.length
+    clusters: clusters.length,
+    articles: articles.length,
+    quickWins: quickWins.length
   };
 
-  // GSC aggregated data
-  const gscStats = gscData.reduce((acc, row) => {
-    acc.clicks += row.clicks || 0;
-    acc.impressions += row.impressions || 0;
-    return acc;
-  }, { clicks: 0, impressions: 0 });
-  gscStats.ctr = gscStats.impressions > 0 ? ((gscStats.clicks / gscStats.impressions) * 100).toFixed(2) : 0;
+  const workflowSteps = calculateWorkflowSteps();
+  const tasks = generateTasks();
+  const overallProgress = Math.round(workflowSteps.reduce((sum, s) => sum + s.progress, 0) / workflowSteps.length);
 
-  const tabs = [
-    { id: 'overview', label: 'Vue d\'ensemble', icon: PieChart },
-    { id: 'keywords', label: `Keywords (${stats.totalKeywords})`, icon: Target },
-    { id: 'pages', label: `Pages (${stats.totalPages})`, icon: FileText },
-    { id: 'quickwins', label: `Quick Wins (${stats.quickWinsCount})`, icon: Zap },
-    { id: 'backlinks', label: `Backlinks (${stats.backlinksCount})`, icon: Link2 },
-  ];
+  // Recent activity (simulated from data)
+  const recentActivity = [
+    ...keywords.slice(0, 3).map(k => ({
+      type: 'keyword',
+      text: `Keyword "${k.keyword}" ajouté`,
+      date: k.created_at
+    })),
+    ...pages.filter(p => p.seo_score).slice(0, 3).map(p => ({
+      type: 'audit',
+      text: `Page "${p.title}" auditée (score: ${p.seo_score})`,
+      date: p.updated_at
+    })),
+    ...articles.slice(0, 2).map(a => ({
+      type: 'content',
+      text: `Article "${a.title}" ${a.status}`,
+      date: a.updated_at
+    }))
+  ].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 5);
 
   if (isLoading) {
     return (
@@ -176,7 +438,7 @@ function SiteDetailView({ site, onBack, onRefresh }) {
             <ArrowLeft className="w-4 h-4 mr-2" />
             Retour
           </Button>
-          <div className="w-14 h-14 bg-primary/20 rounded-xl flex items-center justify-center text-primary font-bold text-2xl">
+          <div className="w-12 h-12 bg-primary/20 rounded-xl flex items-center justify-center text-primary font-bold text-xl">
             {(site.alias || site.domain || '?')[0].toUpperCase()}
           </div>
           <div>
@@ -185,10 +447,10 @@ function SiteDetailView({ site, onBack, onRefresh }) {
               <a href={`https://${site.domain}`} target="_blank" rel="noopener noreferrer" className="text-dark-muted hover:text-primary">
                 <ExternalLink className="w-5 h-5" />
               </a>
-            </div>
-            <div className="flex items-center gap-3 mt-1">
-              <span className="text-dark-muted">{site.alias}</span>
               <Badge variant={entityColors[site.entity] || 'secondary'}>{site.entity}</Badge>
+            </div>
+            <div className="flex items-center gap-2 mt-1">
+              <span className="text-dark-muted">{site.alias}</span>
               {site.focus && <span className="text-sm text-dark-muted">• {site.focus}</span>}
             </div>
           </div>
@@ -198,494 +460,205 @@ function SiteDetailView({ site, onBack, onRefresh }) {
             <RefreshCw className="w-4 h-4 mr-2" />
             Actualiser
           </Button>
-          <Button variant="secondary" onClick={handleTechnicalAudit} disabled={isAuditing}>
-            <Activity className={`w-4 h-4 mr-2 ${isAuditing ? 'animate-spin' : ''}`} />
-            {isAuditing ? 'Audit...' : 'Audit Technique'}
-          </Button>
           <Button variant="ghost">
             <Settings className="w-4 h-4" />
           </Button>
         </div>
       </div>
 
-      {/* Alerts Banner */}
-      {stats.alertsCount > 0 && (
-        <Card className="p-4 border-warning/30 bg-warning/5">
-          <div className="flex items-center gap-3">
-            <AlertTriangle className="w-5 h-5 text-warning" />
-            <span className="text-white font-medium">{stats.alertsCount} alerte{stats.alertsCount > 1 ? 's' : ''} non lue{stats.alertsCount > 1 ? 's' : ''}</span>
-            <div className="flex-1" />
-            <Button variant="ghost" size="sm">Voir les alertes</Button>
-          </div>
+      {/* KPIs Summary */}
+      <div className="grid grid-cols-9 gap-3">
+        <Card className="p-3 text-center">
+          <div className="text-xl font-bold text-white">{kpis.keywords}</div>
+          <div className="text-xs text-dark-muted">Keywords</div>
         </Card>
-      )}
-
-      {/* Stats Grid */}
-      <div className="grid grid-cols-6 gap-4">
-        <StatCard icon={Target} value={stats.totalKeywords} label="Keywords suivis" subValue={`${stats.rankedKeywords} positionnés`} color="primary" />
-        <StatCard icon={Award} value={stats.top10} label="Top 10" subValue={`${stats.top3} en top 3`} color="success" />
-        <StatCard icon={BarChart3} value={stats.avgPosition} label="Position moyenne" color="info" />
-        <StatCard icon={MousePointer} value={gscStats.clicks.toLocaleString()} label="Clics GSC" subValue={`CTR: ${gscStats.ctr}%`} color="info" />
-        <StatCard icon={Eye} value={gscStats.impressions.toLocaleString()} label="Impressions" color="secondary" />
-        <StatCard icon={Zap} value={stats.quickWinsCount} label="Quick Wins" subValue="Opportunités P11-20" color="warning" />
+        <Card className="p-3 text-center">
+          <div className="text-xl font-bold text-info">{kpis.avgPosition}</div>
+          <div className="text-xs text-dark-muted">Pos. moy.</div>
+        </Card>
+        <Card className="p-3 text-center">
+          <div className="text-xl font-bold text-success">{kpis.clicks.toLocaleString()}</div>
+          <div className="text-xs text-dark-muted">Clics</div>
+        </Card>
+        <Card className="p-3 text-center">
+          <div className="text-xl font-bold text-white">{kpis.impressions.toLocaleString()}</div>
+          <div className="text-xs text-dark-muted">Impressions</div>
+        </Card>
+        <Card className="p-3 text-center">
+          <div className="text-xl font-bold text-white">{kpis.pages}</div>
+          <div className="text-xs text-dark-muted">Pages</div>
+        </Card>
+        <Card className="p-3 text-center">
+          <div className={`text-xl font-bold ${typeof kpis.avgScore === 'number' && kpis.avgScore >= 80 ? 'text-success' : kpis.avgScore >= 50 ? 'text-warning' : 'text-danger'}`}>
+            {kpis.avgScore}
+          </div>
+          <div className="text-xs text-dark-muted">Score SEO</div>
+        </Card>
+        <Card className="p-3 text-center">
+          <div className="text-xl font-bold text-primary">{kpis.clusters}</div>
+          <div className="text-xs text-dark-muted">Cocons</div>
+        </Card>
+        <Card className="p-3 text-center">
+          <div className="text-xl font-bold text-white">{kpis.articles}</div>
+          <div className="text-xs text-dark-muted">Articles</div>
+        </Card>
+        <Card className="p-3 text-center">
+          <div className="text-xl font-bold text-warning">{kpis.quickWins}</div>
+          <div className="text-xs text-dark-muted">Quick Wins</div>
+        </Card>
       </div>
 
-      {/* Secondary Stats */}
-      <div className="grid grid-cols-4 gap-4">
-        <StatCard icon={FileText} value={stats.totalPages} label="Pages" subValue={`${stats.auditedPages} auditées`} color="primary" />
-        <StatCard icon={CheckCircle} value={stats.avgSeoScore} label="Score SEO moyen" color={typeof stats.avgSeoScore === 'number' ? getScoreColor(stats.avgSeoScore) : 'secondary'} />
-        <StatCard icon={Link2} value={stats.backlinksCount} label="Backlinks" subValue={`${stats.dofollowLinks} dofollow`} color="info" />
-        <StatCard icon={Globe} value={stats.totalVolume.toLocaleString()} label="Volume total" subValue="Recherches/mois" color="success" />
-      </div>
+      {/* Overall Progress */}
+      <Card className="p-6">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h2 className="text-lg font-semibold text-white">Progression SEO</h2>
+            <p className="text-sm text-dark-muted mt-1">Avancement global du projet</p>
+          </div>
+          <div className="text-right">
+            <div className="text-3xl font-bold text-primary">{overallProgress}%</div>
+            <div className="text-sm text-dark-muted">complété</div>
+          </div>
+        </div>
 
-      {/* Tabs */}
-      <div className="flex gap-2 border-b border-dark-border pb-0">
-        {tabs.map(tab => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
-              activeTab === tab.id
-                ? 'text-primary border-primary'
-                : 'text-dark-muted border-transparent hover:text-white'
-            }`}
-          >
-            <tab.icon className="w-4 h-4" />
-            {tab.label}
-          </button>
-        ))}
-      </div>
+        {/* Workflow Steps */}
+        <div className="flex items-start">
+          {workflowSteps.map((step, i) => (
+            <WorkflowStep
+              key={step.id}
+              step={step}
+              isActive={step.status === 'in_progress'}
+              isCompleted={step.status === 'complete'}
+              isLast={i === workflowSteps.length - 1}
+              onAction={() => handleAction(step.id)}
+            />
+          ))}
+        </div>
+      </Card>
 
-      {/* Tab Content */}
-      {activeTab === 'overview' && (
-        <div className="grid grid-cols-2 gap-6">
-          {/* Top Keywords */}
-          <Card className="p-0 overflow-hidden">
-            <div className="p-4 border-b border-dark-border flex items-center justify-between">
-              <h3 className="font-medium text-white flex items-center gap-2">
-                <Target className="w-4 h-4 text-primary" />
-                Top Keywords
-              </h3>
-              <Button variant="ghost" size="sm" onClick={() => setActiveTab('keywords')}>Voir tout</Button>
+      {/* Main Content Grid */}
+      <div className="grid grid-cols-3 gap-6">
+        {/* Tasks To Do */}
+        <div className="col-span-2 space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+              <ListTodo className="w-5 h-5 text-primary" />
+              À faire ({tasks.length})
+            </h2>
+          </div>
+
+          {tasks.length === 0 ? (
+            <Card className="p-8 text-center">
+              <Sparkles className="w-12 h-12 text-success mx-auto mb-3" />
+              <h3 className="text-lg font-medium text-white">Tout est à jour !</h3>
+              <p className="text-dark-muted mt-1">Aucune tâche en attente pour ce site</p>
+            </Card>
+          ) : (
+            <div className="space-y-3">
+              {tasks.map(task => (
+                <TaskCard
+                  key={task.id}
+                  task={task}
+                  onAction={() => task.action && handleAction(task.action)}
+                />
+              ))}
             </div>
-            <div className="divide-y divide-dark-border/50">
-              {keywords.slice(0, 8).map(kw => {
-                const change = kw.previous_position && kw.current_position
-                  ? kw.previous_position - kw.current_position
-                  : null;
-                return (
-                  <div key={kw.id} className="p-3 hover:bg-dark-border/30 flex items-center gap-3">
-                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold ${
-                      kw.current_position <= 3 ? 'bg-success/20 text-success' :
-                      kw.current_position <= 10 ? 'bg-info/20 text-info' :
-                      kw.current_position <= 20 ? 'bg-warning/20 text-warning' :
-                      'bg-dark-border text-dark-muted'
-                    }`}>
-                      {kw.current_position || '-'}
-                    </div>
+          )}
+        </div>
+
+        {/* Sidebar */}
+        <div className="space-y-4">
+          {/* Recent Activity */}
+          <Card className="p-4">
+            <h3 className="text-sm font-medium text-dark-muted mb-3 flex items-center gap-2">
+              <Activity className="w-4 h-4" />
+              Activité récente
+            </h3>
+            {recentActivity.length === 0 ? (
+              <p className="text-sm text-dark-muted text-center py-4">Aucune activité</p>
+            ) : (
+              <div className="space-y-3">
+                {recentActivity.map((item, i) => (
+                  <div key={i} className="flex items-start gap-2 text-sm">
+                    <div className={`w-2 h-2 rounded-full mt-1.5 ${
+                      item.type === 'keyword' ? 'bg-primary' :
+                      item.type === 'audit' ? 'bg-info' :
+                      item.type === 'content' ? 'bg-success' : 'bg-dark-muted'
+                    }`} />
                     <div className="flex-1 min-w-0">
-                      <div className="text-sm text-white truncate">{kw.keyword}</div>
-                      <div className="text-xs text-dark-muted">
-                        Vol: {kw.search_volume?.toLocaleString() || '-'} • Diff: {kw.difficulty || '-'}
-                      </div>
+                      <p className="text-white truncate">{item.text}</p>
+                      <p className="text-xs text-dark-muted">
+                        {item.date ? new Date(item.date).toLocaleDateString('fr-FR') : '-'}
+                      </p>
                     </div>
-                    {change !== null && change !== 0 && (
-                      <div className={`flex items-center gap-1 text-xs ${change > 0 ? 'text-success' : 'text-danger'}`}>
-                        {change > 0 ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />}
-                        {Math.abs(change)}
-                      </div>
-                    )}
                   </div>
-                );
-              })}
-              {keywords.length === 0 && (
-                <div className="p-8 text-center text-dark-muted">
-                  Aucun keyword suivi
+                ))}
+              </div>
+            )}
+          </Card>
+
+          {/* Quick Stats by Step */}
+          <Card className="p-4">
+            <h3 className="text-sm font-medium text-dark-muted mb-3 flex items-center gap-2">
+              <BarChart3 className="w-4 h-4" />
+              Détails par étape
+            </h3>
+            <div className="space-y-3">
+              {workflowSteps.map(step => (
+                <div key={step.id} className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <step.icon className={`w-4 h-4 ${step.status === 'complete' ? 'text-success' : step.status === 'in_progress' ? 'text-primary' : 'text-dark-muted'}`} />
+                    <span className="text-sm text-white">{step.label}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-dark-muted">{step.done}/{step.total}</span>
+                    <Badge variant={step.status === 'complete' ? 'success' : step.status === 'in_progress' ? 'primary' : 'secondary'} size="sm">
+                      {step.progress}%
+                    </Badge>
+                  </div>
                 </div>
-              )}
+              ))}
             </div>
           </Card>
 
-          {/* Recent Pages */}
-          <Card className="p-0 overflow-hidden">
-            <div className="p-4 border-b border-dark-border flex items-center justify-between">
-              <h3 className="font-medium text-white flex items-center gap-2">
-                <FileText className="w-4 h-4 text-primary" />
-                Pages Recentes
-              </h3>
-              <Button variant="ghost" size="sm" onClick={() => setActiveTab('pages')}>Voir tout</Button>
-            </div>
-            <div className="divide-y divide-dark-border/50">
-              {pages.slice(0, 8).map(page => (
-                <div key={page.id} className="p-3 hover:bg-dark-border/30 flex items-center gap-3">
-                  {page.seo_score !== null ? (
-                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold bg-${getScoreColor(page.seo_score)}/20 text-${getScoreColor(page.seo_score)}`}>
-                      {page.seo_score}
-                    </div>
-                  ) : (
-                    <div className="w-8 h-8 rounded-lg flex items-center justify-center text-sm bg-dark-border text-dark-muted">
-                      -
-                    </div>
-                  )}
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm text-white truncate">{page.title || page.slug || 'Sans titre'}</div>
-                    <div className="text-xs text-dark-muted truncate">
-                      {page.word_count || 0} mots • {page.slug || '/'}
-                    </div>
-                  </div>
-                  {page.wp_url && (
-                    <a href={page.wp_url} target="_blank" rel="noopener noreferrer" className="text-dark-muted hover:text-primary">
-                      <ExternalLink className="w-4 h-4" />
-                    </a>
-                  )}
-                </div>
-              ))}
-              {pages.length === 0 && (
-                <div className="p-8 text-center text-dark-muted">
-                  <p>Aucune page auditée</p>
-                  <Button variant="secondary" size="sm" className="mt-2" onClick={handleTechnicalAudit}>
-                    Lancer un audit
-                  </Button>
-                </div>
-              )}
-            </div>
-          </Card>
-
-          {/* Quick Wins */}
-          <Card className="p-0 overflow-hidden">
-            <div className="p-4 border-b border-dark-border flex items-center justify-between">
-              <h3 className="font-medium text-white flex items-center gap-2">
-                <Zap className="w-4 h-4 text-warning" />
-                Quick Wins
-              </h3>
-              <Button variant="ghost" size="sm" onClick={() => setActiveTab('quickwins')}>Voir tout</Button>
-            </div>
-            <div className="divide-y divide-dark-border/50">
-              {quickWins.filter(qw => qw.status === 'pending').slice(0, 5).map(qw => (
-                <div key={qw.id} className="p-3 hover:bg-dark-border/30 flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold bg-warning/20 text-warning">
-                    {qw.current_position || '-'}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm text-white truncate">{qw.keywords?.keyword || qw.keyword_id}</div>
-                    <div className="text-xs text-dark-muted">
-                      Vol: {qw.keywords?.search_volume?.toLocaleString() || '-'} • Score: {qw.priority_score || '-'}
-                    </div>
-                  </div>
-                  <Badge variant="warning" size="sm">P{qw.current_position}</Badge>
-                </div>
-              ))}
-              {quickWins.filter(qw => qw.status === 'pending').length === 0 && (
-                <div className="p-8 text-center text-dark-muted">
-                  Aucun quick win détecté
-                </div>
-              )}
-            </div>
-          </Card>
-
-          {/* Backlinks */}
-          <Card className="p-0 overflow-hidden">
-            <div className="p-4 border-b border-dark-border flex items-center justify-between">
-              <h3 className="font-medium text-white flex items-center gap-2">
-                <Link2 className="w-4 h-4 text-info" />
-                Backlinks Recents
-              </h3>
-              <Button variant="ghost" size="sm" onClick={() => setActiveTab('backlinks')}>Voir tout</Button>
-            </div>
-            <div className="divide-y divide-dark-border/50">
-              {backlinks.slice(0, 5).map(bl => (
-                <div key={bl.id} className="p-3 hover:bg-dark-border/30 flex items-center gap-3">
-                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold ${
-                    bl.domain_rating >= 50 ? 'bg-success/20 text-success' :
-                    bl.domain_rating >= 30 ? 'bg-warning/20 text-warning' :
-                    'bg-dark-border text-dark-muted'
-                  }`}>
-                    {bl.domain_rating || '-'}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm text-white truncate">{bl.source_domain}</div>
-                    <div className="text-xs text-dark-muted truncate">
-                      {bl.anchor_text || 'Pas d\'ancre'} • {bl.link_type || 'unknown'}
-                    </div>
-                  </div>
-                  <Badge variant={bl.link_type === 'dofollow' ? 'success' : 'secondary'} size="sm">
-                    {bl.link_type || '?'}
-                  </Badge>
-                </div>
-              ))}
-              {backlinks.length === 0 && (
-                <div className="p-8 text-center text-dark-muted">
-                  Aucun backlink enregistré
-                </div>
-              )}
+          {/* Quick Actions */}
+          <Card className="p-4">
+            <h3 className="text-sm font-medium text-dark-muted mb-3 flex items-center gap-2">
+              <Zap className="w-4 h-4" />
+              Actions rapides
+            </h3>
+            <div className="space-y-2">
+              <Button
+                variant="ghost"
+                className="w-full justify-start"
+                onClick={() => handleAction('keyword-research')}
+                disabled={isRunningAction === 'keyword-research'}
+              >
+                <Target className="w-4 h-4 mr-2" />
+                Recherche keywords
+              </Button>
+              <Button
+                variant="ghost"
+                className="w-full justify-start"
+                onClick={() => handleAction('technical-audit')}
+                disabled={isRunningAction === 'technical-audit'}
+              >
+                <FileSearch className="w-4 h-4 mr-2" />
+                Audit technique
+              </Button>
+              <Button
+                variant="ghost"
+                className="w-full justify-start"
+                onClick={() => handleAction('gsc-sync')}
+                disabled={isRunningAction === 'gsc-sync'}
+              >
+                <TrendingUp className="w-4 h-4 mr-2" />
+                Sync GSC
+              </Button>
             </div>
           </Card>
         </div>
-      )}
-
-      {activeTab === 'keywords' && (
-        <Card className="p-0 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-dark-border bg-dark-bg/50">
-                  <th className="text-left py-3 px-4 text-sm font-medium text-dark-muted">Keyword</th>
-                  <th className="text-center py-3 px-4 text-sm font-medium text-dark-muted">Position</th>
-                  <th className="text-center py-3 px-4 text-sm font-medium text-dark-muted">Évolution</th>
-                  <th className="text-center py-3 px-4 text-sm font-medium text-dark-muted">Volume</th>
-                  <th className="text-center py-3 px-4 text-sm font-medium text-dark-muted">Difficulté</th>
-                  <th className="text-center py-3 px-4 text-sm font-medium text-dark-muted">Intent</th>
-                  <th className="text-center py-3 px-4 text-sm font-medium text-dark-muted">Quick Win</th>
-                </tr>
-              </thead>
-              <tbody>
-                {keywords.map(kw => {
-                  const change = kw.previous_position && kw.current_position
-                    ? kw.previous_position - kw.current_position
-                    : null;
-                  return (
-                    <tr key={kw.id} className="border-b border-dark-border/50 hover:bg-dark-border/30">
-                      <td className="py-3 px-4">
-                        <div className="text-white">{kw.keyword}</div>
-                        {kw.target_url && <div className="text-xs text-dark-muted truncate max-w-xs">{kw.target_url}</div>}
-                      </td>
-                      <td className="py-3 px-4 text-center">
-                        <span className={`font-bold ${getPositionColor(kw.current_position)}`}>
-                          {kw.current_position || '-'}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 text-center">
-                        {change !== null && change !== 0 ? (
-                          <span className={`flex items-center justify-center gap-1 ${change > 0 ? 'text-success' : 'text-danger'}`}>
-                            {change > 0 ? <ArrowUp className="w-4 h-4" /> : <ArrowDown className="w-4 h-4" />}
-                            {Math.abs(change)}
-                          </span>
-                        ) : (
-                          <span className="text-dark-muted">-</span>
-                        )}
-                      </td>
-                      <td className="py-3 px-4 text-center text-white">{kw.search_volume?.toLocaleString() || '-'}</td>
-                      <td className="py-3 px-4 text-center">
-                        {kw.difficulty ? (
-                          <Badge variant={kw.difficulty < 30 ? 'success' : kw.difficulty < 60 ? 'warning' : 'danger'}>
-                            {kw.difficulty}
-                          </Badge>
-                        ) : (
-                          <span className="text-dark-muted">-</span>
-                        )}
-                      </td>
-                      <td className="py-3 px-4 text-center">
-                        {kw.intent ? (
-                          <Badge variant="secondary">{kw.intent}</Badge>
-                        ) : (
-                          <span className="text-dark-muted">-</span>
-                        )}
-                      </td>
-                      <td className="py-3 px-4 text-center">
-                        {kw.is_quick_win ? (
-                          <CheckCircle className="w-5 h-5 text-success mx-auto" />
-                        ) : (
-                          <span className="text-dark-muted">-</span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-          {keywords.length === 0 && (
-            <div className="p-12 text-center text-dark-muted">
-              Aucun keyword suivi pour ce site
-            </div>
-          )}
-        </Card>
-      )}
-
-      {activeTab === 'pages' && (
-        <Card className="p-0 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-dark-border bg-dark-bg/50">
-                  <th className="text-left py-3 px-4 text-sm font-medium text-dark-muted">Page</th>
-                  <th className="text-center py-3 px-4 text-sm font-medium text-dark-muted">Score SEO</th>
-                  <th className="text-center py-3 px-4 text-sm font-medium text-dark-muted">Mots</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-dark-muted">Title</th>
-                  <th className="text-center py-3 px-4 text-sm font-medium text-dark-muted">H1</th>
-                  <th className="text-center py-3 px-4 text-sm font-medium text-dark-muted">Meta Desc</th>
-                  <th className="text-center py-3 px-4 text-sm font-medium text-dark-muted">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {pages.map(page => (
-                  <tr key={page.id} className="border-b border-dark-border/50 hover:bg-dark-border/30">
-                    <td className="py-3 px-4">
-                      <div className="text-white truncate max-w-xs">{page.title || 'Sans titre'}</div>
-                      <div className="text-xs text-dark-muted truncate max-w-xs">{page.slug || '/'}</div>
-                    </td>
-                    <td className="py-3 px-4 text-center">
-                      {page.seo_score !== null ? (
-                        <Badge variant={getScoreColor(page.seo_score)}>{page.seo_score}</Badge>
-                      ) : (
-                        <span className="text-dark-muted">-</span>
-                      )}
-                    </td>
-                    <td className="py-3 px-4 text-center">
-                      <span className={page.word_count >= 1000 ? 'text-success' : page.word_count >= 300 ? 'text-white' : 'text-warning'}>
-                        {page.word_count || 0}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4">
-                      <div className="flex items-center gap-2">
-                        {page.meta_title ? (
-                          <>
-                            <CheckCircle className="w-4 h-4 text-success" />
-                            <span className="text-xs text-dark-muted">{page.meta_title.length}/60</span>
-                          </>
-                        ) : (
-                          <XCircle className="w-4 h-4 text-danger" />
-                        )}
-                      </div>
-                    </td>
-                    <td className="py-3 px-4 text-center">
-                      {page.h1 ? (
-                        <CheckCircle className="w-4 h-4 text-success mx-auto" />
-                      ) : (
-                        <XCircle className="w-4 h-4 text-danger mx-auto" />
-                      )}
-                    </td>
-                    <td className="py-3 px-4 text-center">
-                      {page.meta_description ? (
-                        <div className="flex items-center justify-center gap-1">
-                          <CheckCircle className="w-4 h-4 text-success" />
-                          <span className="text-xs text-dark-muted">{page.meta_description.length}</span>
-                        </div>
-                      ) : (
-                        <XCircle className="w-4 h-4 text-danger mx-auto" />
-                      )}
-                    </td>
-                    <td className="py-3 px-4 text-center">
-                      {page.wp_url && (
-                        <a href={page.wp_url} target="_blank" rel="noopener noreferrer" className="text-dark-muted hover:text-primary">
-                          <ExternalLink className="w-4 h-4 mx-auto" />
-                        </a>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          {pages.length === 0 && (
-            <div className="p-12 text-center text-dark-muted">
-              <p>Aucune page auditée</p>
-              <Button variant="secondary" className="mt-4" onClick={handleTechnicalAudit} disabled={isAuditing}>
-                {isAuditing ? 'Audit en cours...' : 'Lancer un audit technique'}
-              </Button>
-            </div>
-          )}
-        </Card>
-      )}
-
-      {activeTab === 'quickwins' && (
-        <Card className="p-0 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-dark-border bg-dark-bg/50">
-                  <th className="text-left py-3 px-4 text-sm font-medium text-dark-muted">Keyword</th>
-                  <th className="text-center py-3 px-4 text-sm font-medium text-dark-muted">Position</th>
-                  <th className="text-center py-3 px-4 text-sm font-medium text-dark-muted">Volume</th>
-                  <th className="text-center py-3 px-4 text-sm font-medium text-dark-muted">Score Priorité</th>
-                  <th className="text-center py-3 px-4 text-sm font-medium text-dark-muted">Statut</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-dark-muted">Action recommandée</th>
-                </tr>
-              </thead>
-              <tbody>
-                {quickWins.map(qw => (
-                  <tr key={qw.id} className="border-b border-dark-border/50 hover:bg-dark-border/30">
-                    <td className="py-3 px-4 text-white">{qw.keywords?.keyword || '-'}</td>
-                    <td className="py-3 px-4 text-center">
-                      <Badge variant="warning">{qw.current_position || '-'}</Badge>
-                    </td>
-                    <td className="py-3 px-4 text-center text-white">{qw.keywords?.search_volume?.toLocaleString() || '-'}</td>
-                    <td className="py-3 px-4 text-center">
-                      <span className="font-bold text-primary">{qw.priority_score || '-'}</span>
-                    </td>
-                    <td className="py-3 px-4 text-center">
-                      <Badge variant={qw.status === 'pending' ? 'warning' : qw.status === 'done' ? 'success' : 'secondary'}>
-                        {qw.status || 'pending'}
-                      </Badge>
-                    </td>
-                    <td className="py-3 px-4 text-dark-muted text-sm">{qw.recommended_action || 'Optimiser le contenu'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          {quickWins.length === 0 && (
-            <div className="p-12 text-center text-dark-muted">
-              Aucun quick win détecté pour ce site
-            </div>
-          )}
-        </Card>
-      )}
-
-      {activeTab === 'backlinks' && (
-        <Card className="p-0 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-dark-border bg-dark-bg/50">
-                  <th className="text-left py-3 px-4 text-sm font-medium text-dark-muted">Source</th>
-                  <th className="text-center py-3 px-4 text-sm font-medium text-dark-muted">DR</th>
-                  <th className="text-center py-3 px-4 text-sm font-medium text-dark-muted">Type</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-dark-muted">Ancre</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-dark-muted">Page cible</th>
-                  <th className="text-center py-3 px-4 text-sm font-medium text-dark-muted">Découvert</th>
-                </tr>
-              </thead>
-              <tbody>
-                {backlinks.map(bl => (
-                  <tr key={bl.id} className="border-b border-dark-border/50 hover:bg-dark-border/30">
-                    <td className="py-3 px-4">
-                      <a href={bl.source_url} target="_blank" rel="noopener noreferrer" className="text-white hover:text-primary flex items-center gap-1">
-                        {bl.source_domain}
-                        <ExternalLink className="w-3 h-3" />
-                      </a>
-                    </td>
-                    <td className="py-3 px-4 text-center">
-                      <span className={`font-bold ${
-                        bl.domain_rating >= 50 ? 'text-success' :
-                        bl.domain_rating >= 30 ? 'text-warning' :
-                        'text-dark-muted'
-                      }`}>
-                        {bl.domain_rating || '-'}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4 text-center">
-                      <Badge variant={bl.link_type === 'dofollow' ? 'success' : 'secondary'}>
-                        {bl.link_type || '?'}
-                      </Badge>
-                    </td>
-                    <td className="py-3 px-4 text-dark-muted truncate max-w-xs">{bl.anchor_text || '-'}</td>
-                    <td className="py-3 px-4 text-dark-muted truncate max-w-xs">{bl.target_url || '/'}</td>
-                    <td className="py-3 px-4 text-center text-dark-muted text-sm">
-                      {bl.first_seen_at ? new Date(bl.first_seen_at).toLocaleDateString('fr-FR') : '-'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          {backlinks.length === 0 && (
-            <div className="p-12 text-center text-dark-muted">
-              Aucun backlink enregistré pour ce site
-            </div>
-          )}
-        </Card>
-      )}
+      </div>
     </div>
   );
 }
