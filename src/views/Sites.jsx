@@ -564,9 +564,12 @@ function SiteDetailView({ site, onBack, onRefresh }) {
     impressions: totalImpressions,
     ctr: totalImpressions > 0 ? ((totalClicks / totalImpressions) * 100).toFixed(2) : '-',
     pages: pages.length,
-    avgScore: pages.filter(p => p.seo_score !== null).length > 0
-      ? Math.round(pages.filter(p => p.seo_score !== null).reduce((s, p) => s + p.seo_score, 0) / pages.filter(p => p.seo_score !== null).length)
-      : '-',
+    avgScore: (() => {
+      const pagesWithScore = pages.filter(p => typeof p.seo_score === 'number' && !isNaN(p.seo_score));
+      if (pagesWithScore.length === 0) return '-';
+      const avg = pagesWithScore.reduce((s, p) => s + p.seo_score, 0) / pagesWithScore.length;
+      return isNaN(avg) ? '-' : Math.round(avg);
+    })(),
     clusters: clusters.length,
     articles: articles.length,
     backlinks: backlinks.length,
@@ -1586,8 +1589,44 @@ export default function Sites({ onNavigate, selectedSite: propSelectedSite }) {
   const [filterEntity, setFilterEntity] = useState('all');
   const [internalSelectedSite, setInternalSelectedSite] = useState(null);
 
+  // Entity map for transforming raw site data
+  const [entityMap, setEntityMap] = useState({});
+
+  // Load entities early if we have a selected site from props
+  useEffect(() => {
+    if (propSelectedSite && Object.keys(entityMap).length === 0) {
+      supabase.from('entities').select('id, name').then(({ data }) => {
+        const map = {};
+        (data || []).forEach(e => { map[e.id] = e.name; });
+        setEntityMap(map);
+      });
+    }
+  }, [propSelectedSite]);
+
   // Use prop if provided, otherwise use internal state
-  const selectedSite = propSelectedSite || internalSelectedSite;
+  // Transform raw site data to include computed fields (entity name, focus string)
+  const selectedSite = (() => {
+    const rawSite = propSelectedSite || internalSelectedSite;
+    if (!rawSite) return null;
+
+    // If site already has computed entity name, return as-is
+    if (rawSite.entity && typeof rawSite.entity === 'string' && rawSite.entity.length < 50) {
+      return rawSite;
+    }
+
+    // Transform raw site from sidebar
+    return {
+      ...rawSite,
+      id: rawSite.id,
+      alias: rawSite.mcp_alias || rawSite.alias,
+      domain: rawSite.domain,
+      entity: entityMap[rawSite.entity_id] || rawSite.entity_id || 'Non assigné',
+      focus: Array.isArray(rawSite.seo_focus)
+        ? rawSite.seo_focus.join(' • ')
+        : (rawSite.seo_focus || rawSite.focus || ''),
+      status: rawSite.is_active ? 'active' : (rawSite.status || 'inactive'),
+    };
+  })();
   const setSelectedSite = propSelectedSite ? () => {} : setInternalSelectedSite;
 
   const loadSites = async () => {
@@ -1603,8 +1642,9 @@ export default function Sites({ onNavigate, selectedSite: propSelectedSite }) {
       ]);
 
       // Map entity IDs to names
-      const entityMap = {};
-      entitiesData.forEach(e => { entityMap[e.id] = e.name; });
+      const entityMapLocal = {};
+      entitiesData.forEach(e => { entityMapLocal[e.id] = e.name; });
+      setEntityMap(entityMapLocal); // Also save to state for use in site transform
 
       const statsPerSite = {};
       keywordsData.forEach(kw => {
@@ -1641,7 +1681,7 @@ export default function Sites({ onNavigate, selectedSite: propSelectedSite }) {
           id: site.id,
           alias: site.mcp_alias,
           domain: site.domain,
-          entity: entityMap[site.entity_id] || site.entity_id || 'Non assigné',
+          entity: entityMapLocal[site.entity_id] || site.entity_id || 'Non assigné',
           focus: Array.isArray(site.seo_focus) ? site.seo_focus.join(' • ') : (site.seo_focus || ''),
           status: site.is_active ? 'active' : 'inactive',
           keywords: stats.keywords,

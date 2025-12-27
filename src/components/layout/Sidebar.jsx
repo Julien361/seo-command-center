@@ -15,7 +15,7 @@ import {
 import { Terminal as XTerm } from 'xterm';
 import { FitAddon } from 'xterm-addon-fit';
 import 'xterm/css/xterm.css';
-import { sitesApi } from '../../lib/supabase';
+import { sitesApi, supabase } from '../../lib/supabase';
 
 // Entity color mapping
 const entityColors = {
@@ -34,13 +34,21 @@ export default function Sidebar({ activeView, onViewChange }) {
   const [isTerminalExpanded, setIsTerminalExpanded] = useState(true);
   const [appVersion, setAppVersion] = useState('');
   const [sites, setSites] = useState([]);
+  const [entities, setEntities] = useState({});
   const [searchTerm, setSearchTerm] = useState('');
   const isElectron = typeof window !== 'undefined' && window.electronAPI?.isElectron;
 
-  // Load sites
+  // Load sites and entities
   useEffect(() => {
     const loadSites = async () => {
       try {
+        // Load entities first
+        const { data: entitiesData } = await supabase.from('entities').select('id, name');
+        const entityMap = {};
+        (entitiesData || []).forEach(e => { entityMap[e.id] = e.name; });
+        setEntities(entityMap);
+
+        // Load sites
         const data = await sitesApi.getAll();
         setSites(data || []);
       } catch (error) {
@@ -161,11 +169,11 @@ export default function Sidebar({ activeView, onViewChange }) {
     (site.domain || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  // Group sites by entity
+  // Group sites by entity (use entity name instead of ID)
   const sitesByEntity = filteredSites.reduce((acc, site) => {
-    const entity = site.entity_id || 'Autres';
-    if (!acc[entity]) acc[entity] = [];
-    acc[entity].push(site);
+    const entityName = entities[site.entity_id] || 'Autres';
+    if (!acc[entityName]) acc[entityName] = [];
+    acc[entityName].push(site);
     return acc;
   }, {});
 
