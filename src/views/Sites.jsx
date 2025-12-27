@@ -183,7 +183,7 @@ function SiteDetailView({ site, onBack, onRefresh }) {
   // Action costs configuration
   const actionCosts = {
     'keyword-research': { price: '~0.50€', api: 'DataForSEO', isPaid: true },
-    'technical-audit': { price: '~0.10€', api: 'Firecrawl', isPaid: true },
+    'technical-audit': { price: 'Variable', api: 'Firecrawl', isPaid: true },
     'backlink-analysis': { price: '~0.30€', api: 'DataForSEO', isPaid: true },
     'cocon-create': { price: '~0.10€', api: 'Claude AI', isPaid: true },
     'quick-wins': { price: 'Gratuit', api: 'Supabase', isPaid: false },
@@ -214,7 +214,7 @@ function SiteDetailView({ site, onBack, onRefresh }) {
           result = await n8nApi.triggerWebhook('wf0', { site_alias: site.alias, seed_keyword: data.keyword || site.focus });
           break;
         case 'technical-audit':
-          result = await n8nApi.triggerWebhook('technical-audit', { site_alias: site.alias, max_pages: 10 });
+          result = await n8nApi.triggerWebhook('technical-audit', { site_alias: site.alias });
           break;
         case 'backlink-analysis':
           result = await n8nApi.triggerWebhook('backlinks-sync', { site_alias: site.alias });
@@ -988,7 +988,7 @@ function SiteDetailView({ site, onBack, onRefresh }) {
             >
               <FileSearch className={`w-4 h-4 mr-2 ${isRunningAction === 'technical-audit' ? 'animate-spin' : ''}`} />
               {isRunningAction === 'technical-audit' ? 'Scan en cours...' : pages.filter(p => p.seo_score !== null).length > 0 ? 'Re-scanner' : 'Scanner'}
-              <span className="ml-2 text-xs opacity-70 bg-warning/20 text-warning px-1.5 py-0.5 rounded">~0.10€</span>
+              <span className="ml-2 text-xs opacity-70 bg-warning/20 text-warning px-1.5 py-0.5 rounded">Variable</span>
             </Button>
           </div>
           {pages.length === 0 ? (
