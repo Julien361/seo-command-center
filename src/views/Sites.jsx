@@ -185,6 +185,7 @@ function SiteDetailView({ site, onBack, onRefresh }) {
     'keyword-research': { price: '~0.50€', api: 'DataForSEO', isPaid: true },
     'technical-audit': { price: '~0.10€', api: 'Firecrawl', isPaid: true },
     'backlink-analysis': { price: '~0.30€', api: 'DataForSEO', isPaid: true },
+    'cocon-create': { price: '~0.10€', api: 'Claude AI', isPaid: true },
     'quick-wins': { price: 'Gratuit', api: 'Supabase', isPaid: false },
     'gsc-sync': { price: 'Gratuit', api: 'Google', isPaid: false },
   };
@@ -217,6 +218,9 @@ function SiteDetailView({ site, onBack, onRefresh }) {
           break;
         case 'backlink-analysis':
           result = await n8nApi.triggerWebhook('backlinks-sync', { site_alias: site.alias });
+          break;
+        case 'cocon-create':
+          result = await n8nApi.triggerWebhook('wf-setup-3', { site_alias: site.alias, main_keyword: site.focus });
           break;
         case 'quick-wins':
           result = await n8nApi.triggerWebhook('wf7', { site_id: site.id });
@@ -871,9 +875,15 @@ function SiteDetailView({ site, onBack, onRefresh }) {
                 </p>
               )}
             </div>
-            <Button disabled variant="ghost">
-              <Network className="w-4 h-4 mr-2" />
-              Créer un cocon
+            <Button
+              onClick={() => handleAction('cocon-create')}
+              disabled={isRunningAction === 'cocon-create' || keywords.length < 5}
+              variant={clusters.length > 0 ? 'ghost' : 'primary'}
+              title={keywords.length < 5 ? 'Minimum 5 keywords requis' : ''}
+            >
+              <Network className={`w-4 h-4 mr-2 ${isRunningAction === 'cocon-create' ? 'animate-spin' : ''}`} />
+              {isRunningAction === 'cocon-create' ? 'Génération...' : clusters.length > 0 ? 'Nouveau cocon' : 'Créer un cocon'}
+              <span className="ml-2 text-xs opacity-70 bg-warning/20 text-warning px-1.5 py-0.5 rounded">~0.10€</span>
             </Button>
           </div>
           {clusters.length === 0 ? (
