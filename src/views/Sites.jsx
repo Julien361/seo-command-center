@@ -207,7 +207,10 @@ function SiteDetailView({ site, onBack, onRefresh }) {
     { value: 'affiliate', label: 'Affiliation', icon: '🔗', description: 'Liens affiliés, comparateurs' },
     { value: 'ecommerce', label: 'E-commerce', icon: '🛒', description: 'Vente de produits' },
     { value: 'ads', label: 'Publicité', icon: '📢', description: 'AdSense, display ads' },
-    { value: 'saas', label: 'SaaS / Abonnement', icon: '💳', description: 'Service en ligne payant' },
+    { value: 'sponsored', label: 'Vente d\'espace', icon: '🏪', description: 'Commerçants, annonceurs locaux' },
+    { value: 'links', label: 'Vente de liens', icon: '🔗', description: 'Articles sponsorisés, backlinks' },
+    { value: 'membership', label: 'Abonnements', icon: '👥', description: 'Contenu premium, communauté' },
+    { value: 'saas', label: 'SaaS', icon: '💳', description: 'Service en ligne payant' },
     { value: 'info', label: 'Contenu informatif', icon: '📚', description: 'Autorité, notoriété' },
   ];
 
@@ -890,11 +893,11 @@ function SiteDetailView({ site, onBack, onRefresh }) {
             </div>
 
             {/* Type de monétisation */}
-            <div>
+            <div className="col-span-2">
               <label className="block text-sm font-medium text-dark-muted mb-1">
                 Monétisation
               </label>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-3 gap-2">
                 {monetizationTypes.map(type => (
                   <button
                     key={type.value}
