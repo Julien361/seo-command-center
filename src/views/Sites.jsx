@@ -211,7 +211,7 @@ function SiteDetailView({ site, onBack, onRefresh }) {
       let result;
       switch (actionType) {
         case 'keyword-research':
-          result = await n8nApi.triggerWebhook('wf0', { site_alias: site.alias, seed_keyword: data.keyword || site.focus });
+          result = await n8nApi.triggerWebhook('seo-cascade-start', { url: `https://${site.domain}`, site_objective: data.keyword || site.focus, site_alias: site.alias });
           break;
         case 'technical-audit':
           result = await n8nApi.triggerWebhook('technical-audit', { site_alias: site.alias });

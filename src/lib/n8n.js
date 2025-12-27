@@ -11,7 +11,7 @@ export const WORKFLOWS = {
   WF0_CASCADE: {
     id: 'by6OEOU5xK4BWx9g',
     name: 'WF0 - SEO Cascade Starter v4',
-    webhook: 'wf0',
+    webhook: 'seo-cascade-start',
     description: 'Lance une analyse SEO complète (DataForSEO + Perplexity + Firecrawl)',
     category: 'orchestration',
     isPaid: true,
@@ -443,9 +443,10 @@ export const n8nApi = {
    * Analyse SEO complète (WF0 Cascade)
    * ATTENTION: Coûte ~0.15€ (DataForSEO + Perplexity + Firecrawl)
    */
-  async analyzeKeyword(seedKeyword, siteAlias, options = {}) {
-    return triggerWebhook('wf0', {
-      seed_keyword: seedKeyword,
+  async analyzeKeyword(seedKeyword, siteAlias, siteUrl, options = {}) {
+    return triggerWebhook('seo-cascade-start', {
+      url: siteUrl,
+      site_objective: seedKeyword,
       site_alias: siteAlias,
       depth: options.depth || 'standard', // 'quick', 'standard', 'deep'
       include_serp: options.includeSERP !== false,
