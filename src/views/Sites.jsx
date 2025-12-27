@@ -340,8 +340,8 @@ function SiteDetailView({ site, onBack, onRefresh }) {
     if (clusters.length === 0 && keywords.length >= 5) {
       tasks.push({
         id: 'cluster-create',
-        title: 'Créer des cocons sémantiques',
-        description: `${keywords.length} keywords disponibles pour structurer en cocons`,
+        title: 'Créer pages piliers & satellites',
+        description: `${keywords.length} keywords disponibles pour générer du contenu`,
         priority: 'high',
         status: 'pending',
         step: 'clusters',
@@ -882,15 +882,15 @@ function SiteDetailView({ site, onBack, onRefresh }) {
               title={keywords.length < 5 ? 'Minimum 5 keywords requis' : ''}
             >
               <Network className={`w-4 h-4 mr-2 ${isRunningAction === 'cocon-create' ? 'animate-spin' : ''}`} />
-              {isRunningAction === 'cocon-create' ? 'Génération...' : clusters.length > 0 ? 'Nouveau cocon' : 'Créer un cocon'}
+              {isRunningAction === 'cocon-create' ? 'Génération...' : clusters.length > 0 ? 'Nouvelles pages' : 'Créer pages piliers & satellites'}
               <span className="ml-2 text-xs opacity-70 bg-warning/20 text-warning px-1.5 py-0.5 rounded">~0.10€</span>
             </Button>
           </div>
           {clusters.length === 0 ? (
             <Card className="p-8 text-center">
               <Network className="w-12 h-12 mx-auto text-dark-muted mb-3" />
-              <h3 className="font-medium text-white">Aucun cocon sémantique</h3>
-              <p className="text-dark-muted text-sm mt-1">Créez des cocons pour structurer votre contenu</p>
+              <h3 className="font-medium text-white">Aucune page générée</h3>
+              <p className="text-dark-muted text-sm mt-1">Générez des pages piliers et satellites pour structurer votre contenu</p>
             </Card>
           ) : (
             <div className="grid grid-cols-2 gap-4">
