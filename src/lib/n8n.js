@@ -372,8 +372,20 @@ export async function triggerWebhook(webhookPath, data = {}, isTest = false) {
       throw new Error(`Webhook error: ${response.status} - ${errorText}`);
     }
 
-    const result = await response.json();
-    return { success: true, data: result };
+    // Handle empty responses (workflow uses responseNode but takes time)
+    const responseText = await response.text();
+    if (!responseText || responseText.trim() === '') {
+      // Empty response means workflow started but responds asynchronously
+      return { success: true, data: { status: 'started', message: 'Workflow démarré (traitement en arrière-plan)' } };
+    }
+
+    try {
+      const result = JSON.parse(responseText);
+      return { success: true, data: result };
+    } catch (parseError) {
+      // Response is not JSON, return as text
+      return { success: true, data: { status: 'started', message: responseText } };
+    }
   } catch (error) {
     console.error(`[n8n] Webhook error for ${webhookPath}:`, error);
     return { success: false, error: error.message };

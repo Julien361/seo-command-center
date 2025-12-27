@@ -505,7 +505,6 @@ function SiteDetailView({ site, onBack, onRefresh }) {
             </div>
             <div className="flex items-center gap-2 mt-1">
               <span className="text-dark-muted">{site.alias}</span>
-              {site.focus && <span className="text-sm text-dark-muted">• {site.focus}</span>}
             </div>
           </div>
         </div>
@@ -519,6 +518,17 @@ function SiteDetailView({ site, onBack, onRefresh }) {
           </Button>
         </div>
       </div>
+
+      {/* Objectif SEO du site */}
+      {site.focus && (
+        <div className="bg-primary/10 border border-primary/30 rounded-lg px-4 py-3 flex items-center gap-3">
+          <Target className="w-5 h-5 text-primary flex-shrink-0" />
+          <div>
+            <span className="text-xs font-medium text-primary uppercase tracking-wide">Objectif SEO</span>
+            <p className="text-white font-medium">{site.focus}</p>
+          </div>
+        </div>
+      )}
 
       {/* Tab Navigation with status indicators */}
       <div className="flex items-center gap-1 border-b border-dark-border pb-1 overflow-x-auto">
