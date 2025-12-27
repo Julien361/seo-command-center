@@ -5,6 +5,7 @@ import {
   Globe, MousePointer, Eye, BarChart3, Link2, AlertTriangle, CheckCircle, XCircle,
   Layers, Activity, Settings, Play, Clock, Check, Circle, ChevronRight,
   PenTool, Network, FileSearch, TrendingUp, Sparkles, ListTodo,
+  Pencil, Save, X, Info,
   // Additional icons for tabs
   LayoutDashboard, Users, LinkIcon, Image, Calendar, Send, LineChart,
   Lightbulb, MapPin, Bell, DollarSign, Code, Wrench, BookOpen
@@ -188,6 +189,80 @@ function SiteDetailView({ site, onBack, onRefresh }) {
   const [backlinks, setBacklinks] = useState([]);
   const [isRunningAction, setIsRunningAction] = useState(null);
 
+  // SEO Objective & Strategy editing
+  const [isEditingStrategy, setIsEditingStrategy] = useState(false);
+  const [isSavingStrategy, setIsSavingStrategy] = useState(false);
+  const [siteStrategy, setSiteStrategy] = useState({
+    objective: site?.seo_focus?.[0] || site?.focus || '',
+    monetization: site?.monetization_type || 'lead_gen',
+    targetAudience: site?.target_audience || '',
+    geoFocus: site?.geographic_focus || 'France',
+    competitors: site?.main_competitors || [],
+    seedKeywords: site?.seed_keywords || []
+  });
+
+  // Monetization types
+  const monetizationTypes = [
+    { value: 'lead_gen', label: 'Génération de leads', icon: '🎯', description: 'Formulaires, devis, contacts' },
+    { value: 'affiliate', label: 'Affiliation', icon: '🔗', description: 'Liens affiliés, comparateurs' },
+    { value: 'ecommerce', label: 'E-commerce', icon: '🛒', description: 'Vente de produits' },
+    { value: 'ads', label: 'Publicité', icon: '📢', description: 'AdSense, display ads' },
+    { value: 'saas', label: 'SaaS / Abonnement', icon: '💳', description: 'Service en ligne payant' },
+    { value: 'info', label: 'Contenu informatif', icon: '📚', description: 'Autorité, notoriété' },
+  ];
+
+  // Save strategy to Supabase
+  const saveStrategy = async () => {
+    setIsSavingStrategy(true);
+    try {
+      // Store full strategy in seo_focus array: [objective, monetization:type, seeds:kw1,kw2]
+      const seoFocusArray = [
+        siteStrategy.objective,
+        `monetization:${siteStrategy.monetization}`,
+        siteStrategy.seedKeywords.length > 0 ? `seeds:${siteStrategy.seedKeywords.join(',')}` : null
+      ].filter(Boolean);
+
+      const { error } = await supabase
+        .from('sites')
+        .update({
+          seo_focus: seoFocusArray,
+          target_audience: siteStrategy.targetAudience || null,
+          geographic_focus: siteStrategy.geoFocus || null,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', site.id);
+
+      if (error) throw error;
+      setIsEditingStrategy(false);
+      if (onRefresh) onRefresh();
+      alert('✅ Stratégie sauvegardée ! Les prochains workflows utiliseront ces paramètres.');
+    } catch (err) {
+      console.error('Error saving strategy:', err);
+      alert('Erreur lors de la sauvegarde: ' + err.message);
+    } finally {
+      setIsSavingStrategy(false);
+    }
+  };
+
+  // Parse strategy from seo_focus on mount
+  useEffect(() => {
+    if (site?.seo_focus && Array.isArray(site.seo_focus)) {
+      const focus = site.seo_focus;
+      const objective = focus.find(f => !f?.startsWith('monetization:') && !f?.startsWith('seeds:')) || '';
+      const monetizationItem = focus.find(f => f?.startsWith('monetization:'));
+      const seedsItem = focus.find(f => f?.startsWith('seeds:'));
+
+      setSiteStrategy(s => ({
+        ...s,
+        objective: objective,
+        monetization: monetizationItem ? monetizationItem.replace('monetization:', '') : 'lead_gen',
+        seedKeywords: seedsItem ? seedsItem.replace('seeds:', '').split(',') : [],
+        targetAudience: site.target_audience || '',
+        geoFocus: site.geographic_focus || 'France'
+      }));
+    }
+  }, [site?.id]);
+
   useEffect(() => {
     if (site?.id) {
       loadAllData();
@@ -278,7 +353,12 @@ function SiteDetailView({ site, onBack, onRefresh }) {
         site_alias: site.alias,
         site_id: site.id,
         url: `https://${site.domain}`,
-        site_objective: site.focus,
+        // Stratégie SEO complète pour orienter les workflows
+        site_objective: siteStrategy.objective || site.focus,
+        monetization_type: siteStrategy.monetization,
+        target_audience: siteStrategy.targetAudience,
+        geographic_focus: siteStrategy.geoFocus,
+        seed_keywords: siteStrategy.seedKeywords,
         ...data
       };
 
@@ -772,13 +852,152 @@ function SiteDetailView({ site, onBack, onRefresh }) {
         </div>
       </div>
 
-      {/* Objectif SEO du site */}
-      {site.focus && (
-        <div className="bg-primary/10 border border-primary/30 rounded-lg px-4 py-3 flex items-center gap-3">
-          <Target className="w-5 h-5 text-primary flex-shrink-0" />
-          <div>
-            <span className="text-xs font-medium text-primary uppercase tracking-wide">Objectif SEO</span>
-            <p className="text-white font-medium">{site.focus}</p>
+      {/* Stratégie SEO du site - Éditable */}
+      {isEditingStrategy ? (
+        <Card className="p-5 border-primary/50">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+              <Target className="w-5 h-5 text-primary" />
+              Stratégie SEO & Monétisation
+            </h3>
+            <div className="flex gap-2">
+              <Button variant="ghost" size="sm" onClick={() => setIsEditingStrategy(false)}>
+                <X className="w-4 h-4 mr-1" /> Annuler
+              </Button>
+              <Button variant="primary" size="sm" onClick={saveStrategy} disabled={isSavingStrategy}>
+                {isSavingStrategy ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Save className="w-4 h-4 mr-1" />}
+                Sauvegarder
+              </Button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            {/* Objectif principal */}
+            <div className="col-span-2">
+              <label className="block text-sm font-medium text-dark-muted mb-1">
+                Objectif SEO principal <span className="text-primary">*</span>
+              </label>
+              <input
+                type="text"
+                value={siteStrategy.objective}
+                onChange={(e) => setSiteStrategy(s => ({ ...s, objective: e.target.value }))}
+                placeholder="Ex: Lead generation MaPrimeAdapt, Vendre des formations..."
+                className="w-full bg-dark-bg border border-dark-border rounded-lg px-4 py-2 text-white placeholder:text-dark-muted focus:outline-none focus:border-primary"
+              />
+              <p className="text-xs text-dark-muted mt-1">
+                Cet objectif guide la recherche de mots-clés et l'analyse des concurrents
+              </p>
+            </div>
+
+            {/* Type de monétisation */}
+            <div>
+              <label className="block text-sm font-medium text-dark-muted mb-1">
+                Monétisation
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                {monetizationTypes.map(type => (
+                  <button
+                    key={type.value}
+                    onClick={() => setSiteStrategy(s => ({ ...s, monetization: type.value }))}
+                    className={`flex items-center gap-2 p-2 rounded-lg border text-left transition-all ${
+                      siteStrategy.monetization === type.value
+                        ? 'border-primary bg-primary/20 text-white'
+                        : 'border-dark-border bg-dark-bg text-dark-muted hover:border-dark-muted'
+                    }`}
+                  >
+                    <span className="text-lg">{type.icon}</span>
+                    <div>
+                      <div className="text-sm font-medium">{type.label}</div>
+                      <div className="text-xs opacity-70">{type.description}</div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Audience cible */}
+            <div>
+              <label className="block text-sm font-medium text-dark-muted mb-1">
+                Audience cible
+              </label>
+              <textarea
+                value={siteStrategy.targetAudience}
+                onChange={(e) => setSiteStrategy(s => ({ ...s, targetAudience: e.target.value }))}
+                placeholder="Ex: Seniors 60+, propriétaires, revenus modestes..."
+                rows={3}
+                className="w-full bg-dark-bg border border-dark-border rounded-lg px-4 py-2 text-white placeholder:text-dark-muted focus:outline-none focus:border-primary"
+              />
+            </div>
+
+            {/* Zone géographique */}
+            <div>
+              <label className="block text-sm font-medium text-dark-muted mb-1">
+                Zone géographique
+              </label>
+              <input
+                type="text"
+                value={siteStrategy.geoFocus}
+                onChange={(e) => setSiteStrategy(s => ({ ...s, geoFocus: e.target.value }))}
+                placeholder="Ex: France, Île-de-France, Marseille..."
+                className="w-full bg-dark-bg border border-dark-border rounded-lg px-4 py-2 text-white placeholder:text-dark-muted focus:outline-none focus:border-primary"
+              />
+            </div>
+
+            {/* Mots-clés prioritaires */}
+            <div>
+              <label className="block text-sm font-medium text-dark-muted mb-1">
+                Mots-clés prioritaires (seeds)
+              </label>
+              <input
+                type="text"
+                value={siteStrategy.seedKeywords.join(', ')}
+                onChange={(e) => setSiteStrategy(s => ({ ...s, seedKeywords: e.target.value.split(',').map(k => k.trim()).filter(k => k) }))}
+                placeholder="maprimeadapt, aide senior, adaptation logement..."
+                className="w-full bg-dark-bg border border-dark-border rounded-lg px-4 py-2 text-white placeholder:text-dark-muted focus:outline-none focus:border-primary"
+              />
+              <p className="text-xs text-dark-muted mt-1">Séparés par des virgules</p>
+            </div>
+          </div>
+
+          <div className="mt-4 p-3 bg-info/10 border border-info/30 rounded-lg">
+            <div className="flex items-start gap-2">
+              <Info className="w-4 h-4 text-info mt-0.5 flex-shrink-0" />
+              <div className="text-sm text-info">
+                <strong>Comment ces infos sont utilisées :</strong>
+                <ul className="mt-1 space-y-1 text-xs opacity-90">
+                  <li>• <strong>Objectif</strong> → Guide la génération de mots-clés et briefs</li>
+                  <li>• <strong>Monétisation</strong> → Oriente le type de contenu (landing pages, articles, comparatifs)</li>
+                  <li>• <strong>Audience</strong> → Adapte le ton et le vocabulaire</li>
+                  <li>• <strong>Géo</strong> → Cible les recherches locales</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </Card>
+      ) : (
+        <div
+          className="bg-gradient-to-r from-primary/10 to-info/10 border border-primary/30 rounded-lg px-4 py-3 cursor-pointer hover:border-primary/50 transition-all group"
+          onClick={() => setIsEditingStrategy(true)}
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Target className="w-5 h-5 text-primary flex-shrink-0" />
+              <div>
+                <span className="text-xs font-medium text-primary uppercase tracking-wide">Stratégie SEO</span>
+                <p className="text-white font-medium">
+                  {siteStrategy.objective || site.focus || 'Cliquez pour définir votre objectif'}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-4">
+              {siteStrategy.monetization && (
+                <div className="text-center">
+                  <span className="text-lg">{monetizationTypes.find(t => t.value === siteStrategy.monetization)?.icon || '🎯'}</span>
+                  <div className="text-xs text-dark-muted">{monetizationTypes.find(t => t.value === siteStrategy.monetization)?.label || 'Lead gen'}</div>
+                </div>
+              )}
+              <Pencil className="w-4 h-4 text-dark-muted group-hover:text-primary transition-colors" />
+            </div>
           </div>
         </div>
       )}
