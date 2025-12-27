@@ -121,17 +121,17 @@ function TaskCard({ task, onAction }) {
   );
 }
 
-// Tab configuration for site detail view
-const siteTabs = [
-  { id: 'dashboard', label: 'Tableau de bord', icon: LayoutDashboard },
-  { id: 'keywords', label: 'Keywords', icon: Target },
-  { id: 'quickwins', label: 'Quick Wins', icon: Zap },
-  { id: 'cocons', label: 'Cocons', icon: Network },
-  { id: 'content', label: 'Contenu', icon: PenTool },
-  { id: 'audit', label: 'Audit', icon: FileSearch },
-  { id: 'backlinks', label: 'Backlinks', icon: LinkIcon },
-  { id: 'positions', label: 'Positions', icon: LineChart },
-  { id: 'performance', label: 'Performance', icon: BarChart3 },
+// Tab configuration for site detail view - with dynamic status
+const getTabsWithStatus = (keywords, quickWins, clusters, articles, pages, backlinks, gscData) => [
+  { id: 'dashboard', label: 'Tableau de bord', icon: LayoutDashboard, count: null, status: 'info' },
+  { id: 'keywords', label: 'Keywords', icon: Target, count: keywords.length, status: keywords.length > 0 ? 'done' : 'todo' },
+  { id: 'quickwins', label: 'Quick Wins', icon: Zap, count: quickWins.length, status: quickWins.length > 0 ? 'warning' : 'done' },
+  { id: 'cocons', label: 'Cocons', icon: Network, count: clusters.length, status: clusters.length > 0 ? 'done' : 'todo' },
+  { id: 'content', label: 'Contenu', icon: PenTool, count: articles.length, status: articles.length > 0 ? 'done' : 'todo' },
+  { id: 'audit', label: 'Audit', icon: FileSearch, count: pages.filter(p => p.seo_score !== null).length, status: pages.filter(p => p.seo_score !== null).length > 0 ? 'done' : 'todo' },
+  { id: 'backlinks', label: 'Backlinks', icon: LinkIcon, count: backlinks.length, status: backlinks.length > 0 ? 'done' : 'todo' },
+  { id: 'positions', label: 'Positions', icon: LineChart, count: gscData.length, status: gscData.length > 0 ? 'done' : 'todo' },
+  { id: 'performance', label: 'Performance', icon: BarChart3, count: null, status: 'info' },
 ];
 
 // Site Detail View - Tabbed interface
@@ -180,18 +180,39 @@ function SiteDetailView({ site, onBack, onRefresh }) {
     }
   };
 
+  // Action costs configuration
+  const actionCosts = {
+    'keyword-research': { price: '~0.50€', api: 'DataForSEO', isPaid: true },
+    'technical-audit': { price: '~0.10€', api: 'Firecrawl', isPaid: true },
+    'backlink-analysis': { price: '~0.30€', api: 'DataForSEO', isPaid: true },
+    'quick-wins': { price: 'Gratuit', api: 'Supabase', isPaid: false },
+    'gsc-sync': { price: 'Gratuit', api: 'Google', isPaid: false },
+  };
+
   // Action handlers
   const handleAction = async (actionType, data = {}) => {
+    const cost = actionCosts[actionType];
+
+    // Confirmation for paid actions
+    if (cost?.isPaid) {
+      const confirmed = confirm(
+        `🔍 ${actionType === 'keyword-research' ? 'Recherche de keywords' : actionType === 'technical-audit' ? 'Audit technique' : 'Analyse backlinks'}\n\n` +
+        `Site: ${site.domain}\n` +
+        `API: ${cost.api}\n` +
+        `Coût estimé: ${cost.price}\n\n` +
+        `Confirmer ?`
+      );
+      if (!confirmed) return;
+    }
+
     setIsRunningAction(actionType);
     try {
       let result;
       switch (actionType) {
         case 'keyword-research':
-          if (!confirm(`Lancer une recherche de keywords pour ${site.domain} ?\n\nCela utilisera l'API DataForSEO (payant).`)) return;
           result = await n8nApi.triggerWebhook('wf0', { site_alias: site.alias, seed_keyword: data.keyword || site.focus });
           break;
         case 'technical-audit':
-          if (!confirm(`Lancer un audit technique sur ${site.domain} avec Firecrawl ?`)) return;
           result = await n8nApi.triggerWebhook('technical-audit', { site_alias: site.alias, max_pages: 10 });
           break;
         case 'quick-wins':
@@ -486,9 +507,9 @@ function SiteDetailView({ site, onBack, onRefresh }) {
         </div>
       </div>
 
-      {/* Tab Navigation */}
+      {/* Tab Navigation with status indicators */}
       <div className="flex items-center gap-1 border-b border-dark-border pb-1 overflow-x-auto">
-        {siteTabs.map(tab => (
+        {getTabsWithStatus(keywords, quickWins, clusters, articles, pages, backlinks, gscData).map(tab => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
@@ -500,6 +521,19 @@ function SiteDetailView({ site, onBack, onRefresh }) {
           >
             <tab.icon className="w-4 h-4" />
             {tab.label}
+            {tab.count !== null && (
+              <span className={`ml-1 px-1.5 py-0.5 rounded text-xs font-medium ${
+                tab.status === 'done' ? 'bg-success/20 text-success' :
+                tab.status === 'warning' ? 'bg-warning/20 text-warning' :
+                tab.status === 'todo' ? 'bg-dark-border text-dark-muted' :
+                'bg-dark-border/50 text-dark-muted'
+              }`}>
+                {tab.count}
+              </span>
+            )}
+            {tab.status === 'todo' && tab.count === 0 && (
+              <span className="w-2 h-2 rounded-full bg-danger animate-pulse" title="À faire" />
+            )}
           </button>
         ))}
       </div>
@@ -707,11 +741,21 @@ function SiteDetailView({ site, onBack, onRefresh }) {
       {activeTab === 'keywords' && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-white">Keywords ({keywords.length})</h2>
-            <Button onClick={() => handleAction('keyword-research')} disabled={isRunningAction}>
-              <Target className="w-4 h-4 mr-2" />
-              Rechercher
-            </Button>
+            <div>
+              <h2 className="text-lg font-semibold text-white">Keywords ({keywords.length})</h2>
+              {keywords.length > 0 && (
+                <p className="text-sm text-success flex items-center gap-1 mt-1">
+                  <CheckCircle className="w-3 h-3" /> Recherche effectuée
+                </p>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <Button onClick={() => handleAction('keyword-research')} disabled={isRunningAction} variant={keywords.length > 0 ? 'ghost' : 'primary'}>
+                <Target className="w-4 h-4 mr-2" />
+                {keywords.length > 0 ? 'Relancer' : 'Rechercher'}
+                <span className="ml-2 text-xs opacity-70 bg-warning/20 text-warning px-1.5 py-0.5 rounded">~0.50€</span>
+              </Button>
+            </div>
           </div>
           {keywords.length === 0 ? (
             <Card className="p-8 text-center">
@@ -764,10 +808,22 @@ function SiteDetailView({ site, onBack, onRefresh }) {
       {activeTab === 'quickwins' && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-white">Quick Wins ({quickWins.length})</h2>
-            <Button onClick={() => handleAction('quick-wins')} disabled={isRunningAction}>
+            <div>
+              <h2 className="text-lg font-semibold text-white">Quick Wins ({quickWins.length})</h2>
+              {quickWins.length > 0 ? (
+                <p className="text-sm text-warning flex items-center gap-1 mt-1">
+                  <AlertTriangle className="w-3 h-3" /> {quickWins.length} opportunité(s) à saisir
+                </p>
+              ) : keywords.length > 0 ? (
+                <p className="text-sm text-success flex items-center gap-1 mt-1">
+                  <CheckCircle className="w-3 h-3" /> Aucune opportunité quick win
+                </p>
+              ) : null}
+            </div>
+            <Button onClick={() => handleAction('quick-wins')} disabled={isRunningAction} variant="ghost">
               <Zap className="w-4 h-4 mr-2" />
               Détecter
+              <span className="ml-2 text-xs opacity-70 bg-success/20 text-success px-1.5 py-0.5 rounded">Gratuit</span>
             </Button>
           </div>
           {quickWins.length === 0 ? (
@@ -800,8 +856,19 @@ function SiteDetailView({ site, onBack, onRefresh }) {
       {activeTab === 'cocons' && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-white">Cocons Sémantiques ({clusters.length})</h2>
-            <Button disabled>
+            <div>
+              <h2 className="text-lg font-semibold text-white">Cocons Sémantiques ({clusters.length})</h2>
+              {clusters.length > 0 ? (
+                <p className="text-sm text-success flex items-center gap-1 mt-1">
+                  <CheckCircle className="w-3 h-3" /> {clusters.filter(c => c.status === 'complete').length}/{clusters.length} cocon(s) complet(s)
+                </p>
+              ) : (
+                <p className="text-sm text-dark-muted flex items-center gap-1 mt-1">
+                  <Circle className="w-3 h-3" /> Aucun cocon créé
+                </p>
+              )}
+            </div>
+            <Button disabled variant="ghost">
               <Network className="w-4 h-4 mr-2" />
               Créer un cocon
             </Button>
@@ -835,8 +902,19 @@ function SiteDetailView({ site, onBack, onRefresh }) {
       {activeTab === 'content' && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-white">Articles ({articles.length})</h2>
-            <Button disabled>
+            <div>
+              <h2 className="text-lg font-semibold text-white">Articles ({articles.length})</h2>
+              {articles.length > 0 ? (
+                <p className="text-sm text-success flex items-center gap-1 mt-1">
+                  <CheckCircle className="w-3 h-3" /> {articles.filter(a => a.status === 'published').length} publié(s), {articles.filter(a => a.status === 'draft').length} brouillon(s)
+                </p>
+              ) : (
+                <p className="text-sm text-dark-muted flex items-center gap-1 mt-1">
+                  <Circle className="w-3 h-3" /> Aucun article
+                </p>
+              )}
+            </div>
+            <Button disabled variant="ghost">
               <PenTool className="w-4 h-4 mr-2" />
               Nouvel article
             </Button>
@@ -878,10 +956,22 @@ function SiteDetailView({ site, onBack, onRefresh }) {
       {activeTab === 'audit' && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-white">Audit des pages ({pages.length})</h2>
-            <Button onClick={() => handleAction('technical-audit')} disabled={isRunningAction}>
+            <div>
+              <h2 className="text-lg font-semibold text-white">Audit des pages ({pages.length})</h2>
+              {pages.filter(p => p.seo_score !== null).length > 0 ? (
+                <p className="text-sm text-success flex items-center gap-1 mt-1">
+                  <CheckCircle className="w-3 h-3" /> {pages.filter(p => p.seo_score !== null).length} page(s) auditée(s)
+                </p>
+              ) : (
+                <p className="text-sm text-dark-muted flex items-center gap-1 mt-1">
+                  <Circle className="w-3 h-3" /> Aucun audit effectué
+                </p>
+              )}
+            </div>
+            <Button onClick={() => handleAction('technical-audit')} disabled={isRunningAction} variant={pages.filter(p => p.seo_score !== null).length > 0 ? 'ghost' : 'primary'}>
               <FileSearch className="w-4 h-4 mr-2" />
-              Scanner
+              {pages.filter(p => p.seo_score !== null).length > 0 ? 'Re-scanner' : 'Scanner'}
+              <span className="ml-2 text-xs opacity-70 bg-warning/20 text-warning px-1.5 py-0.5 rounded">~0.10€</span>
             </Button>
           </div>
           {pages.length === 0 ? (
@@ -918,10 +1008,22 @@ function SiteDetailView({ site, onBack, onRefresh }) {
       {activeTab === 'backlinks' && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-white">Backlinks ({backlinks.length})</h2>
-            <Button disabled>
+            <div>
+              <h2 className="text-lg font-semibold text-white">Backlinks ({backlinks.length})</h2>
+              {backlinks.length > 0 ? (
+                <p className="text-sm text-success flex items-center gap-1 mt-1">
+                  <CheckCircle className="w-3 h-3" /> {backlinks.filter(b => b.link_type === 'dofollow').length} dofollow, {backlinks.filter(b => b.link_type !== 'dofollow').length} nofollow
+                </p>
+              ) : (
+                <p className="text-sm text-dark-muted flex items-center gap-1 mt-1">
+                  <Circle className="w-3 h-3" /> Pas encore analysé
+                </p>
+              )}
+            </div>
+            <Button disabled variant={backlinks.length > 0 ? 'ghost' : 'primary'}>
               <LinkIcon className="w-4 h-4 mr-2" />
               Analyser
+              <span className="ml-2 text-xs opacity-70 bg-warning/20 text-warning px-1.5 py-0.5 rounded">~0.30€</span>
             </Button>
           </div>
           {backlinks.length === 0 ? (
@@ -973,10 +1075,22 @@ function SiteDetailView({ site, onBack, onRefresh }) {
       {activeTab === 'positions' && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-white">Évolution des positions</h2>
-            <Button onClick={() => handleAction('gsc-sync')} disabled={isRunningAction}>
+            <div>
+              <h2 className="text-lg font-semibold text-white">Évolution des positions</h2>
+              {gscData.length > 0 ? (
+                <p className="text-sm text-success flex items-center gap-1 mt-1">
+                  <CheckCircle className="w-3 h-3" /> {gscData.length} entrée(s) GSC
+                </p>
+              ) : (
+                <p className="text-sm text-dark-muted flex items-center gap-1 mt-1">
+                  <Circle className="w-3 h-3" /> Pas encore synchronisé
+                </p>
+              )}
+            </div>
+            <Button onClick={() => handleAction('gsc-sync')} disabled={isRunningAction} variant="ghost">
               <TrendingUp className="w-4 h-4 mr-2" />
               Sync GSC
+              <span className="ml-2 text-xs opacity-70 bg-success/20 text-success px-1.5 py-0.5 rounded">Gratuit</span>
             </Button>
           </div>
           {gscData.length === 0 ? (
