@@ -4,7 +4,10 @@ import {
   ArrowLeft, Target, FileText, ArrowUp, ArrowDown, ArrowRight,
   Globe, MousePointer, Eye, BarChart3, Link2, AlertTriangle, CheckCircle, XCircle,
   Layers, Activity, Settings, Play, Clock, Check, Circle, ChevronRight,
-  PenTool, Network, FileSearch, TrendingUp, Sparkles, ListTodo
+  PenTool, Network, FileSearch, TrendingUp, Sparkles, ListTodo,
+  // Additional icons for tabs
+  LayoutDashboard, Users, LinkIcon, Image, Calendar, Send, LineChart,
+  Lightbulb, MapPin, Bell, DollarSign, Code, Wrench, BookOpen
 } from 'lucide-react';
 import { Card, Badge, Button } from '../components/common';
 import { sitesApi, keywordsApi, gscApi, supabase } from '../lib/supabase';
@@ -118,8 +121,22 @@ function TaskCard({ task, onAction }) {
   );
 }
 
-// Site Detail View - Workflow oriented
+// Tab configuration for site detail view
+const siteTabs = [
+  { id: 'dashboard', label: 'Tableau de bord', icon: LayoutDashboard },
+  { id: 'keywords', label: 'Keywords', icon: Target },
+  { id: 'quickwins', label: 'Quick Wins', icon: Zap },
+  { id: 'cocons', label: 'Cocons', icon: Network },
+  { id: 'content', label: 'Contenu', icon: PenTool },
+  { id: 'audit', label: 'Audit', icon: FileSearch },
+  { id: 'backlinks', label: 'Backlinks', icon: LinkIcon },
+  { id: 'positions', label: 'Positions', icon: LineChart },
+  { id: 'performance', label: 'Performance', icon: BarChart3 },
+];
+
+// Site Detail View - Tabbed interface
 function SiteDetailView({ site, onBack, onRefresh }) {
+  const [activeTab, setActiveTab] = useState('dashboard');
   const [isLoading, setIsLoading] = useState(true);
   const [keywords, setKeywords] = useState([]);
   const [pages, setPages] = useState([]);
@@ -127,6 +144,7 @@ function SiteDetailView({ site, onBack, onRefresh }) {
   const [articles, setArticles] = useState([]);
   const [quickWins, setQuickWins] = useState([]);
   const [gscData, setGscData] = useState([]);
+  const [backlinks, setBacklinks] = useState([]);
   const [isRunningAction, setIsRunningAction] = useState(null);
 
   useEffect(() => {
@@ -138,13 +156,14 @@ function SiteDetailView({ site, onBack, onRefresh }) {
   const loadAllData = async () => {
     setIsLoading(true);
     try {
-      const [kwRes, pagesRes, clustersRes, articlesRes, qwRes, gscRes] = await Promise.all([
-        supabase.from('keywords').select('*').eq('site_id', site.id),
+      const [kwRes, pagesRes, clustersRes, articlesRes, qwRes, gscRes, backlinksRes] = await Promise.all([
+        supabase.from('keywords').select('*').eq('site_id', site.id).order('search_volume', { ascending: false }),
         supabase.from('pages').select('*').eq('site_id', site.id),
         supabase.from('semantic_clusters').select('*, cluster_satellites(*)').eq('site_id', site.id),
-        supabase.from('articles').select('*').eq('site_id', site.id),
+        supabase.from('articles').select('*').eq('site_id', site.id).order('created_at', { ascending: false }),
         supabase.from('quick_wins').select('*, keywords(keyword)').eq('site_id', site.id).eq('status', 'pending'),
-        supabase.from('gsc_keyword_history').select('*').eq('site_id', site.id).order('date', { ascending: false }).limit(50)
+        supabase.from('gsc_keyword_history').select('*').eq('site_id', site.id).order('date', { ascending: false }).limit(100),
+        supabase.from('backlinks').select('*').eq('site_id', site.id).order('discovered_at', { ascending: false }).limit(100)
       ]);
 
       setKeywords(kwRes.data || []);
@@ -153,6 +172,7 @@ function SiteDetailView({ site, onBack, onRefresh }) {
       setArticles(articlesRes.data || []);
       setQuickWins(qwRes.data || []);
       setGscData(gscRes.data || []);
+      setBacklinks(backlinksRes.data || []);
     } catch (err) {
       console.error('Error loading site data:', err);
     } finally {
@@ -466,6 +486,27 @@ function SiteDetailView({ site, onBack, onRefresh }) {
         </div>
       </div>
 
+      {/* Tab Navigation */}
+      <div className="flex items-center gap-1 border-b border-dark-border pb-1 overflow-x-auto">
+        {siteTabs.map(tab => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`flex items-center gap-2 px-4 py-2 rounded-t-lg text-sm font-medium transition-all whitespace-nowrap ${
+              activeTab === tab.id
+                ? 'bg-primary/20 text-primary border-b-2 border-primary'
+                : 'text-dark-muted hover:text-white hover:bg-dark-border/50'
+            }`}
+          >
+            <tab.icon className="w-4 h-4" />
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Tab Content */}
+      {activeTab === 'dashboard' && (
+        <>
       {/* KPIs Summary */}
       <div className="grid grid-cols-9 gap-3">
         <Card className="p-3 text-center">
@@ -659,6 +700,413 @@ function SiteDetailView({ site, onBack, onRefresh }) {
           </Card>
         </div>
       </div>
+        </>
+      )}
+
+      {/* Keywords Tab */}
+      {activeTab === 'keywords' && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-white">Keywords ({keywords.length})</h2>
+            <Button onClick={() => handleAction('keyword-research')} disabled={isRunningAction}>
+              <Target className="w-4 h-4 mr-2" />
+              Rechercher
+            </Button>
+          </div>
+          {keywords.length === 0 ? (
+            <Card className="p-8 text-center">
+              <Target className="w-12 h-12 mx-auto text-dark-muted mb-3" />
+              <h3 className="font-medium text-white">Aucun keyword</h3>
+              <p className="text-dark-muted text-sm mt-1">Lancez une recherche pour identifier des opportunités</p>
+            </Card>
+          ) : (
+            <Card className="overflow-hidden">
+              <table className="w-full">
+                <thead className="bg-dark-border/50">
+                  <tr>
+                    <th className="text-left p-3 text-sm font-medium text-dark-muted">Keyword</th>
+                    <th className="text-center p-3 text-sm font-medium text-dark-muted">Volume</th>
+                    <th className="text-center p-3 text-sm font-medium text-dark-muted">Difficulté</th>
+                    <th className="text-center p-3 text-sm font-medium text-dark-muted">Position</th>
+                    <th className="text-center p-3 text-sm font-medium text-dark-muted">Intent</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-dark-border">
+                  {keywords.slice(0, 50).map(kw => (
+                    <tr key={kw.id} className="hover:bg-dark-border/30">
+                      <td className="p-3 text-white font-medium">{kw.keyword}</td>
+                      <td className="p-3 text-center text-white">{kw.search_volume?.toLocaleString() || '-'}</td>
+                      <td className="p-3 text-center">
+                        <Badge variant={kw.difficulty < 30 ? 'success' : kw.difficulty < 60 ? 'warning' : 'danger'} size="sm">
+                          {kw.difficulty || '-'}
+                        </Badge>
+                      </td>
+                      <td className="p-3 text-center">
+                        {kw.current_position ? (
+                          <Badge variant={kw.current_position <= 10 ? 'success' : kw.current_position <= 20 ? 'warning' : 'secondary'} size="sm">
+                            #{kw.current_position}
+                          </Badge>
+                        ) : '-'}
+                      </td>
+                      <td className="p-3 text-center">
+                        <Badge variant="secondary" size="sm">{kw.intent || 'info'}</Badge>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </Card>
+          )}
+        </div>
+      )}
+
+      {/* Quick Wins Tab */}
+      {activeTab === 'quickwins' && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-white">Quick Wins ({quickWins.length})</h2>
+            <Button onClick={() => handleAction('quick-wins')} disabled={isRunningAction}>
+              <Zap className="w-4 h-4 mr-2" />
+              Détecter
+            </Button>
+          </div>
+          {quickWins.length === 0 ? (
+            <Card className="p-8 text-center">
+              <Zap className="w-12 h-12 mx-auto text-dark-muted mb-3" />
+              <h3 className="font-medium text-white">Aucun quick win</h3>
+              <p className="text-dark-muted text-sm mt-1">Les keywords en position 11-20 apparaîtront ici</p>
+            </Card>
+          ) : (
+            <div className="grid grid-cols-2 gap-4">
+              {quickWins.map(qw => (
+                <Card key={qw.id} className="p-4 border-warning/30 bg-warning/5">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="font-medium text-white">{qw.keywords?.keyword || 'Keyword'}</span>
+                    <Badge variant="warning">Position {qw.current_position}</Badge>
+                  </div>
+                  <p className="text-sm text-dark-muted">{qw.recommendation || 'Optimisation recommandée'}</p>
+                  <div className="flex gap-2 mt-3">
+                    <Badge variant="secondary" size="sm">Volume: {qw.search_volume || '-'}</Badge>
+                    <Badge variant="secondary" size="sm">Potentiel: +{qw.potential_gain || '?'} clics</Badge>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Cocons Tab */}
+      {activeTab === 'cocons' && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-white">Cocons Sémantiques ({clusters.length})</h2>
+            <Button disabled>
+              <Network className="w-4 h-4 mr-2" />
+              Créer un cocon
+            </Button>
+          </div>
+          {clusters.length === 0 ? (
+            <Card className="p-8 text-center">
+              <Network className="w-12 h-12 mx-auto text-dark-muted mb-3" />
+              <h3 className="font-medium text-white">Aucun cocon sémantique</h3>
+              <p className="text-dark-muted text-sm mt-1">Créez des cocons pour structurer votre contenu</p>
+            </Card>
+          ) : (
+            <div className="grid grid-cols-2 gap-4">
+              {clusters.map(cluster => (
+                <Card key={cluster.id} className="p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="font-medium text-white">{cluster.name}</h3>
+                    <Badge variant={cluster.status === 'complete' ? 'success' : 'warning'}>{cluster.status}</Badge>
+                  </div>
+                  <p className="text-sm text-dark-muted mb-3">Pilier: {cluster.pillar_keyword}</p>
+                  <div className="flex items-center gap-2 text-sm text-dark-muted">
+                    <span>{cluster.cluster_satellites?.length || 0} satellites</span>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Content Tab */}
+      {activeTab === 'content' && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-white">Articles ({articles.length})</h2>
+            <Button disabled>
+              <PenTool className="w-4 h-4 mr-2" />
+              Nouvel article
+            </Button>
+          </div>
+          {articles.length === 0 ? (
+            <Card className="p-8 text-center">
+              <PenTool className="w-12 h-12 mx-auto text-dark-muted mb-3" />
+              <h3 className="font-medium text-white">Aucun article</h3>
+              <p className="text-dark-muted text-sm mt-1">Créez du contenu pour améliorer votre SEO</p>
+            </Card>
+          ) : (
+            <div className="space-y-3">
+              {articles.map(article => (
+                <Card key={article.id} className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="font-medium text-white">{article.title}</h3>
+                      <div className="flex items-center gap-2 mt-1">
+                        <Badge variant={article.status === 'published' ? 'success' : article.status === 'draft' ? 'warning' : 'secondary'} size="sm">
+                          {article.status}
+                        </Badge>
+                        {article.word_count && <span className="text-xs text-dark-muted">{article.word_count} mots</span>}
+                      </div>
+                    </div>
+                    {article.wp_post_id && (
+                      <a href={`https://${site.domain}/?p=${article.wp_post_id}`} target="_blank" rel="noopener noreferrer" className="text-dark-muted hover:text-primary">
+                        <ExternalLink className="w-4 h-4" />
+                      </a>
+                    )}
+                  </div>
+                </Card>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Audit Tab */}
+      {activeTab === 'audit' && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-white">Audit des pages ({pages.length})</h2>
+            <Button onClick={() => handleAction('technical-audit')} disabled={isRunningAction}>
+              <FileSearch className="w-4 h-4 mr-2" />
+              Scanner
+            </Button>
+          </div>
+          {pages.length === 0 ? (
+            <Card className="p-8 text-center">
+              <FileSearch className="w-12 h-12 mx-auto text-dark-muted mb-3" />
+              <h3 className="font-medium text-white">Aucune page auditée</h3>
+              <p className="text-dark-muted text-sm mt-1">Lancez un scan pour analyser vos pages</p>
+            </Card>
+          ) : (
+            <div className="grid grid-cols-3 gap-4">
+              {pages.map(page => (
+                <Card key={page.id} className={`p-4 ${page.seo_score >= 80 ? 'border-success/30' : page.seo_score >= 50 ? 'border-warning/30' : page.seo_score ? 'border-danger/30' : ''}`}>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="font-medium text-white truncate flex-1">{page.title || page.slug}</span>
+                    {page.seo_score !== null && (
+                      <Badge variant={page.seo_score >= 80 ? 'success' : page.seo_score >= 50 ? 'warning' : 'danger'}>
+                        {page.seo_score}
+                      </Badge>
+                    )}
+                  </div>
+                  <p className="text-sm text-dark-muted truncate">{page.slug || page.wp_url}</p>
+                  <div className="flex gap-2 mt-2 text-xs text-dark-muted">
+                    {page.word_count && <span>{page.word_count} mots</span>}
+                    {page.meta_title && <span>Title: {page.meta_title.length}/60</span>}
+                  </div>
+                </Card>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Backlinks Tab */}
+      {activeTab === 'backlinks' && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-white">Backlinks ({backlinks.length})</h2>
+            <Button disabled>
+              <LinkIcon className="w-4 h-4 mr-2" />
+              Analyser
+            </Button>
+          </div>
+          {backlinks.length === 0 ? (
+            <Card className="p-8 text-center">
+              <LinkIcon className="w-12 h-12 mx-auto text-dark-muted mb-3" />
+              <h3 className="font-medium text-white">Aucun backlink</h3>
+              <p className="text-dark-muted text-sm mt-1">Lancez une analyse de votre profil de liens</p>
+            </Card>
+          ) : (
+            <Card className="overflow-hidden">
+              <table className="w-full">
+                <thead className="bg-dark-border/50">
+                  <tr>
+                    <th className="text-left p-3 text-sm font-medium text-dark-muted">Source</th>
+                    <th className="text-left p-3 text-sm font-medium text-dark-muted">Ancre</th>
+                    <th className="text-center p-3 text-sm font-medium text-dark-muted">DA</th>
+                    <th className="text-center p-3 text-sm font-medium text-dark-muted">Type</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-dark-border">
+                  {backlinks.slice(0, 30).map(bl => (
+                    <tr key={bl.id} className="hover:bg-dark-border/30">
+                      <td className="p-3">
+                        <a href={bl.source_url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline truncate block max-w-xs">
+                          {bl.source_domain || bl.source_url}
+                        </a>
+                      </td>
+                      <td className="p-3 text-white">{bl.anchor_text || '-'}</td>
+                      <td className="p-3 text-center">
+                        <Badge variant={bl.domain_authority >= 50 ? 'success' : bl.domain_authority >= 30 ? 'warning' : 'secondary'} size="sm">
+                          {bl.domain_authority || '-'}
+                        </Badge>
+                      </td>
+                      <td className="p-3 text-center">
+                        <Badge variant={bl.link_type === 'dofollow' ? 'success' : 'secondary'} size="sm">
+                          {bl.link_type || 'dofollow'}
+                        </Badge>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </Card>
+          )}
+        </div>
+      )}
+
+      {/* Positions Tab */}
+      {activeTab === 'positions' && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-white">Évolution des positions</h2>
+            <Button onClick={() => handleAction('gsc-sync')} disabled={isRunningAction}>
+              <TrendingUp className="w-4 h-4 mr-2" />
+              Sync GSC
+            </Button>
+          </div>
+          {gscData.length === 0 ? (
+            <Card className="p-8 text-center">
+              <LineChart className="w-12 h-12 mx-auto text-dark-muted mb-3" />
+              <h3 className="font-medium text-white">Pas de données GSC</h3>
+              <p className="text-dark-muted text-sm mt-1">Synchronisez avec Google Search Console</p>
+            </Card>
+          ) : (
+            <>
+              <div className="grid grid-cols-4 gap-4">
+                <Card className="p-4 text-center">
+                  <div className="text-2xl font-bold text-success">{gscData.reduce((sum, r) => sum + (r.clicks || 0), 0).toLocaleString()}</div>
+                  <div className="text-sm text-dark-muted">Clics totaux</div>
+                </Card>
+                <Card className="p-4 text-center">
+                  <div className="text-2xl font-bold text-white">{gscData.reduce((sum, r) => sum + (r.impressions || 0), 0).toLocaleString()}</div>
+                  <div className="text-sm text-dark-muted">Impressions</div>
+                </Card>
+                <Card className="p-4 text-center">
+                  <div className="text-2xl font-bold text-info">
+                    {gscData.length > 0 ? (gscData.reduce((sum, r) => sum + (r.position || 0), 0) / gscData.length).toFixed(1) : '-'}
+                  </div>
+                  <div className="text-sm text-dark-muted">Position moy.</div>
+                </Card>
+                <Card className="p-4 text-center">
+                  <div className="text-2xl font-bold text-primary">
+                    {gscData.length > 0 ? ((gscData.reduce((sum, r) => sum + (r.ctr || 0), 0) / gscData.length) * 100).toFixed(1) : '-'}%
+                  </div>
+                  <div className="text-sm text-dark-muted">CTR moyen</div>
+                </Card>
+              </div>
+              <Card className="overflow-hidden">
+                <table className="w-full">
+                  <thead className="bg-dark-border/50">
+                    <tr>
+                      <th className="text-left p-3 text-sm font-medium text-dark-muted">Keyword</th>
+                      <th className="text-center p-3 text-sm font-medium text-dark-muted">Position</th>
+                      <th className="text-center p-3 text-sm font-medium text-dark-muted">Clics</th>
+                      <th className="text-center p-3 text-sm font-medium text-dark-muted">Impressions</th>
+                      <th className="text-center p-3 text-sm font-medium text-dark-muted">CTR</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-dark-border">
+                    {gscData.slice(0, 30).map((row, i) => (
+                      <tr key={i} className="hover:bg-dark-border/30">
+                        <td className="p-3 text-white font-medium">{row.keyword || row.query || '-'}</td>
+                        <td className="p-3 text-center">
+                          <Badge variant={row.position <= 10 ? 'success' : row.position <= 20 ? 'warning' : 'secondary'} size="sm">
+                            #{Math.round(row.position)}
+                          </Badge>
+                        </td>
+                        <td className="p-3 text-center text-success">{row.clicks || 0}</td>
+                        <td className="p-3 text-center text-white">{row.impressions?.toLocaleString() || 0}</td>
+                        <td className="p-3 text-center text-dark-muted">{((row.ctr || 0) * 100).toFixed(1)}%</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </Card>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Performance Tab */}
+      {activeTab === 'performance' && (
+        <div className="space-y-4">
+          <h2 className="text-lg font-semibold text-white">Performance SEO</h2>
+          <div className="grid grid-cols-2 gap-4">
+            <Card className="p-6">
+              <h3 className="font-medium text-white mb-4">Résumé du mois</h3>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-dark-muted">Keywords trackés</span>
+                  <span className="text-white font-medium">{keywords.length}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-dark-muted">Top 10</span>
+                  <span className="text-success font-medium">{keywords.filter(k => k.current_position && k.current_position <= 10).length}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-dark-muted">Top 20</span>
+                  <span className="text-warning font-medium">{keywords.filter(k => k.current_position && k.current_position <= 20).length}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-dark-muted">Articles publiés</span>
+                  <span className="text-white font-medium">{articles.filter(a => a.status === 'published').length}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-dark-muted">Pages auditées</span>
+                  <span className="text-white font-medium">{pages.filter(p => p.seo_score !== null).length}</span>
+                </div>
+              </div>
+            </Card>
+            <Card className="p-6">
+              <h3 className="font-medium text-white mb-4">Objectifs</h3>
+              <div className="space-y-4">
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-dark-muted text-sm">Keywords Top 10</span>
+                    <span className="text-sm text-white">{keywords.filter(k => k.current_position && k.current_position <= 10).length}/10</span>
+                  </div>
+                  <div className="h-2 bg-dark-border rounded-full overflow-hidden">
+                    <div className="h-full bg-primary" style={{ width: `${Math.min(100, (keywords.filter(k => k.current_position && k.current_position <= 10).length / 10) * 100)}%` }} />
+                  </div>
+                </div>
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-dark-muted text-sm">Articles publiés</span>
+                    <span className="text-sm text-white">{articles.filter(a => a.status === 'published').length}/20</span>
+                  </div>
+                  <div className="h-2 bg-dark-border rounded-full overflow-hidden">
+                    <div className="h-full bg-success" style={{ width: `${Math.min(100, (articles.filter(a => a.status === 'published').length / 20) * 100)}%` }} />
+                  </div>
+                </div>
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-dark-muted text-sm">Score SEO moyen</span>
+                    <span className="text-sm text-white">{kpis.avgScore}/100</span>
+                  </div>
+                  <div className="h-2 bg-dark-border rounded-full overflow-hidden">
+                    <div className="h-full bg-info" style={{ width: `${typeof kpis.avgScore === 'number' ? kpis.avgScore : 0}%` }} />
+                  </div>
+                </div>
+              </div>
+            </Card>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

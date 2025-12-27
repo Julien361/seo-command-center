@@ -1,7 +1,7 @@
 {
   "name": "seo-command-center",
   "productName": "SEO Command Center",
-  "version": "1.0.48",
+  "version": "1.0.49",
   "description": "Dashboard SEO avec Claude Code intégré",
   "private": true,
   "type": "module",
