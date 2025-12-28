@@ -81,6 +81,16 @@ export default function SeoCoach({ onNavigate }) {
   const [workflowResults, setWorkflowResults] = useState(null);
   const pollingRef = useRef(null);
 
+  // État pour l'édition du site
+  const [isEditingSite, setIsEditingSite] = useState(false);
+  const [editFormData, setEditFormData] = useState({
+    monetization_types: [],
+    target_audience: '',
+    geographic_focus: '',
+    seo_focus: []
+  });
+  const [isSavingSite, setIsSavingSite] = useState(false);
+
   // Charger les sites
   useEffect(() => {
     async function loadSites() {
@@ -144,6 +154,55 @@ export default function SeoCoach({ onNavigate }) {
       }
     };
   }, []);
+
+  // Ouvrir le formulaire d'édition du site
+  const handleEditSite = () => {
+    if (!selectedSite) return;
+    setEditFormData({
+      monetization_types: selectedSite.monetization_types || [],
+      target_audience: selectedSite.target_audience || '',
+      geographic_focus: selectedSite.geographic_focus || 'France',
+      seo_focus: selectedSite.seo_focus || []
+    });
+    setIsEditingSite(true);
+  };
+
+  // Sauvegarder les modifications du site
+  const handleSaveSite = async () => {
+    if (!selectedSite) return;
+    setIsSavingSite(true);
+    try {
+      // Mettre à jour dans Supabase
+      const { data, error } = await supabase
+        .from('sites')
+        .update({
+          monetization_types: editFormData.monetization_types,
+          target_audience: editFormData.target_audience,
+          geographic_focus: editFormData.geographic_focus,
+          seo_focus: editFormData.seo_focus
+        })
+        .eq('id', selectedSite.id)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Mettre à jour l'état local
+      const updatedSite = { ...selectedSite, ...data };
+      setSelectedSite(updatedSite);
+      setSites(sites.map(s => s.id === selectedSite.id ? updatedSite : s));
+      setIsEditingSite(false);
+      console.log('[SeoCoach] Site mis à jour:', updatedSite.mcp_alias);
+    } catch (error) {
+      console.error('[SeoCoach] Erreur sauvegarde site:', error);
+      alert('Erreur lors de la sauvegarde: ' + error.message);
+    } finally {
+      setIsSavingSite(false);
+    }
+  };
+
+  // Options de monétisation disponibles
+  const MONETIZATION_OPTIONS = ['lead_gen', 'ecommerce', 'ads', 'affiliate', 'saas', 'links', 'content'];
 
   // Charger les résultats du workflow terminé
   const loadWorkflowResults = async (webhookType) => {
@@ -233,21 +292,30 @@ export default function SeoCoach({ onNavigate }) {
 
     try {
       // Lancer le workflow via webhook
-      console.log('[Workflow] Lancement:', workflow.name);
+      console.log('[Workflow] Lancement:', workflow.name, 'pour site:', selectedSite.mcp_alias);
 
       // Extraire l'objectif SEO du site (seo_focus est un array)
       const seoFocus = selectedSite.seo_focus || [];
-      const siteObjective = Array.isArray(seoFocus) ? seoFocus.join('; ') : seoFocus;
+      const siteObjective = Array.isArray(seoFocus) && seoFocus.length > 0
+        ? seoFocus.join('; ')
+        : (selectedSite.domain || selectedSite.mcp_alias); // Fallback au domaine si pas d'objectif
 
-      const result = await n8nApi.triggerWebhook(workflow.webhook, {
+      // Préparer les données à envoyer
+      const webhookData = {
         site_alias: selectedSite.mcp_alias,
         site_url: selectedSite.url,
         site_id: selectedSite.id,
         site_objective: siteObjective,
-        target_audience: selectedSite.target_audience,
+        objective: siteObjective, // Alias pour compatibilité
+        target_audience: selectedSite.target_audience || '',
         geographic_focus: selectedSite.geographic_focus || 'France'
-      });
-      console.log('[Workflow] Webhook declenche avec objectif:', siteObjective?.substring(0, 50));
+      };
+
+      // Log détaillé des données envoyées
+      console.log('[Workflow] Donnees envoyees au webhook:', JSON.stringify(webhookData, null, 2));
+
+      const result = await n8nApi.triggerWebhook(workflow.webhook, webhookData);
+      console.log('[Workflow] Reponse webhook:', result);
 
       // Polling pour suivre l'exécution réelle
       let checkCount = 0;
@@ -576,6 +644,128 @@ export default function SeoCoach({ onNavigate }) {
         </select>
       </div>
 
+      {/* Modal d'édition du site */}
+      {isEditingSite && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+          <div className="bg-dark-card border border-dark-border rounded-2xl p-6 max-w-xl w-full mx-4 shadow-2xl max-h-[90vh] overflow-y-auto">
+            <h3 className="text-lg font-semibold text-white mb-4">
+              Modifier {selectedSite?.mcp_alias}
+            </h3>
+
+            <div className="space-y-4">
+              {/* Monétisation */}
+              <div>
+                <label className="block text-sm text-dark-muted mb-2">💰 Types de monetisation</label>
+                <div className="flex flex-wrap gap-2">
+                  {MONETIZATION_OPTIONS.map(option => (
+                    <button
+                      key={option}
+                      onClick={() => {
+                        const current = editFormData.monetization_types || [];
+                        const updated = current.includes(option)
+                          ? current.filter(t => t !== option)
+                          : [...current, option];
+                        setEditFormData({ ...editFormData, monetization_types: updated });
+                      }}
+                      className={`px-3 py-1 rounded-full text-sm transition-colors ${
+                        (editFormData.monetization_types || []).includes(option)
+                          ? 'bg-warning text-black'
+                          : 'bg-dark-bg border border-dark-border text-dark-muted hover:border-warning'
+                      }`}
+                    >
+                      {option}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Audience cible */}
+              <div>
+                <label className="block text-sm text-dark-muted mb-2">🎯 Audience cible</label>
+                <textarea
+                  value={editFormData.target_audience}
+                  onChange={(e) => setEditFormData({ ...editFormData, target_audience: e.target.value })}
+                  className="w-full bg-dark-bg border border-dark-border rounded-lg px-4 py-2 text-white placeholder:text-dark-muted focus:outline-none focus:border-primary"
+                  placeholder="Ex: seniors +60 ans, retraités, propriétaires..."
+                  rows={2}
+                />
+              </div>
+
+              {/* Zone géographique */}
+              <div>
+                <label className="block text-sm text-dark-muted mb-2">📍 Zone geographique</label>
+                <input
+                  type="text"
+                  value={editFormData.geographic_focus}
+                  onChange={(e) => setEditFormData({ ...editFormData, geographic_focus: e.target.value })}
+                  className="w-full bg-dark-bg border border-dark-border rounded-lg px-4 py-2 text-white placeholder:text-dark-muted focus:outline-none focus:border-primary"
+                  placeholder="Ex: France, PACA, Bouches-du-Rhône..."
+                />
+              </div>
+
+              {/* Focus SEO (objectif) */}
+              <div>
+                <label className="block text-sm text-dark-muted mb-2">🔍 Objectif SEO principal</label>
+                <textarea
+                  value={Array.isArray(editFormData.seo_focus) ? editFormData.seo_focus[0] || '' : editFormData.seo_focus || ''}
+                  onChange={(e) => {
+                    const currentSeeds = Array.isArray(editFormData.seo_focus) && editFormData.seo_focus[1]
+                      ? editFormData.seo_focus[1]
+                      : '';
+                    setEditFormData({
+                      ...editFormData,
+                      seo_focus: currentSeeds ? [e.target.value, currentSeeds] : [e.target.value]
+                    });
+                  }}
+                  className="w-full bg-dark-bg border border-dark-border rounded-lg px-4 py-2 text-white placeholder:text-dark-muted focus:outline-none focus:border-primary"
+                  placeholder="Ex: Lead generation MaPrimeAdapt pour seniors..."
+                  rows={2}
+                />
+              </div>
+
+              {/* Seeds keywords */}
+              <div>
+                <label className="block text-sm text-dark-muted mb-2">🌱 Seeds keywords (separes par ;)</label>
+                <input
+                  type="text"
+                  value={
+                    Array.isArray(editFormData.seo_focus) && editFormData.seo_focus[1]
+                      ? editFormData.seo_focus[1].replace('seeds:', '')
+                      : ''
+                  }
+                  onChange={(e) => {
+                    const mainFocus = Array.isArray(editFormData.seo_focus) ? editFormData.seo_focus[0] : '';
+                    const seedsValue = e.target.value ? `seeds:${e.target.value}` : '';
+                    setEditFormData({
+                      ...editFormData,
+                      seo_focus: seedsValue ? [mainFocus, seedsValue] : [mainFocus]
+                    });
+                  }}
+                  className="w-full bg-dark-bg border border-dark-border rounded-lg px-4 py-2 text-white placeholder:text-dark-muted focus:outline-none focus:border-primary"
+                  placeholder="Ex: maprimeadapt;aide logement;renovation"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-6">
+              <Button
+                onClick={handleSaveSite}
+                disabled={isSavingSite}
+                className="flex-1"
+              >
+                {isSavingSite ? 'Sauvegarde...' : 'Sauvegarder'}
+              </Button>
+              <button
+                onClick={() => setIsEditingSite(false)}
+                className="px-4 py-2 bg-dark-border text-white rounded-lg hover:bg-dark-bg transition-colors"
+              >
+                Annuler
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Contexte du site sélectionné */}
       {selectedSite && (
         <Card className="!p-4">
@@ -623,35 +813,49 @@ export default function SeoCoach({ onNavigate }) {
               </div>
             </div>
 
-            {/* Stats existantes - indicateur d'analyse deja faite */}
-            {phaseData?.stats && (
-              <div className="flex gap-3 border-l border-dark-border pl-4">
-                <div className="text-center">
-                  <div className={`text-lg font-bold ${phaseData.stats.keywords > 0 ? 'text-success' : 'text-dark-muted'}`}>
-                    {phaseData.stats.keywords}
+            {/* Bouton d'édition + Stats */}
+            <div className="flex items-center gap-4">
+              {/* Bouton modifier */}
+              <button
+                onClick={handleEditSite}
+                className="p-2 rounded-lg bg-dark-bg border border-dark-border text-dark-muted hover:text-white hover:border-primary transition-colors"
+                title="Modifier les informations du site"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                </svg>
+              </button>
+
+              {/* Stats existantes - indicateur d'analyse deja faite */}
+              {phaseData?.stats && (
+                <div className="flex gap-3 border-l border-dark-border pl-4">
+                  <div className="text-center">
+                    <div className={`text-lg font-bold ${phaseData.stats.keywords > 0 ? 'text-success' : 'text-dark-muted'}`}>
+                      {phaseData.stats.keywords}
+                    </div>
+                    <div className="text-[10px] text-dark-muted">Keywords</div>
                   </div>
-                  <div className="text-[10px] text-dark-muted">Keywords</div>
-                </div>
-                <div className="text-center">
-                  <div className={`text-lg font-bold ${phaseData.stats.competitors > 0 ? 'text-success' : 'text-dark-muted'}`}>
-                    {phaseData.stats.competitors}
+                  <div className="text-center">
+                    <div className={`text-lg font-bold ${phaseData.stats.competitors > 0 ? 'text-success' : 'text-dark-muted'}`}>
+                      {phaseData.stats.competitors}
+                    </div>
+                    <div className="text-[10px] text-dark-muted">Concurrents</div>
                   </div>
-                  <div className="text-[10px] text-dark-muted">Concurrents</div>
-                </div>
-                <div className="text-center">
-                  <div className={`text-lg font-bold ${phaseData.stats.clusters > 0 ? 'text-success' : 'text-dark-muted'}`}>
-                    {phaseData.stats.clusters}
+                  <div className="text-center">
+                    <div className={`text-lg font-bold ${phaseData.stats.clusters > 0 ? 'text-success' : 'text-dark-muted'}`}>
+                      {phaseData.stats.clusters}
+                    </div>
+                    <div className="text-[10px] text-dark-muted">Cocons</div>
                   </div>
-                  <div className="text-[10px] text-dark-muted">Cocons</div>
-                </div>
-                <div className="text-center">
-                  <div className={`text-lg font-bold ${phaseData.stats.articles?.published > 0 ? 'text-success' : 'text-dark-muted'}`}>
-                    {phaseData.stats.articles?.published || 0}
+                  <div className="text-center">
+                    <div className={`text-lg font-bold ${phaseData.stats.articles?.published > 0 ? 'text-success' : 'text-dark-muted'}`}>
+                      {phaseData.stats.articles?.published || 0}
+                    </div>
+                    <div className="text-[10px] text-dark-muted">Publies</div>
                   </div>
-                  <div className="text-[10px] text-dark-muted">Publies</div>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
 
           {/* Message si analyse deja faite */}
