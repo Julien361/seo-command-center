@@ -96,7 +96,11 @@ export default function SeoCoach() {
     }
 
     try {
-      const result = await n8nApi.startSeoCascade(selectedSite.mcp_alias, workflow.webhook);
+      const result = await n8nApi.triggerWebhook(workflow.webhook, {
+        site_alias: selectedSite.mcp_alias,
+        site_url: selectedSite.url,
+        site_id: selectedSite.id
+      });
       alert(`Workflow ${workflow.name} lancé avec succès!`);
     } catch (error) {
       alert(`Erreur: ${error.message}`);
