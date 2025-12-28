@@ -39,15 +39,20 @@ export default function Keywords() {
   const loadData = async () => {
     setIsLoading(true);
     setError(null);
+    console.log('[Keywords] Chargement des donnees...');
     try {
       const [keywordsData, sitesData] = await Promise.all([
         keywordsApi.getAll(),
         sitesApi.getAll()
       ]);
+      console.log('[Keywords] Donnees chargees:', {
+        keywords: keywordsData?.length || 0,
+        sites: sitesData?.length || 0
+      });
       setKeywords(keywordsData || []);
       setSites(sitesData || []);
     } catch (err) {
-      console.error('Erreur chargement keywords:', err);
+      console.error('[Keywords] Erreur chargement:', err);
       setError(err.message);
     } finally {
       setIsLoading(false);
@@ -212,14 +217,38 @@ export default function Keywords() {
           </button>
         </div>
 
+        {/* Stats bar */}
+        <div className="mb-4 flex items-center gap-4 text-sm">
+          <span className="text-dark-muted">
+            Total: <span className="text-white font-medium">{keywords.length}</span> keywords
+          </span>
+          <span className="text-dark-muted">|</span>
+          <span className="text-dark-muted">
+            Affiches: <span className="text-white font-medium">{filteredKeywords.length}</span>
+          </span>
+          {keywords.filter(k => k.search_volume > 0).length > 0 && (
+            <>
+              <span className="text-dark-muted">|</span>
+              <span className="text-dark-muted">
+                Avec volume: <span className="text-success font-medium">{keywords.filter(k => k.search_volume > 0).length}</span>
+              </span>
+            </>
+          )}
+        </div>
+
         {isLoading ? (
           <div className="flex items-center justify-center py-12">
             <Loader2 className="w-8 h-8 text-primary animate-spin" />
+            <span className="ml-3 text-dark-muted">Chargement des keywords...</span>
           </div>
         ) : filteredKeywords.length === 0 ? (
           <div className="text-center py-12">
             <Target className="w-12 h-12 text-dark-muted mx-auto mb-4" />
-            <p className="text-dark-muted">Aucun keyword trouve</p>
+            <p className="text-dark-muted">
+              {keywords.length === 0
+                ? 'Aucun keyword dans la base. Lancez une analyse depuis le SEO Coach !'
+                : `Aucun keyword ne correspond aux filtres (${keywords.length} au total)`}
+            </p>
             <Button
               className="mt-4"
               icon={Sparkles}
