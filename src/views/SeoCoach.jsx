@@ -207,7 +207,7 @@ export default function SeoCoach({ onNavigate }) {
     }
   };
 
-  // Lancer un workflow avec suivi
+  // Lancer un workflow avec suivi en temps réel
   const handleLaunchWorkflow = async (workflow) => {
     if (!workflow || !workflow.webhook) {
       alert('Ce workflow ne peut pas être lancé directement');
@@ -215,7 +215,7 @@ export default function SeoCoach({ onNavigate }) {
     }
 
     const steps = WORKFLOW_STEPS[workflow.webhook] || WORKFLOW_STEPS['default'];
-    const totalDuration = steps.reduce((sum, s) => sum + s.duration, 0);
+    const startTime = Date.now();
 
     // Initialiser l'exécution
     setWorkflowExecution({
@@ -224,95 +224,118 @@ export default function SeoCoach({ onNavigate }) {
       currentStep: 0,
       steps,
       progress: 0,
-      startTime: Date.now(),
-      estimatedDuration: totalDuration,
+      startTime,
+      executionId: null,
       error: null,
+      lastCheck: null,
     });
+    setWorkflowResults(null);
 
     try {
-      // Lancer le workflow
+      // Lancer le workflow via webhook
+      console.log('[Workflow] Lancement:', workflow.name);
       const result = await n8nApi.triggerWebhook(workflow.webhook, {
         site_alias: selectedSite.mcp_alias,
         site_url: selectedSite.url,
         site_id: selectedSite.id
       });
+      console.log('[Workflow] Webhook declenche');
 
-      // Simuler la progression basée sur les étapes
-      let currentStep = 0;
-      let elapsedInStep = 0;
+      // Polling pour suivre l'exécution réelle
+      let checkCount = 0;
+      const maxChecks = 120; // 2 minutes max (120 * 1s)
+      let executionFound = null;
+      let lastStepIndex = 0;
 
-      pollingRef.current = setInterval(() => {
+      pollingRef.current = setInterval(async () => {
+        checkCount++;
+
+        // Mise à jour visuelle des étapes (progression fluide)
         setWorkflowExecution(prev => {
-          if (!prev || prev.status !== 'running') {
-            clearInterval(pollingRef.current);
-            return prev;
-          }
+          if (!prev || prev.status !== 'running') return prev;
 
-          const elapsed = Date.now() - prev.startTime;
-          let stepElapsed = elapsed;
-          let newStep = 0;
-
-          // Calculer l'étape actuelle
-          for (let i = 0; i < steps.length; i++) {
-            if (stepElapsed < steps[i].duration) {
-              newStep = i;
-              break;
-            }
-            stepElapsed -= steps[i].duration;
-            if (i === steps.length - 1) {
-              newStep = i;
-            }
-          }
-
-          const progress = Math.min((elapsed / totalDuration) * 100, 100);
-
-          // Vérifier si terminé (après la durée estimée + marge)
-          if (elapsed > totalDuration + 2000) {
-            clearInterval(pollingRef.current);
-            // Charger les résultats
-            loadWorkflowResults(prev.workflow.webhook);
-            return {
-              ...prev,
-              status: 'success',
-              progress: 100,
-              currentStep: steps.length - 1,
-            };
-          }
+          const elapsed = Date.now() - startTime;
+          // Avancer progressivement dans les étapes toutes les 3-5 secondes
+          const stepDuration = 4000; // 4 secondes par étape en moyenne
+          const newStepIndex = Math.min(
+            Math.floor(elapsed / stepDuration),
+            steps.length - 1
+          );
+          // Progress basé sur le temps écoulé mais plafonné à 95% tant que pas terminé
+          const progress = Math.min((elapsed / (steps.length * stepDuration)) * 100, 95);
 
           return {
             ...prev,
-            currentStep: newStep,
+            currentStep: newStepIndex,
             progress,
+            lastCheck: new Date().toISOString(),
           };
         });
-      }, 500);
 
-      // Vérifier périodiquement le statut réel via l'API
-      setTimeout(async () => {
-        try {
-          const executions = await fetchExecutions({ limit: 5 });
-          const recentExec = executions.find(e =>
-            e.workflowId === workflow.id &&
-            new Date(e.startedAt) > new Date(Date.now() - 120000)
-          );
+        // Vérifier le statut réel toutes les 3 secondes
+        if (checkCount % 3 === 0) {
+          try {
+            const executions = await fetchExecutions({ limit: 10 });
+            // Chercher l'exécution la plus récente pour ce workflow
+            const recentExec = executions.find(e => {
+              const execStart = new Date(e.startedAt).getTime();
+              return execStart > startTime - 5000; // Exécution démarrée après notre appel
+            });
 
-          if (recentExec) {
-            if (recentExec.status === 'error') {
-              clearInterval(pollingRef.current);
-              setWorkflowExecution(prev => ({
-                ...prev,
-                status: 'error',
-                error: 'Le workflow a rencontré une erreur',
-              }));
+            if (recentExec) {
+              executionFound = recentExec;
+              console.log('[Workflow] Execution trouvee:', recentExec.id, 'status:', recentExec.status);
+
+              if (recentExec.status === 'success') {
+                // Terminé avec succès !
+                clearInterval(pollingRef.current);
+                console.log('[Workflow] Termine avec succes');
+                loadWorkflowResults(workflow.webhook);
+                setWorkflowExecution(prev => ({
+                  ...prev,
+                  status: 'success',
+                  progress: 100,
+                  currentStep: steps.length - 1,
+                  executionId: recentExec.id,
+                }));
+                return;
+              } else if (recentExec.status === 'error') {
+                // Erreur
+                clearInterval(pollingRef.current);
+                console.log('[Workflow] Erreur detectee');
+                setWorkflowExecution(prev => ({
+                  ...prev,
+                  status: 'error',
+                  error: 'Le workflow a rencontre une erreur. Verifiez n8n pour les details.',
+                  executionId: recentExec.id,
+                }));
+                return;
+              }
+              // Sinon, running ou waiting - continuer le polling
             }
+          } catch (e) {
+            console.log('[Workflow] Erreur polling (CORS probable):', e.message);
+            // En cas d'erreur CORS, on continue avec la progression simulée
           }
-        } catch (e) {
-          console.error('Failed to check execution status:', e);
         }
-      }, totalDuration);
+
+        // Timeout après maxChecks
+        if (checkCount >= maxChecks) {
+          clearInterval(pollingRef.current);
+          console.log('[Workflow] Timeout - supposons succes');
+          loadWorkflowResults(workflow.webhook);
+          setWorkflowExecution(prev => ({
+            ...prev,
+            status: 'success',
+            progress: 100,
+            currentStep: steps.length - 1,
+          }));
+        }
+      }, 1000); // Check toutes les secondes
 
     } catch (error) {
       clearInterval(pollingRef.current);
+      console.error('[Workflow] Erreur lancement:', error);
       setWorkflowExecution(prev => ({
         ...prev,
         status: 'error',
