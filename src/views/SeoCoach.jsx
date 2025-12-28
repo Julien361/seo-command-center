@@ -428,6 +428,71 @@ export default function SeoCoach({ onNavigate }) {
         </select>
       </div>
 
+      {/* Barre de progression globale */}
+      {phaseData && !loading && (
+        <Card className="!p-4 bg-gradient-to-r from-dark-card to-primary/10 border-primary/30">
+          <div className="flex items-center gap-6">
+            {/* Phase actuelle */}
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center">
+                <span className="text-2xl font-bold text-primary">{phaseData.phaseNumber}</span>
+              </div>
+              <div>
+                <div className="text-xs text-dark-muted">Phase actuelle</div>
+                <div className="text-lg font-semibold text-white">{phaseData.currentPhase.nameFr}</div>
+              </div>
+            </div>
+
+            {/* Barre de progression */}
+            <div className="flex-1">
+              <div className="flex justify-between text-sm mb-1">
+                <span className="text-dark-muted">Progression vers Position 0</span>
+                <span className="text-primary font-bold">{calculateOverallProgress(phaseData)}%</span>
+              </div>
+              <div className="h-3 bg-dark-bg rounded-full overflow-hidden flex">
+                {SEO_PHASES.map((phase, index) => {
+                  const isCompleted = index < phaseData.phaseNumber - 1;
+                  const isCurrent = index === phaseData.phaseNumber - 1;
+                  return (
+                    <div
+                      key={phase.id}
+                      className={`flex-1 border-r border-dark-card last:border-0 ${
+                        isCompleted ? 'bg-success' :
+                        isCurrent ? 'bg-primary' : 'bg-dark-border'
+                      }`}
+                      title={phase.nameFr}
+                    />
+                  );
+                })}
+              </div>
+              <div className="flex justify-between text-[10px] text-dark-muted mt-1">
+                {SEO_PHASES.map((phase, index) => (
+                  <span key={phase.id} className={index < phaseData.phaseNumber ? 'text-success' : ''}>
+                    {phase.nameFr.split(' ')[0]}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            {/* Prochaine action */}
+            {recommendations.length > 0 && recommendations[0].workflow && (
+              <div className="flex items-center gap-2">
+                <Button
+                  onClick={() => handleLaunchWorkflow(recommendations[0].workflow)}
+                  disabled={workflowExecution?.status === 'running'}
+                  className="whitespace-nowrap"
+                >
+                  {recommendations[0].workflow.estimatedCost > 0 && (
+                    <span className="mr-1 text-xs opacity-70">{recommendations[0].workflow.estimatedCost}€</span>
+                  )}
+                  Prochaine étape
+                </Button>
+              </div>
+            )}
+          </div>
+        </Card>
+      )}
+
       {/* Tabs */}
       <div className="flex gap-2 border-b border-dark-border pb-4">
         <button
@@ -473,34 +538,59 @@ export default function SeoCoach({ onNavigate }) {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Colonne gauche: Phases */}
           <div className="lg:col-span-1">
-            <Card title="Progression SEO">
-              <div className="space-y-3">
+            <Card title="Phases SEO">
+              <div className="space-y-2">
                 {SEO_PHASES.map((phase, index) => {
                   const isCompleted = phaseData?.completedPhases?.some(p => p.id === phase.id);
                   const isCurrent = phaseData?.currentPhase?.id === phase.id;
 
+                  // Mapping des phases vers les pages de résultats
+                  const phaseResultPages = {
+                    'discovery': 'keywords',
+                    'analysis': 'concurrents',
+                    'structure': 'cocons',
+                    'creation': 'articles',
+                    'publication': 'articles',
+                    'monitoring': 'positions',
+                  };
+                  const resultPage = phaseResultPages[phase.id];
+
                   return (
                     <div
                       key={phase.id}
-                      className={`flex items-center gap-3 p-3 rounded-lg transition-colors ${
+                      className={`p-3 rounded-lg transition-all ${
                         isCurrent
                           ? 'bg-primary/20 border border-primary'
                           : isCompleted
-                            ? 'bg-success/10'
-                            : 'bg-dark-bg'
+                            ? 'bg-success/10 border border-success/30'
+                            : 'bg-dark-bg border border-transparent'
                       }`}
                     >
-                      <span className="text-xl">
-                        {isCompleted ? '✅' : isCurrent ? '🔄' : '○'}
-                      </span>
-                      <div className="flex-1">
-                        <div className="font-medium text-white">{phase.nameFr}</div>
-                        <div className="text-xs text-dark-muted">{phase.description}</div>
+                      <div className="flex items-center gap-3">
+                        <span className="text-xl">
+                          {isCompleted ? '✅' : isCurrent ? '🔄' : '○'}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-white text-sm">{phase.nameFr}</div>
+                          <div className="text-xs text-dark-muted truncate">{phase.description}</div>
+                        </div>
+                        {isCurrent && (
+                          <Badge variant="primary" size="sm">
+                            {phaseData?.progress}%
+                          </Badge>
+                        )}
                       </div>
-                      {isCurrent && (
-                        <Badge variant="primary" size="sm">
-                          {phaseData?.progress}%
-                        </Badge>
+
+                      {/* Boutons d'action pour la phase */}
+                      {(isCompleted || isCurrent) && resultPage && (
+                        <div className="mt-2 pt-2 border-t border-dark-border/50 flex gap-2">
+                          <button
+                            onClick={() => onNavigate && onNavigate(resultPage)}
+                            className="text-xs text-primary hover:text-primary/80 flex items-center gap-1"
+                          >
+                            Voir résultats →
+                          </button>
+                        </div>
                       )}
                     </div>
                   );
@@ -526,30 +616,107 @@ export default function SeoCoach({ onNavigate }) {
             </Card>
 
             {roadmap && (
-              <Card title="Roadmap Position 0" className="mt-6">
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <span className="text-dark-muted">Temps estimé</span>
-                    <Badge variant="info">{roadmap.estimatedTimeToRank}</Badge>
+              <Card title="Checklist Position 0" className="mt-6">
+                {/* En-tête avec stats */}
+                <div className="flex items-center justify-between p-3 bg-dark-bg rounded-lg mb-4">
+                  <div className="text-center flex-1">
+                    <div className="text-lg font-bold text-primary">{roadmap.estimatedTimeToRank}</div>
+                    <div className="text-xs text-dark-muted">Temps estimé</div>
                   </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-dark-muted">Investissement</span>
-                    <Badge variant="warning">{roadmap.requiredInvestment.toFixed(2)}€</Badge>
+                  <div className="w-px h-8 bg-dark-border" />
+                  <div className="text-center flex-1">
+                    <div className="text-lg font-bold text-warning">{roadmap.requiredInvestment.toFixed(2)}€</div>
+                    <div className="text-xs text-dark-muted">Coût restant</div>
                   </div>
+                </div>
 
-                  <div className="border-t border-dark-border pt-4 mt-4">
-                    <div className="text-sm text-dark-muted mb-2">Étapes restantes</div>
-                    {roadmap.steps
-                      .filter(s => s.status !== 'completed')
-                      .slice(0, 3)
-                      .map(step => (
-                        <div key={step.step} className="flex items-center gap-2 py-1">
-                          <span className="text-primary">{step.step}.</span>
-                          <span className="text-white text-sm">{step.name}</span>
+                {/* Checklist des étapes */}
+                <div className="space-y-2">
+                  {roadmap.steps.map((step) => {
+                    const isCompleted = step.status === 'completed';
+                    const isInProgress = step.status === 'in_progress';
+
+                    // Mapping des étapes vers les pages et workflows
+                    const stepConfig = {
+                      1: { page: 'keywords', workflow: WORKFLOWS.WF0_CASCADE },
+                      2: { page: 'concurrents', workflow: WORKFLOWS.WF2_PERPLEXITY },
+                      3: { page: 'cocons', workflow: WORKFLOWS.WF6_CLUSTERING },
+                      4: { page: 'articles', workflow: null },
+                      5: { page: 'articles', workflow: null },
+                      6: { page: 'positions', workflow: WORKFLOWS.GSC_SYNC },
+                    };
+                    const config = stepConfig[step.step] || {};
+
+                    return (
+                      <div
+                        key={step.step}
+                        className={`p-3 rounded-lg border transition-all ${
+                          isCompleted
+                            ? 'bg-success/10 border-success/30'
+                            : isInProgress
+                              ? 'bg-primary/10 border-primary/30'
+                              : 'bg-dark-bg border-dark-border'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          {/* Checkbox */}
+                          <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 ${
+                            isCompleted
+                              ? 'bg-success text-white'
+                              : isInProgress
+                                ? 'bg-primary text-white'
+                                : 'border-2 border-dark-muted'
+                          }`}>
+                            {isCompleted ? '✓' : isInProgress ? '→' : step.step}
+                          </div>
+
+                          {/* Contenu */}
+                          <div className="flex-1 min-w-0">
+                            <div className={`font-medium text-sm ${isCompleted ? 'text-success line-through' : 'text-white'}`}>
+                              {step.name}
+                            </div>
+                            {step.actions && step.actions.length > 0 && !isCompleted && (
+                              <div className="text-xs text-dark-muted mt-0.5 truncate">
+                                {step.actions[0]}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Actions */}
+                          {!isCompleted && (
+                            <div className="flex gap-1">
+                              {config.workflow && (
+                                <button
+                                  onClick={() => handleLaunchWorkflow(config.workflow)}
+                                  disabled={workflowExecution?.status === 'running'}
+                                  className="p-1.5 bg-primary/20 text-primary rounded hover:bg-primary/30 text-xs"
+                                  title="Lancer"
+                                >
+                                  ▶
+                                </button>
+                              )}
+                              {config.page && (
+                                <button
+                                  onClick={() => onNavigate && onNavigate(config.page)}
+                                  className="p-1.5 bg-dark-border text-white rounded hover:bg-dark-bg text-xs"
+                                  title="Voir"
+                                >
+                                  →
+                                </button>
+                              )}
+                            </div>
+                          )}
                         </div>
-                      ))
-                    }
-                  </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Résumé */}
+                <div className="mt-4 pt-3 border-t border-dark-border text-center">
+                  <span className="text-sm text-dark-muted">
+                    {roadmap.steps.filter(s => s.status === 'completed').length}/{roadmap.steps.length} étapes complétées
+                  </span>
                 </div>
               </Card>
             )}
@@ -564,97 +731,168 @@ export default function SeoCoach({ onNavigate }) {
                     Sélectionnez un site pour voir les recommandations
                   </p>
                 ) : (
-                  recommendations.map((rec, index) => (
-                    <div
-                      key={index}
-                      className={`p-4 rounded-lg border ${
-                        rec.priority === 'high'
-                          ? 'bg-danger/10 border-danger/30'
-                          : rec.priority === 'medium'
-                            ? 'bg-warning/10 border-warning/30'
-                            : 'bg-dark-bg border-dark-border'
-                      }`}
-                    >
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2">
-                            <Badge
-                              variant={
-                                rec.priority === 'high' ? 'danger' :
-                                rec.priority === 'medium' ? 'warning' : 'default'
-                              }
-                              size="sm"
-                            >
-                              {rec.priority === 'high' ? 'Prioritaire' :
-                               rec.priority === 'medium' ? 'Recommandé' : 'Optionnel'}
-                            </Badge>
-                            <Badge variant="info" size="sm">{rec.type}</Badge>
-                          </div>
-                          <h4 className="text-white font-medium mt-2">{rec.title}</h4>
-                          <p className="text-dark-muted text-sm mt-1">{rec.description}</p>
-                          {rec.impact && (
-                            <p className="text-success text-sm mt-2">
-                              Impact: {rec.impact}
-                            </p>
-                          )}
-                        </div>
+                  recommendations.map((rec, index) => {
+                    // Mapping des types de recommandations vers les pages
+                    const typeToPage = {
+                      'immediate': rec.workflow?.webhook ? WORKFLOW_RESULT_PAGES[rec.workflow.webhook]?.view : null,
+                      'next_step': null,
+                      'optimization': null,
+                      'opportunity': 'quickwins',
+                      'warning': null,
+                    };
+                    const viewPage = rec.link?.replace('/', '') || typeToPage[rec.type];
 
-                        <div className="ml-4">
-                          {rec.workflow ? (
-                            <Button
-                              size="sm"
-                              onClick={() => handleLaunchWorkflow(rec.workflow)}
-                              disabled={workflowExecution?.status === 'running'}
-                            >
-                              {rec.estimatedCost > 0 && (
-                                <span className="mr-1 text-xs opacity-70">
-                                  {rec.estimatedCost}€
-                                </span>
-                              )}
-                              Lancer
-                            </Button>
-                          ) : rec.link ? (
-                            <a
-                              href={rec.link}
-                              className="inline-flex items-center px-3 py-1.5 bg-dark-card text-white rounded-lg text-sm hover:bg-dark-border transition-colors"
-                            >
-                              Voir
-                            </a>
-                          ) : null}
+                    return (
+                      <div
+                        key={index}
+                        className={`p-4 rounded-lg border ${
+                          rec.priority === 'high'
+                            ? 'bg-danger/10 border-danger/30'
+                            : rec.priority === 'medium'
+                              ? 'bg-warning/10 border-warning/30'
+                              : 'bg-dark-bg border-dark-border'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <Badge
+                                variant={
+                                  rec.priority === 'high' ? 'danger' :
+                                  rec.priority === 'medium' ? 'warning' : 'default'
+                                }
+                                size="sm"
+                              >
+                                {rec.priority === 'high' ? 'Prioritaire' :
+                                 rec.priority === 'medium' ? 'Recommandé' : 'Optionnel'}
+                              </Badge>
+                              <Badge variant="info" size="sm">{rec.type}</Badge>
+                            </div>
+                            <h4 className="text-white font-medium mt-2">{rec.title}</h4>
+                            <p className="text-dark-muted text-sm mt-1">{rec.description}</p>
+                            {rec.impact && (
+                              <p className="text-success text-sm mt-2">
+                                Impact: {rec.impact}
+                              </p>
+                            )}
+                          </div>
+
+                          <div className="ml-4 flex flex-col gap-2">
+                            {rec.workflow ? (
+                              <Button
+                                size="sm"
+                                onClick={() => handleLaunchWorkflow(rec.workflow)}
+                                disabled={workflowExecution?.status === 'running'}
+                              >
+                                {rec.estimatedCost > 0 && (
+                                  <span className="mr-1 text-xs opacity-70">
+                                    {rec.estimatedCost}€
+                                  </span>
+                                )}
+                                Lancer
+                              </Button>
+                            ) : null}
+                            {viewPage && (
+                              <button
+                                onClick={() => onNavigate && onNavigate(viewPage)}
+                                className="inline-flex items-center justify-center px-3 py-1.5 bg-dark-bg text-primary rounded-lg text-sm hover:bg-primary/10 transition-colors border border-primary/30"
+                              >
+                                Voir →
+                              </button>
+                            )}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
             </Card>
 
             {phaseData?.stats && (
-              <Card title="État actuel" className="mt-6">
+              <Card title="État actuel - Cliquez pour voir les détails" className="mt-6">
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div className="bg-dark-bg rounded-lg p-4 text-center">
-                    <div className="text-2xl font-bold text-white">
+                  {/* Keywords - Cliquable */}
+                  <button
+                    onClick={() => onNavigate && onNavigate('keywords')}
+                    className="bg-dark-bg rounded-lg p-4 text-center hover:bg-primary/20 hover:border-primary border border-transparent transition-all group cursor-pointer"
+                  >
+                    <div className="text-2xl font-bold text-white group-hover:text-primary">
                       {phaseData.stats.keywords}
                     </div>
-                    <div className="text-xs text-dark-muted">Keywords</div>
-                  </div>
-                  <div className="bg-dark-bg rounded-lg p-4 text-center">
-                    <div className="text-2xl font-bold text-white">
+                    <div className="text-xs text-dark-muted group-hover:text-primary/70">Keywords</div>
+                    <div className="text-[10px] text-primary opacity-0 group-hover:opacity-100 mt-1">Voir →</div>
+                  </button>
+
+                  {/* Cocons - Cliquable */}
+                  <button
+                    onClick={() => onNavigate && onNavigate('cocons')}
+                    className="bg-dark-bg rounded-lg p-4 text-center hover:bg-primary/20 hover:border-primary border border-transparent transition-all group cursor-pointer"
+                  >
+                    <div className="text-2xl font-bold text-white group-hover:text-primary">
                       {phaseData.stats.clusters}
                     </div>
-                    <div className="text-xs text-dark-muted">Cocons</div>
-                  </div>
-                  <div className="bg-dark-bg rounded-lg p-4 text-center">
-                    <div className="text-2xl font-bold text-white">
+                    <div className="text-xs text-dark-muted group-hover:text-primary/70">Cocons</div>
+                    <div className="text-[10px] text-primary opacity-0 group-hover:opacity-100 mt-1">Voir →</div>
+                  </button>
+
+                  {/* Articles - Cliquable */}
+                  <button
+                    onClick={() => onNavigate && onNavigate('articles')}
+                    className="bg-dark-bg rounded-lg p-4 text-center hover:bg-primary/20 hover:border-primary border border-transparent transition-all group cursor-pointer"
+                  >
+                    <div className="text-2xl font-bold text-white group-hover:text-primary">
                       {phaseData.stats.articles.published}
                     </div>
-                    <div className="text-xs text-dark-muted">Articles publiés</div>
-                  </div>
-                  <div className="bg-dark-bg rounded-lg p-4 text-center">
-                    <div className="text-2xl font-bold text-success">
+                    <div className="text-xs text-dark-muted group-hover:text-primary/70">Articles publiés</div>
+                    <div className="text-[10px] text-primary opacity-0 group-hover:opacity-100 mt-1">Voir →</div>
+                  </button>
+
+                  {/* Quick Wins - Cliquable + Highlight */}
+                  <button
+                    onClick={() => onNavigate && onNavigate('quickwins')}
+                    className={`rounded-lg p-4 text-center border transition-all group cursor-pointer ${
+                      phaseData.stats.quickWins > 0
+                        ? 'bg-success/10 border-success/30 hover:bg-success/20 hover:border-success'
+                        : 'bg-dark-bg border-transparent hover:bg-primary/20 hover:border-primary'
+                    }`}
+                  >
+                    <div className={`text-2xl font-bold ${phaseData.stats.quickWins > 0 ? 'text-success' : 'text-white'} group-hover:scale-110 transition-transform`}>
                       {phaseData.stats.quickWins}
                     </div>
                     <div className="text-xs text-dark-muted">Quick Wins</div>
+                    {phaseData.stats.quickWins > 0 && (
+                      <div className="text-[10px] text-success mt-1">Opportunités →</div>
+                    )}
+                  </button>
+                </div>
+
+                {/* Actions rapides */}
+                <div className="mt-4 pt-4 border-t border-dark-border">
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => handleLaunchWorkflow(WORKFLOWS.WF0_CASCADE)}
+                      disabled={workflowExecution?.status === 'running'}
+                    >
+                      + Rechercher keywords
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => handleLaunchWorkflow(WORKFLOWS.WF6_CLUSTERING)}
+                      disabled={workflowExecution?.status === 'running'}
+                    >
+                      + Créer cocon
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => onNavigate && onNavigate('articles')}
+                    >
+                      + Nouvel article
+                    </Button>
                   </div>
                 </div>
               </Card>
