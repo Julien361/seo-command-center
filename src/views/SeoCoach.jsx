@@ -11,16 +11,16 @@ import { n8nApi, WORKFLOWS } from '../lib/n8n';
 
 // Mapping des workflows vers les pages de résultats
 const WORKFLOW_RESULT_PAGES = {
-  'seo-cascade-start': { path: '/keywords', label: 'Voir les keywords' },
-  'wf1': { path: '/keywords', label: 'Voir les keywords' },
-  'wf2': { path: '/concurrents', label: 'Voir la recherche marché' },
-  'wf3': { path: '/concurrents', label: 'Voir les concurrents' },
-  'wf6': { path: '/cocons', label: 'Voir les cocons' },
-  'wf4': { path: '/keywords', label: 'Voir la synthèse' },
-  'content-brief': { path: '/briefs', label: 'Voir le brief' },
-  'article-generator': { path: '/articles', label: 'Voir l\'article' },
-  'gsc-sync': { path: '/positions', label: 'Voir les positions' },
-  'quickwins': { path: '/quickwins', label: 'Voir les Quick Wins' },
+  'seo-cascade-start': { view: 'keywords', label: 'Voir les keywords' },
+  'wf1': { view: 'keywords', label: 'Voir les keywords' },
+  'wf2': { view: 'concurrents', label: 'Voir la recherche marché' },
+  'wf3': { view: 'concurrents', label: 'Voir les concurrents' },
+  'wf6': { view: 'cocons', label: 'Voir les cocons' },
+  'wf4': { view: 'keywords', label: 'Voir la synthèse' },
+  'content-brief': { view: 'briefs', label: 'Voir le brief' },
+  'article-generator': { view: 'articles', label: 'Voir l\'article' },
+  'gsc-sync': { view: 'positions', label: 'Voir les positions' },
+  'quickwins': { view: 'quickwins', label: 'Voir les Quick Wins' },
 };
 
 // Étapes simulées pour chaque type de workflow
@@ -64,7 +64,7 @@ const WORKFLOW_STEPS = {
   ],
 };
 
-export default function SeoCoach() {
+export default function SeoCoach({ onNavigate }) {
   const [sites, setSites] = useState([]);
   const [selectedSite, setSelectedSite] = useState(null);
   const [phaseData, setPhaseData] = useState(null);
@@ -271,11 +271,10 @@ export default function SeoCoach() {
   // Naviguer vers les résultats
   const handleViewResults = () => {
     const resultPage = WORKFLOW_RESULT_PAGES[workflowExecution?.workflow?.webhook];
-    if (resultPage) {
-      // Utiliser la navigation de l'app
-      window.location.hash = resultPage.path;
+    if (resultPage && onNavigate) {
+      onNavigate(resultPage.view);
     }
-    handleCloseModal();
+    setWorkflowExecution(null);
   };
 
   const healthReport = workflowHealth ? generateHealthReport(workflowHealth) : null;

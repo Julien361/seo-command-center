@@ -129,7 +129,7 @@ function App() {
       case 'dashboard':
         return <Dashboard />;
       case 'coach':
-        return <SeoCoach />;
+        return <SeoCoach onNavigate={handleViewChange} />;
       case 'sites':
         return <Sites onNavigate={handleViewChange} />;
       case 'add-site':
