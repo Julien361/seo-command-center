@@ -33,13 +33,13 @@ export const sitesApi = {
         url: `https://${site.domain}`,
         entity_id: site.entity,
         seo_focus: site.focus || null,
+        monetization_types: site.monetizationTypes || [], // Colonne dédiée text[]
         wp_api_url: site.wpApiUrl || null,
         wp_endpoint: site.wpApiUrl || null, // Compatibilité legacy
         wp_username: site.wpUsername || null,
         wp_app_password: site.wpAppPassword || null,
         gsc_property: site.gscProperty || null,
         ga4_property_id: site.ga4PropertyId || null,
-        // Nouveaux champs
         target_audience: site.targetAudience || null,
         content_tone: site.contentTone || 'expert',
         geographic_focus: site.geographicFocus || null,
@@ -63,6 +63,7 @@ export const sitesApi = {
         url: `https://${site.domain}`,
         entity_id: site.entity,
         seo_focus: site.focus || null,
+        monetization_types: site.monetizationTypes || [], // Colonne dédiée text[]
         wp_api_url: site.wpApiUrl || null,
         wp_endpoint: site.wpApiUrl || null,
         wp_username: site.wpUsername || null,

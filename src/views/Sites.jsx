@@ -218,10 +218,9 @@ function SiteDetailView({ site, onBack, onRefresh }) {
   const saveStrategy = async () => {
     setIsSavingStrategy(true);
     try {
-      // Store full strategy in seo_focus array: [objective, monetization:type1,type2, seeds:kw1,kw2]
+      // Store objective and seeds in seo_focus, monetization in dedicated column
       const seoFocusArray = [
         siteStrategy.objective,
-        siteStrategy.monetization.length > 0 ? `monetization:${siteStrategy.monetization.join(',')}` : null,
         siteStrategy.seedKeywords.length > 0 ? `seeds:${siteStrategy.seedKeywords.join(',')}` : null
       ].filter(Boolean);
 
@@ -229,6 +228,7 @@ function SiteDetailView({ site, onBack, onRefresh }) {
         .from('sites')
         .update({
           seo_focus: seoFocusArray,
+          monetization_types: siteStrategy.monetization, // Colonne dédiée text[]
           target_audience: siteStrategy.targetAudience || null,
           geographic_focus: siteStrategy.geoFocus || null,
           updated_at: new Date().toISOString()
@@ -257,18 +257,27 @@ function SiteDetailView({ site, onBack, onRefresh }) {
     }));
   };
 
-  // Parse strategy from seo_focus on mount
+  // Parse strategy from site data on mount
   useEffect(() => {
-    if (site?.seo_focus && Array.isArray(site.seo_focus)) {
-      const focus = site.seo_focus;
+    if (site) {
+      // Parse seo_focus for objective and seeds
+      const focus = site.seo_focus || [];
       const objective = focus.find(f => !f?.startsWith('monetization:') && !f?.startsWith('seeds:')) || '';
-      const monetizationItem = focus.find(f => f?.startsWith('monetization:'));
       const seedsItem = focus.find(f => f?.startsWith('seeds:'));
+
+      // Monetization: priorité à la colonne dédiée, fallback sur seo_focus (compatibilité)
+      let monetization = site.monetization_types || [];
+      if ((!monetization || monetization.length === 0) && Array.isArray(focus)) {
+        const monetizationItem = focus.find(f => f?.startsWith('monetization:'));
+        if (monetizationItem) {
+          monetization = monetizationItem.replace('monetization:', '').split(',').filter(Boolean);
+        }
+      }
 
       setSiteStrategy(s => ({
         ...s,
         objective: objective,
-        monetization: monetizationItem ? monetizationItem.replace('monetization:', '').split(',') : [],
+        monetization: monetization,
         seedKeywords: seedsItem ? seedsItem.replace('seeds:', '').split(',') : [],
         targetAudience: site.target_audience || '',
         geoFocus: site.geographic_focus || 'France'
