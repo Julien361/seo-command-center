@@ -234,12 +234,20 @@ export default function SeoCoach({ onNavigate }) {
     try {
       // Lancer le workflow via webhook
       console.log('[Workflow] Lancement:', workflow.name);
+
+      // Extraire l'objectif SEO du site (seo_focus est un array)
+      const seoFocus = selectedSite.seo_focus || [];
+      const siteObjective = Array.isArray(seoFocus) ? seoFocus.join('; ') : seoFocus;
+
       const result = await n8nApi.triggerWebhook(workflow.webhook, {
         site_alias: selectedSite.mcp_alias,
         site_url: selectedSite.url,
-        site_id: selectedSite.id
+        site_id: selectedSite.id,
+        site_objective: siteObjective,
+        target_audience: selectedSite.target_audience,
+        geographic_focus: selectedSite.geographic_focus || 'France'
       });
-      console.log('[Workflow] Webhook declenche');
+      console.log('[Workflow] Webhook declenche avec objectif:', siteObjective?.substring(0, 50));
 
       // Polling pour suivre l'exécution réelle
       let checkCount = 0;
