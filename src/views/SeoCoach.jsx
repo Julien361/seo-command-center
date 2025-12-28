@@ -576,6 +576,103 @@ export default function SeoCoach({ onNavigate }) {
         </select>
       </div>
 
+      {/* Contexte du site sélectionné */}
+      {selectedSite && (
+        <Card className="!p-4">
+          <div className="flex items-start justify-between gap-6">
+            {/* Infos principales */}
+            <div className="flex-1 grid grid-cols-2 md:grid-cols-4 gap-4">
+              {/* Monétisation */}
+              <div>
+                <div className="text-xs text-dark-muted mb-1">💰 Monetisation</div>
+                <div className="flex flex-wrap gap-1">
+                  {(selectedSite.monetization_types || []).map((type, i) => (
+                    <Badge key={i} variant="warning" size="sm">{type}</Badge>
+                  ))}
+                  {(!selectedSite.monetization_types || selectedSite.monetization_types.length === 0) && (
+                    <span className="text-dark-muted text-xs">Non defini</span>
+                  )}
+                </div>
+              </div>
+
+              {/* Audience cible */}
+              <div>
+                <div className="text-xs text-dark-muted mb-1">🎯 Audience</div>
+                <div className="text-sm text-white truncate" title={selectedSite.target_audience}>
+                  {selectedSite.target_audience?.substring(0, 40) || 'Non definie'}
+                  {selectedSite.target_audience?.length > 40 && '...'}
+                </div>
+              </div>
+
+              {/* Zone géographique */}
+              <div>
+                <div className="text-xs text-dark-muted mb-1">📍 Zone</div>
+                <div className="text-sm text-white">
+                  {selectedSite.geographic_focus || 'France'}
+                </div>
+              </div>
+
+              {/* Focus SEO */}
+              <div>
+                <div className="text-xs text-dark-muted mb-1">🔍 Focus SEO</div>
+                <div className="text-sm text-white truncate" title={Array.isArray(selectedSite.seo_focus) ? selectedSite.seo_focus[0] : selectedSite.seo_focus}>
+                  {Array.isArray(selectedSite.seo_focus) && selectedSite.seo_focus[0]
+                    ? selectedSite.seo_focus[0].substring(0, 40) + (selectedSite.seo_focus[0].length > 40 ? '...' : '')
+                    : 'Non defini'}
+                </div>
+              </div>
+            </div>
+
+            {/* Stats existantes - indicateur d'analyse deja faite */}
+            {phaseData?.stats && (
+              <div className="flex gap-3 border-l border-dark-border pl-4">
+                <div className="text-center">
+                  <div className={`text-lg font-bold ${phaseData.stats.keywords > 0 ? 'text-success' : 'text-dark-muted'}`}>
+                    {phaseData.stats.keywords}
+                  </div>
+                  <div className="text-[10px] text-dark-muted">Keywords</div>
+                </div>
+                <div className="text-center">
+                  <div className={`text-lg font-bold ${phaseData.stats.competitors > 0 ? 'text-success' : 'text-dark-muted'}`}>
+                    {phaseData.stats.competitors}
+                  </div>
+                  <div className="text-[10px] text-dark-muted">Concurrents</div>
+                </div>
+                <div className="text-center">
+                  <div className={`text-lg font-bold ${phaseData.stats.clusters > 0 ? 'text-success' : 'text-dark-muted'}`}>
+                    {phaseData.stats.clusters}
+                  </div>
+                  <div className="text-[10px] text-dark-muted">Cocons</div>
+                </div>
+                <div className="text-center">
+                  <div className={`text-lg font-bold ${phaseData.stats.articles?.published > 0 ? 'text-success' : 'text-dark-muted'}`}>
+                    {phaseData.stats.articles?.published || 0}
+                  </div>
+                  <div className="text-[10px] text-dark-muted">Publies</div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Message si analyse deja faite */}
+          {phaseData?.stats?.keywords > 0 && (
+            <div className="mt-3 pt-3 border-t border-dark-border flex items-center gap-2 text-sm">
+              <span className="text-success">✓</span>
+              <span className="text-dark-muted">
+                Analyse deja effectuee : {phaseData.stats.keywords} keywords trouves
+                {phaseData.stats.quickWins > 0 && `, ${phaseData.stats.quickWins} quick wins`}
+              </span>
+              <button
+                onClick={() => onNavigate && onNavigate('keywords', selectedSite)}
+                className="text-primary hover:underline ml-2"
+              >
+                Voir les keywords →
+              </button>
+            </div>
+          )}
+        </Card>
+      )}
+
       {/* Barre de progression globale */}
       {phaseData && !loading && (
         <Card className="!p-4 bg-gradient-to-r from-dark-card to-primary/10 border-primary/30">
