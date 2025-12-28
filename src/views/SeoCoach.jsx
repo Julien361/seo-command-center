@@ -812,40 +812,52 @@ export default function SeoCoach({ onNavigate }) {
 
                           {/* Contenu */}
                           <div className="flex-1 min-w-0">
-                            <div className={`font-medium text-sm ${isCompleted ? 'text-success line-through' : 'text-white'}`}>
-                              {step.name}
+                            <div className="flex items-center gap-2">
+                              <span className={`font-medium text-sm ${isCompleted ? 'text-success' : 'text-white'}`}>
+                                {step.name}
+                              </span>
+                              {/* Compteur */}
+                              {step.count !== undefined && (
+                                <span className={`text-xs px-1.5 py-0.5 rounded ${
+                                  isCompleted ? 'bg-success/20 text-success' :
+                                  step.count > 0 ? 'bg-primary/20 text-primary' : 'bg-dark-border text-dark-muted'
+                                }`}>
+                                  {step.count}/{step.target}
+                                </span>
+                              )}
                             </div>
-                            {step.actions && step.actions.length > 0 && !isCompleted && (
-                              <div className="text-xs text-dark-muted mt-0.5 truncate">
-                                {step.actions[0]}
-                              </div>
-                            )}
+                            {/* Résultat ou action */}
+                            <div className="text-xs text-dark-muted mt-0.5 truncate">
+                              {step.actions && step.actions[0]}
+                            </div>
                           </div>
 
-                          {/* Actions */}
-                          {!isCompleted && (
-                            <div className="flex gap-1">
-                              {config.workflow && (
-                                <button
-                                  onClick={() => handleLaunchWorkflow(config.workflow)}
-                                  disabled={workflowExecution?.status === 'running'}
-                                  className="p-1.5 bg-primary/20 text-primary rounded hover:bg-primary/30 text-xs"
-                                  title="Lancer"
-                                >
-                                  ▶
-                                </button>
-                              )}
-                              {config.page && (
-                                <button
-                                  onClick={() => onNavigate && onNavigate(config.page)}
-                                  className="p-1.5 bg-dark-border text-white rounded hover:bg-dark-bg text-xs"
-                                  title="Voir"
-                                >
-                                  →
-                                </button>
-                              )}
-                            </div>
-                          )}
+                          {/* Actions - toujours afficher le bouton Voir */}
+                          <div className="flex gap-1">
+                            {!isCompleted && config.workflow && (
+                              <button
+                                onClick={() => handleLaunchWorkflow(config.workflow)}
+                                disabled={workflowExecution?.status === 'running'}
+                                className="p-1.5 bg-primary/20 text-primary rounded hover:bg-primary/30 text-xs"
+                                title="Lancer"
+                              >
+                                ▶
+                              </button>
+                            )}
+                            {config.page && (
+                              <button
+                                onClick={() => onNavigate && onNavigate(config.page, selectedSite)}
+                                className={`p-1.5 rounded text-xs ${
+                                  isCompleted
+                                    ? 'bg-success/20 text-success hover:bg-success/30'
+                                    : 'bg-dark-border text-white hover:bg-dark-bg'
+                                }`}
+                                title="Voir les resultats"
+                              >
+                                →
+                              </button>
+                            )}
+                          </div>
                         </div>
                       </div>
                     );

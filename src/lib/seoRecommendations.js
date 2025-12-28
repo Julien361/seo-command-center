@@ -382,6 +382,7 @@ export function generateRecommendations(phaseResult, site) {
 
 /**
  * Génère un plan d'action pour atteindre la Position 0
+ * Affiche TOUTES les étapes avec leur statut réel basé sur les données
  */
 export function generatePosition0Roadmap(phaseResult, site) {
   const { phaseNumber, stats } = phaseResult;
@@ -394,63 +395,102 @@ export function generatePosition0Roadmap(phaseResult, site) {
     requiredInvestment: 0
   };
 
-  // Étapes restantes
-  if (phaseNumber <= 1) {
-    roadmap.steps.push({
-      step: 1,
-      name: 'Recherche de keywords',
-      status: phaseNumber === 1 ? 'in_progress' : 'pending',
-      actions: ['Lancer WF0-Cascade avec keyword seed'],
-      cost: 0.15
-    });
-  }
+  // Calculer le statut réel de chaque étape basé sur les données
+  const getStepStatus = (stepNum, isCompleted, isInProgress) => {
+    if (isCompleted) return 'completed';
+    if (isInProgress) return 'in_progress';
+    return 'pending';
+  };
 
-  if (phaseNumber <= 2) {
-    roadmap.steps.push({
-      step: 2,
-      name: 'Analyse concurrentielle',
-      status: phaseNumber === 2 ? 'in_progress' : phaseNumber > 2 ? 'completed' : 'pending',
-      actions: ['Analyser top 5 concurrents', 'Identifier leurs featured snippets'],
-      cost: 0.12
-    });
-  }
+  // Étape 1: Recherche de keywords (complété si >= 20 keywords)
+  const step1Completed = stats.keywords >= 20;
+  const step1InProgress = stats.keywords > 0 && stats.keywords < 20;
+  roadmap.steps.push({
+    step: 1,
+    name: 'Recherche de keywords',
+    status: getStepStatus(1, step1Completed, step1InProgress),
+    actions: step1Completed
+      ? [`${stats.keywords} keywords trouves`]
+      : ['Lancer WF0-Cascade avec keyword seed'],
+    cost: step1Completed ? 0 : 0.15,
+    count: stats.keywords,
+    target: 20
+  });
 
-  if (phaseNumber <= 3) {
-    roadmap.steps.push({
-      step: 3,
-      name: 'Architecture des cocons',
-      status: phaseNumber === 3 ? 'in_progress' : phaseNumber > 3 ? 'completed' : 'pending',
-      actions: ['Créer 1-2 cocons sémantiques', 'Définir maillage interne'],
-      cost: 0.10
-    });
-  }
+  // Étape 2: Analyse concurrentielle (complété si >= 3 concurrents)
+  const step2Completed = stats.competitors >= 3;
+  const step2InProgress = stats.competitors > 0 && stats.competitors < 3;
+  roadmap.steps.push({
+    step: 2,
+    name: 'Analyse concurrentielle',
+    status: getStepStatus(2, step2Completed, step2InProgress),
+    actions: step2Completed
+      ? [`${stats.competitors} concurrents analyses`]
+      : ['Analyser top 5 concurrents', 'Identifier leurs featured snippets'],
+    cost: step2Completed ? 0 : 0.12,
+    count: stats.competitors,
+    target: 3
+  });
 
-  if (phaseNumber <= 4) {
-    roadmap.steps.push({
-      step: 4,
-      name: 'Création de contenu',
-      status: phaseNumber === 4 ? 'in_progress' : phaseNumber > 4 ? 'completed' : 'pending',
-      actions: ['Rédiger articles piliers (3000+ mots)', 'Rédiger satellites (1500 mots)', 'Optimiser pour Position 0'],
-      cost: 0.50
-    });
-  }
+  // Étape 3: Architecture des cocons (complété si >= 1 cocon)
+  const step3Completed = stats.clusters >= 1;
+  const step3InProgress = phaseNumber === 3 && !step3Completed;
+  roadmap.steps.push({
+    step: 3,
+    name: 'Architecture des cocons',
+    status: getStepStatus(3, step3Completed, step3InProgress),
+    actions: step3Completed
+      ? [`${stats.clusters} cocon(s) cree(s)`]
+      : ['Creer 1-2 cocons semantiques', 'Definir maillage interne'],
+    cost: step3Completed ? 0 : 0.10,
+    count: stats.clusters,
+    target: 1
+  });
 
-  if (phaseNumber <= 5) {
-    roadmap.steps.push({
-      step: 5,
-      name: 'Publication',
-      status: phaseNumber === 5 ? 'in_progress' : phaseNumber > 5 ? 'completed' : 'pending',
-      actions: ['Publier sur WordPress', 'Soumettre sitemap à Google'],
-      cost: 0
-    });
-  }
+  // Étape 4: Création de contenu (complété si articles en rédaction/review)
+  const articlesInProgress = stats.articles.draft + stats.articles.writing + stats.articles.review;
+  const step4Completed = articlesInProgress > 0 || stats.articles.published > 0;
+  const step4InProgress = phaseNumber === 4;
+  roadmap.steps.push({
+    step: 4,
+    name: 'Creation de contenu',
+    status: getStepStatus(4, step4Completed, step4InProgress),
+    actions: step4Completed
+      ? [`${stats.articles.total} article(s) (${stats.articles.published} publies)`]
+      : ['Rediger articles piliers (3000+ mots)', 'Rediger satellites (1500 mots)'],
+    cost: step4Completed ? 0 : 0.50,
+    count: stats.articles.total,
+    target: 5
+  });
 
+  // Étape 5: Publication (complété si articles publiés)
+  const step5Completed = stats.articles.published > 0;
+  const step5InProgress = phaseNumber === 5;
+  roadmap.steps.push({
+    step: 5,
+    name: 'Publication',
+    status: getStepStatus(5, step5Completed, step5InProgress),
+    actions: step5Completed
+      ? [`${stats.articles.published} article(s) publies sur WordPress`]
+      : ['Publier sur WordPress', 'Soumettre sitemap a Google'],
+    cost: 0,
+    count: stats.articles.published,
+    target: 1
+  });
+
+  // Étape 6: Monitoring (complété si tracking actif)
+  const step6Completed = stats.trackingHistory > 0;
+  const step6InProgress = phaseNumber === 6 && !step6Completed;
   roadmap.steps.push({
     step: 6,
     name: 'Monitoring & Optimisation',
-    status: phaseNumber === 6 ? 'in_progress' : 'pending',
-    actions: ['Suivre positions GSC', 'Optimiser Quick Wins', 'Ajuster contenu selon SERP'],
-    cost: 0
+    status: getStepStatus(6, step6Completed, step6InProgress),
+    actions: step6Completed
+      ? [`${stats.trackingHistory} positions suivies`, `${stats.quickWins} quick wins`]
+      : ['Suivre positions GSC', 'Optimiser Quick Wins'],
+    cost: 0,
+    count: stats.trackingHistory,
+    target: 10
   });
 
   // Calculer l'investissement restant
@@ -459,10 +499,11 @@ export function generatePosition0Roadmap(phaseResult, site) {
     .reduce((sum, s) => sum + s.cost, 0);
 
   // Estimation du temps
-  const remainingSteps = roadmap.steps.filter(s => s.status !== 'completed').length;
-  if (remainingSteps <= 2) {
+  const completedSteps = roadmap.steps.filter(s => s.status === 'completed').length;
+  const remainingSteps = 6 - completedSteps;
+  if (remainingSteps <= 1) {
     roadmap.estimatedTimeToRank = '1-2 mois';
-  } else if (remainingSteps <= 4) {
+  } else if (remainingSteps <= 3) {
     roadmap.estimatedTimeToRank = '2-4 mois';
   } else {
     roadmap.estimatedTimeToRank = '4-6 mois';
