@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import Card from '../components/common/Card';
 import Badge from '../components/common/Badge';
 import Button from '../components/common/Button';
-import { sitesApi } from '../lib/supabase';
+import { sitesApi, keywordsApi, supabase } from '../lib/supabase';
 import { SEO_PHASES, detectCurrentPhase, calculateOverallProgress, generateProgressSummary } from '../lib/seoPhaseDetector';
 import { checkWorkflowHealth, generateHealthReport, getInactiveWorkflows, fetchExecutions } from '../lib/workflowHealth';
 import { generateRecommendations, generatePosition0Roadmap } from '../lib/seoRecommendations';
@@ -78,6 +78,7 @@ export default function SeoCoach({ onNavigate }) {
 
   // État du workflow en cours
   const [workflowExecution, setWorkflowExecution] = useState(null);
+  const [workflowResults, setWorkflowResults] = useState(null);
   const pollingRef = useRef(null);
 
   // Charger les sites
@@ -144,6 +145,68 @@ export default function SeoCoach({ onNavigate }) {
     };
   }, []);
 
+  // Charger les résultats du workflow terminé
+  const loadWorkflowResults = async (webhookType) => {
+    if (!selectedSite) return;
+
+    try {
+      let results = { site: selectedSite.mcp_alias };
+
+      // Selon le type de workflow, charger les données pertinentes
+      if (webhookType === 'seo-cascade-start' || webhookType === 'wf1') {
+        // Compter les keywords pour ce site
+        const { data: keywords, error } = await supabase
+          .from('keywords')
+          .select('id, keyword, search_volume, difficulty, created_at')
+          .eq('site_id', selectedSite.id)
+          .order('created_at', { ascending: false })
+          .limit(10);
+
+        if (!error && keywords) {
+          // Compter les keywords créés dans les 5 dernières minutes
+          const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+          const recentKeywords = keywords.filter(k => k.created_at > fiveMinutesAgo);
+
+          results.keywords = {
+            total: keywords.length,
+            recent: recentKeywords.length,
+            samples: recentKeywords.slice(0, 5).map(k => k.keyword)
+          };
+        }
+      } else if (webhookType === 'wf6') {
+        // Compter les cocons
+        const { data: clusters, error } = await supabase
+          .from('semantic_clusters')
+          .select('id, name, pillar_keyword')
+          .eq('site_id', selectedSite.id);
+
+        if (!error && clusters) {
+          results.clusters = {
+            total: clusters.length,
+            names: clusters.slice(0, 3).map(c => c.name || c.pillar_keyword)
+          };
+        }
+      } else if (webhookType === 'wf2' || webhookType === 'wf3') {
+        // Compter les concurrents
+        const { data: competitors, error } = await supabase
+          .from('competitors')
+          .select('id, domain')
+          .eq('site_id', selectedSite.id);
+
+        if (!error && competitors) {
+          results.competitors = {
+            total: competitors.length,
+            domains: competitors.slice(0, 5).map(c => c.domain)
+          };
+        }
+      }
+
+      setWorkflowResults(results);
+    } catch (error) {
+      console.error('Failed to load workflow results:', error);
+    }
+  };
+
   // Lancer un workflow avec suivi
   const handleLaunchWorkflow = async (workflow) => {
     if (!workflow || !workflow.webhook) {
@@ -206,6 +269,8 @@ export default function SeoCoach({ onNavigate }) {
           // Vérifier si terminé (après la durée estimée + marge)
           if (elapsed > totalDuration + 2000) {
             clearInterval(pollingRef.current);
+            // Charger les résultats
+            loadWorkflowResults(prev.workflow.webhook);
             return {
               ...prev,
               status: 'success',
@@ -268,13 +333,15 @@ export default function SeoCoach({ onNavigate }) {
     }
   };
 
-  // Naviguer vers les résultats
+  // Naviguer vers les résultats (avec filtre sur le site)
   const handleViewResults = () => {
     const resultPage = WORKFLOW_RESULT_PAGES[workflowExecution?.workflow?.webhook];
     if (resultPage && onNavigate) {
-      onNavigate(resultPage.view);
+      // Passer le site sélectionné pour filtrer les résultats
+      onNavigate(resultPage.view, selectedSite);
     }
     setWorkflowExecution(null);
+    setWorkflowResults(null);
   };
 
   const healthReport = workflowHealth ? generateHealthReport(workflowHealth) : null;
@@ -361,12 +428,62 @@ export default function SeoCoach({ onNavigate }) {
               </div>
             )}
 
-            {/* Message de succès */}
+            {/* Message de succès avec récapitulatif */}
             {workflowExecution.status === 'success' && (
               <div className="bg-success/10 border border-success/30 rounded-lg p-4 mb-6">
-                <p className="text-success text-sm">
-                  Le workflow a été exécuté avec succès. Les données ont été sauvegardées dans Supabase.
+                <p className="text-success text-sm font-medium mb-2">
+                  Recherche terminee pour {workflowResults?.site || selectedSite?.mcp_alias}
                 </p>
+
+                {/* Récapitulatif des résultats */}
+                {workflowResults?.keywords && (
+                  <div className="mt-3 space-y-2">
+                    <div className="flex items-center gap-2 text-white text-sm">
+                      <span className="text-success">✓</span>
+                      <span>{workflowResults.keywords.recent || workflowResults.keywords.total} nouveaux keywords trouves</span>
+                    </div>
+                    {workflowResults.keywords.samples?.length > 0 && (
+                      <div className="pl-5 text-xs text-dark-muted">
+                        Exemples: {workflowResults.keywords.samples.slice(0, 3).join(', ')}
+                        {workflowResults.keywords.samples.length > 3 && '...'}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {workflowResults?.clusters && (
+                  <div className="mt-3 space-y-2">
+                    <div className="flex items-center gap-2 text-white text-sm">
+                      <span className="text-success">✓</span>
+                      <span>{workflowResults.clusters.total} cocons crees</span>
+                    </div>
+                    {workflowResults.clusters.names?.length > 0 && (
+                      <div className="pl-5 text-xs text-dark-muted">
+                        {workflowResults.clusters.names.join(', ')}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {workflowResults?.competitors && (
+                  <div className="mt-3 space-y-2">
+                    <div className="flex items-center gap-2 text-white text-sm">
+                      <span className="text-success">✓</span>
+                      <span>{workflowResults.competitors.total} concurrents analyses</span>
+                    </div>
+                    {workflowResults.competitors.domains?.length > 0 && (
+                      <div className="pl-5 text-xs text-dark-muted">
+                        {workflowResults.competitors.domains.slice(0, 3).join(', ')}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {!workflowResults && (
+                  <p className="text-dark-muted text-xs mt-1">
+                    Les donnees ont ete sauvegardees dans Supabase.
+                  </p>
+                )}
               </div>
             )}
 

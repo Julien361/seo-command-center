@@ -18,19 +18,26 @@ const intentLabels = {
   navigational: 'Nav.',
 };
 
-export default function Keywords() {
+export default function Keywords({ initialSite }) {
   const [keywords, setKeywords] = useState([]);
   const [sites, setSites] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterIntent, setFilterIntent] = useState('all');
-  const [filterSite, setFilterSite] = useState('all');
+  const [filterSite, setFilterSite] = useState(initialSite?.id || 'all');
   const [showQuickWins, setShowQuickWins] = useState(false);
   const [showAnalyzeModal, setShowAnalyzeModal] = useState(false);
   const [analyzeKeyword, setAnalyzeKeyword] = useState('');
   const [analyzeSite, setAnalyzeSite] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+
+  // Mettre à jour le filtre si initialSite change
+  useEffect(() => {
+    if (initialSite?.id) {
+      setFilterSite(initialSite.id);
+    }
+  }, [initialSite]);
 
   useEffect(() => {
     loadData();
@@ -104,8 +111,26 @@ export default function Keywords() {
         <div>
           <h2 className="text-2xl font-bold text-white">Keywords Suivis</h2>
           <p className="text-dark-muted mt-1">
-            {isLoading ? 'Chargement...' : `${keywords.length} keywords sur ${sites.length} sites`}
+            {isLoading ? 'Chargement...' : (
+              filterSite !== 'all'
+                ? `${filteredKeywords.length} keywords pour ${sites.find(s => s.id === filterSite)?.mcp_alias || 'ce site'}`
+                : `${keywords.length} keywords sur ${sites.length} sites`
+            )}
           </p>
+          {/* Indicateur de filtre actif */}
+          {initialSite && filterSite !== 'all' && (
+            <div className="flex items-center gap-2 mt-2">
+              <Badge variant="primary" size="sm">
+                Filtre: {initialSite.mcp_alias}
+              </Badge>
+              <button
+                onClick={() => setFilterSite('all')}
+                className="text-xs text-dark-muted hover:text-white"
+              >
+                Voir tous les sites
+              </button>
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-3">
           <Button

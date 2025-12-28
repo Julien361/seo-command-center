@@ -139,17 +139,17 @@ function App() {
 
       // Analyse
       case 'keywords':
-        return <Keywords />;
+        return <Keywords initialSite={selectedSite} />;
       case 'quickwins':
-        return <QuickWins />;
+        return <QuickWins initialSite={selectedSite} />;
       case 'concurrents':
-        return <Concurrents />;
+        return <Concurrents initialSite={selectedSite} />;
       case 'backlinks':
-        return <Backlinks />;
+        return <Backlinks initialSite={selectedSite} />;
       case 'audit-contenu':
-        return <AuditContenu />;
+        return <AuditContenu initialSite={selectedSite} />;
       case 'cocons':
-        return <Cocons />;
+        return <Cocons initialSite={selectedSite} />;
 
       // Creation
       case 'idees':

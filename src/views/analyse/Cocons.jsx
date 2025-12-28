@@ -172,18 +172,25 @@ function MiniMindMap({ clusters }) {
   );
 }
 
-export default function Cocons() {
+export default function Cocons({ initialSite }) {
   const [clusters, setClusters] = useState([]);
   const [sites, setSites] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedSiteId, setSelectedSiteId] = useState('all');
+  const [selectedSiteId, setSelectedSiteId] = useState(initialSite?.id || 'all');
   const [selectedStatus, setSelectedStatus] = useState('all');
   const [expandedClusters, setExpandedClusters] = useState({});
   const [selectedCluster, setSelectedCluster] = useState(null);
   const [isCreating, setIsCreating] = useState(false);
   const [showNewCoconModal, setShowNewCoconModal] = useState(false);
+
+  // Mettre à jour le filtre si initialSite change
+  useEffect(() => {
+    if (initialSite?.id) {
+      setSelectedSiteId(initialSite.id);
+    }
+  }, [initialSite]);
 
   useEffect(() => {
     loadData();
