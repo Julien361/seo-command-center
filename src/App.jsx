@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import Sidebar from './components/layout/Sidebar';
 import Header from './components/layout/Header';
 import { Dashboard, Sites, Keywords, Workflows, QuickWins, Articles, AddSite, Settings, Cocons, Concurrents, Backlinks, AuditContenu, Idees, Calendrier, SchemaMarkup, LiensInternes, Briefs, ImagesSeo, Pages, Publication, Positions, Performance, Alertes, Ameliorations, Revenus, SeoLocal, SeoTechnique, Credentials } from './views';
+import SeoCoach from './views/SeoCoach';
 import PlaceholderView from './views/PlaceholderView';
 import { sitesApi } from './lib/supabase';
 
@@ -33,6 +34,7 @@ import {
 const viewConfig = {
   // Main
   dashboard: { title: 'Dashboard', description: 'Vue d\'ensemble de vos performances SEO' },
+  coach: { title: 'SEO Coach', description: 'Assistant intelligent pour atteindre la Position 0' },
   sites: { title: 'Sites', description: 'Gerer vos sites WordPress' },
   'add-site': { title: 'Ajouter un site', description: 'Configurer un nouveau site' },
   settings: { title: 'Parametres', description: 'Configuration de l\'application' },
@@ -126,6 +128,8 @@ function App() {
     switch (activeView) {
       case 'dashboard':
         return <Dashboard />;
+      case 'coach':
+        return <SeoCoach />;
       case 'sites':
         return <Sites onNavigate={handleViewChange} />;
       case 'add-site':

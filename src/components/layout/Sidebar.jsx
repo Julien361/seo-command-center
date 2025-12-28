@@ -10,7 +10,8 @@ import {
   ChevronUp,
   ChevronDown,
   Plus,
-  ExternalLink
+  ExternalLink,
+  Brain
 } from 'lucide-react';
 import { Terminal as XTerm } from 'xterm';
 import { FitAddon } from 'xterm-addon-fit';
@@ -255,6 +256,22 @@ export default function Sidebar({ activeView, onViewChange }) {
         >
           <Plus className="w-4 h-4" />
           <span>Ajouter un site</span>
+        </button>
+      </div>
+
+      {/* SEO Coach */}
+      <div className="p-2 border-t border-dark-border">
+        <button
+          onClick={() => onViewChange('coach')}
+          className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
+            activeView === 'coach'
+              ? 'bg-gradient-to-r from-primary to-purple-500 text-white shadow-lg'
+              : 'bg-dark-border text-white hover:bg-primary/20 hover:text-primary'
+          }`}
+        >
+          <Brain className="w-4 h-4" />
+          <span>SEO Coach</span>
+          <span className="ml-auto text-xs opacity-70">AI</span>
         </button>
       </div>
 
