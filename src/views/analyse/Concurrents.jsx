@@ -494,64 +494,79 @@ export default function Concurrents({ initialSite }) {
         </Button>
       </div>
 
-      {/* Stats */}
+      {/* Stats - Utilise les données filtrées et cliquables */}
       <div className="grid grid-cols-5 gap-4">
-        <Card className="p-4">
+        <Card
+          className="p-4 cursor-pointer hover:border-primary/50 transition-colors"
+          onClick={() => setActiveTab('research')}
+        >
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-lg bg-primary/10">
               <BookOpen className="w-5 h-5 text-primary" />
             </div>
             <div>
-              <div className="text-2xl font-bold text-white">{marketResearch.length}</div>
+              <div className="text-2xl font-bold text-white">{filteredResearch.length}</div>
               <div className="text-sm text-dark-muted">Recherches</div>
             </div>
           </div>
         </Card>
-        <Card className="p-4">
+        <Card
+          className="p-4 cursor-pointer hover:border-primary/50 transition-colors"
+          onClick={() => setActiveTab('competitors')}
+        >
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-lg bg-info/10">
               <Target className="w-5 h-5 text-info" />
             </div>
             <div>
-              <div className="text-2xl font-bold text-white">{competitors.length}</div>
+              <div className="text-2xl font-bold text-white">{filteredCompetitors.length}</div>
               <div className="text-sm text-dark-muted">Concurrents</div>
             </div>
           </div>
         </Card>
-        <Card className="p-4">
+        <Card
+          className="p-4 cursor-pointer hover:border-primary/50 transition-colors"
+          onClick={() => setActiveTab('competitors')}
+        >
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-lg bg-success/10">
               <TrendingUp className="w-5 h-5 text-success" />
             </div>
             <div>
               <div className="text-2xl font-bold text-white">
-                {competitors.filter(c => (c.domain_rating || 0) >= 50).length}
+                {filteredCompetitors.filter(c => (c.domain_rating || 0) >= 50).length}
               </div>
               <div className="text-sm text-dark-muted">DR 50+</div>
             </div>
           </div>
         </Card>
-        <Card className="p-4">
+        <Card
+          className="p-4 cursor-pointer hover:border-primary/50 transition-colors"
+          onClick={() => setActiveTab('research')}
+        >
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-lg bg-warning/10">
               <Quote className="w-5 h-5 text-warning" />
             </div>
             <div>
               <div className="text-2xl font-bold text-white">
-                {marketResearch.reduce((sum, r) => sum + (r.citations?.length || 0), 0)}
+                {filteredResearch.reduce((sum, r) => sum + (r.citations?.length || 0), 0)}
               </div>
               <div className="text-sm text-dark-muted">Citations</div>
             </div>
           </div>
         </Card>
-        <Card className="p-4">
+        <Card
+          className="p-4 cursor-pointer hover:border-primary/50 transition-colors"
+          onClick={() => setActiveTab('competitors')}
+        >
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-lg bg-danger/10">
               <Link className="w-5 h-5 text-danger" />
             </div>
             <div>
               <div className="text-2xl font-bold text-white">
-                {competitors.reduce((sum, c) => sum + (c.backlinks_count || 0), 0).toLocaleString()}
+                {filteredCompetitors.reduce((sum, c) => sum + (c.backlinks_count || 0), 0).toLocaleString()}
               </div>
               <div className="text-sm text-dark-muted">Backlinks</div>
             </div>
