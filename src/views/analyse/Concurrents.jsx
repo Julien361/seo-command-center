@@ -27,9 +27,9 @@ function CompetitorCard({ competitor, onAnalyze, onDelete }) {
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h3 className="font-medium text-white">{competitor.domain}</h3>
+              <h3 className="font-medium text-white">{competitor.competitor_domain || competitor.competitor_name || '-'}</h3>
               <a
-                href={`https://${competitor.domain}`}
+                href={`https://${competitor.competitor_domain || ''}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-dark-muted hover:text-primary"
@@ -37,9 +37,9 @@ function CompetitorCard({ competitor, onAnalyze, onDelete }) {
                 <ExternalLink className="w-3 h-3" />
               </a>
             </div>
-            {competitor.focus_keyword && (
+            {competitor.primary_focus && (
               <p className="text-sm text-dark-muted mt-0.5">
-                Focus: {competitor.focus_keyword}
+                Focus: {competitor.primary_focus}
               </p>
             )}
           </div>
@@ -124,9 +124,11 @@ function AddCompetitorModal({ isOpen, onClose, sites, onAdd }) {
     setIsLoading(true);
     try {
       await onAdd({
-        domain: domain.replace(/^https?:\/\//, '').replace(/\/$/, ''),
+        competitor_domain: domain.replace(/^https?:\/\//, '').replace(/\/$/, ''),
+        competitor_name: domain.replace(/^https?:\/\//, '').replace(/\/$/, '').split('.')[0],
         site_id: siteId,
-        focus_keyword: focusKeyword || null
+        is_direct_competitor: true,
+        primary_focus: focusKeyword || null
       });
       setDomain('');
       setFocusKeyword('');
@@ -386,7 +388,7 @@ export default function Concurrents({ initialSite }) {
   };
 
   const handleDeleteCompetitor = async (competitor) => {
-    if (!confirm(`Supprimer le concurrent ${competitor.domain} ?`)) return;
+    if (!confirm(`Supprimer le concurrent ${competitor.competitor_domain || competitor.competitor_name} ?`)) return;
 
     const { error } = await supabase
       .from('competitors')
@@ -408,19 +410,19 @@ export default function Concurrents({ initialSite }) {
       return;
     }
 
-    if (!confirm(`Analyser ${competitor.domain} ?\n\nAttention: Cette opération utilise l'API Firecrawl (~0.10€).`)) {
+    if (!confirm(`Analyser ${competitor.competitor_domain} ?\n\nAttention: Cette opération utilise l'API Firecrawl (~0.10€).`)) {
       return;
     }
 
     try {
       const result = await n8nApi.analyzeCompetitor(
-        `https://${competitor.domain}`,
+        `https://${competitor.competitor_domain}`,
         site.mcp_alias,
-        competitor.focus_keyword
+        competitor.primary_focus
       );
 
       if (result.success) {
-        alert(`Analyse de ${competitor.domain} lancée ! Les résultats seront disponibles dans quelques minutes.`);
+        alert(`Analyse de ${competitor.competitor_domain} lancée ! Les résultats seront disponibles dans quelques minutes.`);
         // Mettre à jour la date d'analyse
         await supabase
           .from('competitors')
@@ -437,7 +439,7 @@ export default function Concurrents({ initialSite }) {
 
   // Filter competitors
   const filteredCompetitors = competitors.filter(competitor => {
-    const domain = competitor.domain || '';
+    const domain = competitor.competitor_domain || competitor.competitor_name || '';
     const matchesSearch = domain.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesSite = selectedSiteId === 'all' || competitor.site_id === selectedSiteId;
     return matchesSearch && matchesSite;
