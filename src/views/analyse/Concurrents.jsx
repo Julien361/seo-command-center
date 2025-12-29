@@ -437,15 +437,18 @@ export default function Concurrents({ initialSite }) {
 
   // Filter competitors
   const filteredCompetitors = competitors.filter(competitor => {
-    const matchesSearch = competitor.domain.toLowerCase().includes(searchTerm.toLowerCase());
+    const domain = competitor.domain || '';
+    const matchesSearch = domain.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesSite = selectedSiteId === 'all' || competitor.site_id === selectedSiteId;
     return matchesSearch && matchesSite;
   });
 
   // Filter market research
   const filteredResearch = marketResearch.filter(research => {
-    const matchesSearch = (research.content || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          (research.research_type || '').toLowerCase().includes(searchTerm.toLowerCase());
+    const content = research.content || '';
+    const researchType = research.research_type || '';
+    const matchesSearch = content.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          researchType.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesSite = selectedSiteId === 'all' || research.site_id === selectedSiteId;
     return matchesSearch && matchesSite;
   });
