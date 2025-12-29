@@ -39,9 +39,9 @@ export const WORKFLOWS = {
   },
   WF2_PERPLEXITY: {
     id: 'deaMhuFxshQ23vIs',
-    name: 'Perplexity SEO Market Research',
-    webhook: 'wf2',
-    description: 'Recherche marché via Perplexity AI',
+    name: 'Claude Web Search Market Research',
+    webhook: 'claude-seo-research',
+    description: 'Recherche marché via Claude Web Search',
     category: 'dataCollection',
     isPaid: true,
     estimatedCost: 0.02,
@@ -482,13 +482,15 @@ export const n8nApi = {
   },
 
   /**
-   * Recherche marché Perplexity (WF2)
+   * Recherche marché Claude Web Search (WF2)
    * ATTENTION: Coûte ~0.02€
    */
-  async marketResearch(keyword, siteAlias) {
-    return triggerWebhook('wf2', {
-      keyword,
+  async marketResearch(keyword, siteAlias, siteId = null) {
+    return triggerWebhook('claude-seo-research', {
+      keyword_principal: keyword,
+      niche: keyword,
       site_alias: siteAlias,
+      site_id: siteId,
     });
   },
 
