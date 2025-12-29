@@ -1407,24 +1407,36 @@ export default function SeoCoach({ onNavigate }) {
                   </button>
                 </div>
 
-                {/* Actions rapides */}
+                {/* Actions rapides - Workflows individuels */}
                 <div className="mt-4 pt-4 border-t border-dark-border">
+                  <p className="text-xs text-dark-muted mb-3">Lancer un workflow :</p>
                   <div className="flex flex-wrap gap-2">
                     <Button
                       size="sm"
-                      variant="secondary"
+                      variant="primary"
                       onClick={() => handleLaunchWorkflow(WORKFLOWS.WF0_CASCADE)}
                       disabled={workflowExecution?.status === 'running'}
+                      title="WF0 - Cascade complète : Keywords + Marché + Concurrents"
                     >
-                      + Rechercher keywords
+                      Cascade complète
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => handleLaunchWorkflow(WORKFLOWS.WF2_PERPLEXITY)}
+                      disabled={workflowExecution?.status === 'running'}
+                      title="WF2 - Recherche marché via Claude Web Search"
+                    >
+                      Recherche Marché
                     </Button>
                     <Button
                       size="sm"
                       variant="secondary"
                       onClick={() => handleLaunchWorkflow(WORKFLOWS.WF6_CLUSTERING)}
                       disabled={workflowExecution?.status === 'running'}
+                      title="WF6 - Clustering sémantique"
                     >
-                      + Créer cocon
+                      Créer cocon
                     </Button>
                     <Button
                       size="sm"
@@ -1434,6 +1446,9 @@ export default function SeoCoach({ onNavigate }) {
                       + Nouvel article
                     </Button>
                   </div>
+                  <p className="text-[10px] text-dark-muted mt-2">
+                    Cascade = WF0+WF1+WF2+WF3 | Recherche Marché = WF2 seul
+                  </p>
                 </div>
               </Card>
             )}
