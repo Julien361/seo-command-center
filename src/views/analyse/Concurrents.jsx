@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Target, Plus, Search, ExternalLink, TrendingUp, TrendingDown, BarChart3, Link, FileText, RefreshCw, MoreVertical, Trash2, Eye, Globe } from 'lucide-react';
+import { Target, Plus, Search, ExternalLink, TrendingUp, TrendingDown, BarChart3, Link, FileText, RefreshCw, MoreVertical, Trash2, Eye, Globe, BookOpen, Quote, ChevronDown, ChevronUp } from 'lucide-react';
 import Card from '../../components/common/Card';
 import Badge from '../../components/common/Badge';
 import Button from '../../components/common/Button';
@@ -200,14 +200,139 @@ function AddCompetitorModal({ isOpen, onClose, sites, onAdd }) {
   );
 }
 
-export default function Concurrents() {
+// Research Card Component
+function ResearchCard({ research, sites }) {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const site = sites?.find(s => s.id === research.site_id);
+
+  const getTypeIcon = (type) => {
+    switch (type) {
+      case 'market_analysis': return <BarChart3 className="w-5 h-5 text-primary" />;
+      case 'trends_analysis': return <TrendingUp className="w-5 h-5 text-success" />;
+      case 'sources_resources': return <BookOpen className="w-5 h-5 text-warning" />;
+      default: return <FileText className="w-5 h-5 text-info" />;
+    }
+  };
+
+  const getTypeLabel = (type) => {
+    switch (type) {
+      case 'market_analysis': return 'Analyse Marche';
+      case 'trends_analysis': return 'Tendances & Evolution';
+      case 'sources_resources': return 'Sources & Ressources';
+      default: return type;
+    }
+  };
+
+  const citations = research.citations || [];
+  const content = research.content || '';
+  const preview = content.substring(0, 300);
+  const hasMore = content.length > 300;
+
+  return (
+    <Card className="p-4 hover:border-primary/50 transition-colors">
+      <div className="flex items-start justify-between mb-3">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-lg bg-dark-border flex items-center justify-center">
+            {getTypeIcon(research.research_type)}
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <Badge variant="primary">{getTypeLabel(research.research_type)}</Badge>
+              {site && (
+                <span className="text-sm text-dark-muted">{site.mcp_alias}</span>
+              )}
+            </div>
+            <p className="text-xs text-dark-muted mt-1">
+              {new Date(research.created_at).toLocaleDateString('fr-FR', {
+                day: 'numeric',
+                month: 'short',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+              })}
+            </p>
+          </div>
+        </div>
+        {citations.length > 0 && (
+          <Badge variant="warning" className="flex items-center gap-1">
+            <Quote className="w-3 h-3" />
+            {citations.length} sources
+          </Badge>
+        )}
+      </div>
+
+      <div className="text-sm text-white whitespace-pre-wrap">
+        {isExpanded ? content : preview}
+        {hasMore && !isExpanded && '...'}
+      </div>
+
+      {hasMore && (
+        <button
+          onClick={() => setIsExpanded(!isExpanded)}
+          className="mt-2 text-xs text-primary hover:underline flex items-center gap-1"
+        >
+          {isExpanded ? (
+            <>
+              <ChevronUp className="w-3 h-3" />
+              Voir moins
+            </>
+          ) : (
+            <>
+              <ChevronDown className="w-3 h-3" />
+              Voir plus
+            </>
+          )}
+        </button>
+      )}
+
+      {citations.length > 0 && (
+        <div className="mt-4 pt-4 border-t border-dark-border">
+          <div className="flex items-center gap-2 mb-2">
+            <Quote className="w-4 h-4 text-warning" />
+            <span className="text-sm font-medium text-dark-muted">Sources ({citations.length})</span>
+          </div>
+          <div className="space-y-2">
+            {(isExpanded ? citations : citations.slice(0, 3)).map((citation, idx) => (
+              <a
+                key={idx}
+                href={citation.url || citation}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block text-xs text-primary hover:underline truncate"
+              >
+                <ExternalLink className="w-3 h-3 inline mr-1" />
+                {citation.title || citation.url || citation}
+              </a>
+            ))}
+            {!isExpanded && citations.length > 3 && (
+              <span className="text-xs text-dark-muted">
+                +{citations.length - 3} autres sources
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+export default function Concurrents({ initialSite }) {
   const [competitors, setCompetitors] = useState([]);
+  const [marketResearch, setMarketResearch] = useState([]);
   const [sites, setSites] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedSiteId, setSelectedSiteId] = useState('all');
+  const [selectedSiteId, setSelectedSiteId] = useState(initialSite?.id || 'all');
   const [showAddModal, setShowAddModal] = useState(false);
+  const [activeTab, setActiveTab] = useState('research'); // 'research' ou 'competitors'
+
+  // Mettre à jour le filtre si initialSite change
+  useEffect(() => {
+    if (initialSite?.id) {
+      setSelectedSiteId(initialSite.id);
+    }
+  }, [initialSite]);
 
   useEffect(() => {
     loadData();
@@ -220,6 +345,7 @@ export default function Concurrents() {
         sitesApi.getAll()
       ]);
 
+      // Charger les concurrents
       const { data: competitorsData, error: compError } = await supabase
         .from('competitors')
         .select('*, sites(mcp_alias, domain)')
@@ -227,8 +353,19 @@ export default function Concurrents() {
 
       if (compError) throw compError;
 
+      // Charger les recherches marché (Claude Web Search)
+      const { data: researchData, error: researchError } = await supabase
+        .from('market_research')
+        .select('*, sites(mcp_alias, domain)')
+        .order('created_at', { ascending: false });
+
+      if (researchError) {
+        console.warn('Could not load market_research:', researchError);
+      }
+
       setSites(sitesData || []);
       setCompetitors(competitorsData || []);
+      setMarketResearch(researchData || []);
     } catch (err) {
       console.error('Error loading data:', err);
       setError(err.message);
@@ -305,12 +442,28 @@ export default function Concurrents() {
     return matchesSearch && matchesSite;
   });
 
+  // Filter market research
+  const filteredResearch = marketResearch.filter(research => {
+    const matchesSearch = (research.content || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          (research.research_type || '').toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSite = selectedSiteId === 'all' || research.site_id === selectedSiteId;
+    return matchesSearch && matchesSite;
+  });
+
   // Group by site
   const competitorsBySite = filteredCompetitors.reduce((acc, competitor) => {
     const site = sites.find(s => s.id === competitor.site_id);
     const siteName = site?.mcp_alias || site?.domain || 'Non assigne';
     if (!acc[siteName]) acc[siteName] = [];
     acc[siteName].push(competitor);
+    return acc;
+  }, {});
+
+  // Group research by type
+  const researchByType = filteredResearch.reduce((acc, research) => {
+    const type = research.research_type || 'other';
+    if (!acc[type]) acc[type] = [];
+    acc[type].push(research);
     return acc;
   }, {});
 
@@ -337,11 +490,22 @@ export default function Concurrents() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-5 gap-4">
         <Card className="p-4">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-lg bg-primary/10">
-              <Target className="w-5 h-5 text-primary" />
+              <BookOpen className="w-5 h-5 text-primary" />
+            </div>
+            <div>
+              <div className="text-2xl font-bold text-white">{marketResearch.length}</div>
+              <div className="text-sm text-dark-muted">Recherches</div>
+            </div>
+          </div>
+        </Card>
+        <Card className="p-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-info/10">
+              <Target className="w-5 h-5 text-info" />
             </div>
             <div>
               <div className="text-2xl font-bold text-white">{competitors.length}</div>
@@ -364,30 +528,56 @@ export default function Concurrents() {
         </Card>
         <Card className="p-4">
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-info/10">
-              <Link className="w-5 h-5 text-info" />
+            <div className="p-2 rounded-lg bg-warning/10">
+              <Quote className="w-5 h-5 text-warning" />
             </div>
             <div>
               <div className="text-2xl font-bold text-white">
-                {competitors.reduce((sum, c) => sum + (c.backlinks_count || 0), 0).toLocaleString()}
+                {marketResearch.reduce((sum, r) => sum + (r.citations?.length || 0), 0)}
               </div>
-              <div className="text-sm text-dark-muted">Backlinks total</div>
+              <div className="text-sm text-dark-muted">Citations</div>
             </div>
           </div>
         </Card>
         <Card className="p-4">
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-warning/10">
-              <FileText className="w-5 h-5 text-warning" />
+            <div className="p-2 rounded-lg bg-danger/10">
+              <Link className="w-5 h-5 text-danger" />
             </div>
             <div>
               <div className="text-2xl font-bold text-white">
-                {competitors.reduce((sum, c) => sum + (c.keywords_count || 0), 0).toLocaleString()}
+                {competitors.reduce((sum, c) => sum + (c.backlinks_count || 0), 0).toLocaleString()}
               </div>
-              <div className="text-sm text-dark-muted">Keywords total</div>
+              <div className="text-sm text-dark-muted">Backlinks</div>
             </div>
           </div>
         </Card>
+      </div>
+
+      {/* Tabs */}
+      <div className="flex gap-2">
+        <button
+          onClick={() => setActiveTab('research')}
+          className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+            activeTab === 'research'
+              ? 'bg-primary text-white'
+              : 'bg-dark-card text-dark-muted hover:text-white'
+          }`}
+        >
+          <BookOpen className="w-4 h-4 inline mr-2" />
+          Recherches Marche ({filteredResearch.length})
+        </button>
+        <button
+          onClick={() => setActiveTab('competitors')}
+          className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+            activeTab === 'competitors'
+              ? 'bg-primary text-white'
+              : 'bg-dark-card text-dark-muted hover:text-white'
+          }`}
+        >
+          <Target className="w-4 h-4 inline mr-2" />
+          Concurrents ({filteredCompetitors.length})
+        </button>
       </div>
 
       {/* Filters */}
@@ -424,44 +614,79 @@ export default function Concurrents() {
         </div>
       </Card>
 
-      {/* Competitors List */}
+      {/* Content based on active tab */}
       {error ? (
         <Card className="p-6 text-center">
           <p className="text-danger">{error}</p>
           <Button onClick={loadData} className="mt-4">Reessayer</Button>
         </Card>
-      ) : filteredCompetitors.length === 0 ? (
-        <Card className="p-12 text-center">
-          <Target className="w-12 h-12 mx-auto text-dark-muted mb-4" />
-          <h3 className="text-lg font-medium text-white mb-2">Aucun concurrent</h3>
-          <p className="text-dark-muted mb-6">Ajoutez vos concurrents pour les analyser</p>
-          <Button onClick={() => setShowAddModal(true)}>
-            <Plus className="w-4 h-4 mr-2" />
-            Ajouter un concurrent
-          </Button>
-        </Card>
-      ) : (
-        <div className="space-y-6">
-          {Object.entries(competitorsBySite).map(([siteName, siteCompetitors]) => (
-            <div key={siteName}>
-              <h3 className="text-sm font-medium text-dark-muted uppercase tracking-wider mb-3 flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-primary" />
-                {siteName}
-                <Badge variant="default" className="ml-2">{siteCompetitors.length}</Badge>
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {siteCompetitors.map(competitor => (
-                  <CompetitorCard
-                    key={competitor.id}
-                    competitor={competitor}
-                    onAnalyze={handleAnalyzeCompetitor}
-                    onDelete={handleDeleteCompetitor}
-                  />
-                ))}
+      ) : activeTab === 'research' ? (
+        /* Market Research Tab */
+        filteredResearch.length === 0 ? (
+          <Card className="p-12 text-center">
+            <BookOpen className="w-12 h-12 mx-auto text-dark-muted mb-4" />
+            <h3 className="text-lg font-medium text-white mb-2">Aucune recherche marche</h3>
+            <p className="text-dark-muted mb-6">Lancez WF2 depuis le SEO Coach pour analyser le marche</p>
+          </Card>
+        ) : (
+          <div className="space-y-4">
+            {Object.entries(researchByType).map(([type, researches]) => (
+              <div key={type}>
+                <h3 className="text-sm font-medium text-dark-muted uppercase tracking-wider mb-3 flex items-center gap-2">
+                  <span className={`w-2 h-2 rounded-full ${
+                    type === 'market_analysis' ? 'bg-primary' :
+                    type === 'trends_analysis' ? 'bg-success' :
+                    type === 'sources_resources' ? 'bg-warning' : 'bg-info'
+                  }`} />
+                  {type === 'market_analysis' ? 'Analyse Marche' :
+                   type === 'trends_analysis' ? 'Tendances & Evolution' :
+                   type === 'sources_resources' ? 'Sources & Ressources' : type}
+                  <Badge variant="default" className="ml-2">{researches.length}</Badge>
+                </h3>
+                <div className="space-y-4">
+                  {researches.map(research => (
+                    <ResearchCard key={research.id} research={research} sites={sites} />
+                  ))}
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )
+      ) : (
+        /* Competitors Tab */
+        filteredCompetitors.length === 0 ? (
+          <Card className="p-12 text-center">
+            <Target className="w-12 h-12 mx-auto text-dark-muted mb-4" />
+            <h3 className="text-lg font-medium text-white mb-2">Aucun concurrent</h3>
+            <p className="text-dark-muted mb-6">Ajoutez vos concurrents pour les analyser</p>
+            <Button onClick={() => setShowAddModal(true)}>
+              <Plus className="w-4 h-4 mr-2" />
+              Ajouter un concurrent
+            </Button>
+          </Card>
+        ) : (
+          <div className="space-y-6">
+            {Object.entries(competitorsBySite).map(([siteName, siteCompetitors]) => (
+              <div key={siteName}>
+                <h3 className="text-sm font-medium text-dark-muted uppercase tracking-wider mb-3 flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-primary" />
+                  {siteName}
+                  <Badge variant="default" className="ml-2">{siteCompetitors.length}</Badge>
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {siteCompetitors.map(competitor => (
+                    <CompetitorCard
+                      key={competitor.id}
+                      competitor={competitor}
+                      onAnalyze={handleAnalyzeCompetitor}
+                      onDelete={handleDeleteCompetitor}
+                    />
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )
       )}
 
       {/* Add Modal */}

@@ -245,8 +245,42 @@ export default function SeoCoach({ onNavigate }) {
             names: clusters.slice(0, 3).map(c => c.name || c.pillar_keyword)
           };
         }
-      } else if (webhookType === 'wf2' || webhookType === 'wf3') {
-        // Compter les concurrents
+      } else if (webhookType === 'wf2') {
+        // WF2 = Claude Web Search Research - charge depuis market_research
+        const { data: research, error } = await supabase
+          .from('market_research')
+          .select('id, research_type, content, citations, created_at')
+          .eq('site_id', selectedSite.id)
+          .order('created_at', { ascending: false })
+          .limit(10);
+
+        if (!error && research) {
+          // Compter les recherches créées dans les 10 dernières minutes
+          const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+          const recentResearch = research.filter(r => r.created_at > tenMinutesAgo);
+
+          // Extraire un résumé du contenu
+          const summaries = recentResearch.map(r => {
+            const content = r.content || '';
+            // Prendre les 200 premiers caractères
+            return content.substring(0, 200) + (content.length > 200 ? '...' : '');
+          });
+
+          // Compter les citations
+          const totalCitations = recentResearch.reduce((acc, r) => {
+            const citations = r.citations || [];
+            return acc + (Array.isArray(citations) ? citations.length : 0);
+          }, 0);
+
+          results.marketResearch = {
+            total: recentResearch.length,
+            types: [...new Set(recentResearch.map(r => r.research_type))],
+            summaries: summaries.slice(0, 2),
+            citationsCount: totalCitations
+          };
+        }
+      } else if (webhookType === 'wf3') {
+        // WF3 = DataForSEO Competitor Deep Dive - charge depuis competitors
         const { data: competitors, error } = await supabase
           .from('competitors')
           .select('id, domain')
@@ -573,6 +607,34 @@ export default function SeoCoach({ onNavigate }) {
                     {workflowResults.competitors.domains?.length > 0 && (
                       <div className="pl-5 text-xs text-dark-muted">
                         {workflowResults.competitors.domains.slice(0, 3).join(', ')}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {workflowResults?.marketResearch && (
+                  <div className="mt-3 space-y-2">
+                    <div className="flex items-center gap-2 text-white text-sm">
+                      <span className="text-success">✓</span>
+                      <span>{workflowResults.marketResearch.total} analyses de marche</span>
+                    </div>
+                    {workflowResults.marketResearch.types?.length > 0 && (
+                      <div className="pl-5 text-xs text-dark-muted">
+                        Types: {workflowResults.marketResearch.types.join(', ')}
+                      </div>
+                    )}
+                    {workflowResults.marketResearch.citationsCount > 0 && (
+                      <div className="pl-5 text-xs text-primary">
+                        📚 {workflowResults.marketResearch.citationsCount} sources citees
+                      </div>
+                    )}
+                    {workflowResults.marketResearch.summaries?.length > 0 && (
+                      <div className="pl-5 mt-2 space-y-2">
+                        {workflowResults.marketResearch.summaries.map((summary, idx) => (
+                          <div key={idx} className="text-xs text-dark-muted bg-dark-bg/50 p-2 rounded border-l-2 border-primary">
+                            {summary}
+                          </div>
+                        ))}
                       </div>
                     )}
                   </div>
