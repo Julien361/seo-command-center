@@ -347,8 +347,12 @@ export default function SeoCoach({ onNavigate }) {
         site_alias: selectedSite.mcp_alias,
         site_url: selectedSite.url,
         site_id: selectedSite.id,
+        // niche est le champ attendu par WF2 (Claude Web Search)
+        niche: siteObjective,
+        keyword_principal: siteObjective,
+        // Aliases pour compatibilité avec d'autres workflows
         site_objective: siteObjective,
-        objective: siteObjective, // Alias pour compatibilité
+        objective: siteObjective,
         target_audience: selectedSite.target_audience || '',
         geographic_focus: selectedSite.geographic_focus || 'France'
       };
