@@ -367,8 +367,16 @@ export async function triggerWebhook(webhookPath, data = {}, isTest = false) {
       }),
     });
 
+    // Handle non-ok responses
     if (!response.ok) {
       const errorText = await response.text();
+
+      // Special case: "No item to return" means workflow started but has no immediate response
+      // This is NOT an error - the workflow runs in background
+      if (errorText.includes('No item to return was found') || errorText.includes('Workflow was started')) {
+        return { success: true, data: { status: 'started', message: 'Workflow demarre en arriere-plan' } };
+      }
+
       throw new Error(`Webhook error: ${response.status} - ${errorText}`);
     }
 

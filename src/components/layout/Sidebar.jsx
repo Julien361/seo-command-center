@@ -1,20 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Globe,
   TrendingUp,
-  Settings,
   Workflow,
-  Key,
-  Terminal,
-  RotateCcw,
-  ChevronUp,
-  ChevronDown,
-  Plus,
-  ExternalLink
+  Plus
 } from 'lucide-react';
-import { Terminal as XTerm } from 'xterm';
-import { FitAddon } from 'xterm-addon-fit';
-import 'xterm/css/xterm.css';
 import { sitesApi, supabase } from '../../lib/supabase';
 
 // Entity color mapping
@@ -27,16 +17,10 @@ const entityColors = {
 };
 
 export default function Sidebar({ activeView, onViewChange }) {
-  const terminalRef = useRef(null);
-  const xtermRef = useRef(null);
-  const fitAddonRef = useRef(null);
-  const [isConnected, setIsConnected] = useState(false);
-  const [isTerminalExpanded, setIsTerminalExpanded] = useState(true);
   const [appVersion, setAppVersion] = useState('');
   const [sites, setSites] = useState([]);
   const [entities, setEntities] = useState({});
   const [searchTerm, setSearchTerm] = useState('');
-  const isElectron = typeof window !== 'undefined' && window.electronAPI?.isElectron;
 
   // Load sites and entities
   useEffect(() => {
@@ -62,7 +46,7 @@ export default function Sidebar({ activeView, onViewChange }) {
     return () => clearInterval(interval);
   }, []);
 
-  // Fetch app version
+  // Fetch app version (for Electron)
   useEffect(() => {
     if (window.updater) {
       window.updater.getStatus().then((status) => {
@@ -71,105 +55,13 @@ export default function Sidebar({ activeView, onViewChange }) {
     }
   }, []);
 
-  useEffect(() => {
-    if (!isElectron || !terminalRef.current || xtermRef.current) return;
-
-    const xterm = new XTerm({
-      theme: {
-        background: '#0f172a',
-        foreground: '#e2e8f0',
-        cursor: '#8b5cf6',
-        cursorAccent: '#0f172a',
-        selectionBackground: '#334155',
-      },
-      fontFamily: 'Menlo, Monaco, monospace',
-      fontSize: 11,
-      lineHeight: 1.2,
-      cursorBlink: true,
-      cursorStyle: 'bar',
-      scrollback: 5000,
-    });
-
-    const fitAddon = new FitAddon();
-    xterm.loadAddon(fitAddon);
-    xterm.open(terminalRef.current);
-
-    setTimeout(() => fitAddon.fit(), 100);
-
-    xtermRef.current = xterm;
-    fitAddonRef.current = fitAddon;
-
-    xterm.onData((data) => {
-      if (window.terminal) {
-        window.terminal.write(data);
-      }
-    });
-
-    window.terminal.onData((data) => {
-      xterm.write(data);
-    });
-
-    window.terminal.onExit((code) => {
-      xterm.writeln(`\r\n\x1b[33mClaude exited (${code})\x1b[0m`);
-      setIsConnected(false);
-    });
-
-    window.terminal.start().then(() => {
-      setIsConnected(true);
-      setTimeout(() => {
-        fitAddon.fit();
-        const dims = fitAddon.proposeDimensions();
-        if (dims) window.terminal.resize(dims.cols, dims.rows);
-      }, 200);
-    });
-
-    const handleResize = () => {
-      if (fitAddonRef.current) {
-        fitAddonRef.current.fit();
-        const dims = fitAddonRef.current.proposeDimensions();
-        if (dims && window.terminal) {
-          window.terminal.resize(dims.cols, dims.rows);
-        }
-      }
-    };
-
-    window.addEventListener('resize', handleResize);
-
-    return () => {
-      window.removeEventListener('resize', handleResize);
-      if (window.terminal) {
-        window.terminal.removeListeners();
-        window.terminal.stop();
-      }
-      if (xtermRef.current) {
-        xtermRef.current.dispose();
-        xtermRef.current = null;
-      }
-    };
-  }, [isElectron]);
-
-  const restartClaude = async () => {
-    if (!window.terminal) return;
-    setIsConnected(false);
-    await window.terminal.stop();
-    if (xtermRef.current) {
-      xtermRef.current.clear();
-      xtermRef.current.writeln('\x1b[33mRedemarrage...\x1b[0m\r\n');
-    }
-    await window.terminal.start();
-    setIsConnected(true);
-    if (fitAddonRef.current) {
-      fitAddonRef.current.fit();
-    }
-  };
-
   // Filter sites by search
   const filteredSites = sites.filter(site =>
     (site.mcp_alias || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
     (site.domain || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  // Group sites by entity (use entity name instead of ID)
+  // Group sites by entity
   const sitesByEntity = filteredSites.reduce((acc, site) => {
     const entityName = entities[site.entity_id] || 'Autres';
     if (!acc[entityName]) acc[entityName] = [];
@@ -215,7 +107,7 @@ export default function Sidebar({ activeView, onViewChange }) {
             </div>
             <ul className="space-y-0.5">
               {entitySites.map((site) => {
-                const isActive = activeView === 'sites' || activeView === `site-${site.id}`;
+                const isActive = activeView === `site-${site.id}`;
                 return (
                   <li key={site.id}>
                     <button
@@ -238,7 +130,7 @@ export default function Sidebar({ activeView, onViewChange }) {
 
         {filteredSites.length === 0 && (
           <div className="text-center py-8 text-dark-muted text-sm">
-            {searchTerm ? 'Aucun site trouvé' : 'Aucun site'}
+            {searchTerm ? 'Aucun site trouve' : 'Aucun site'}
           </div>
         )}
       </nav>
@@ -258,7 +150,7 @@ export default function Sidebar({ activeView, onViewChange }) {
         </button>
       </div>
 
-      {/* Config Section */}
+      {/* Workflows Button */}
       <div className="p-2 border-t border-dark-border">
         <button
           onClick={() => onViewChange('workflows')}
@@ -271,62 +163,6 @@ export default function Sidebar({ activeView, onViewChange }) {
           <Workflow className="w-4 h-4" />
           <span>Workflows n8n</span>
         </button>
-        <button
-          onClick={() => onViewChange('credentials')}
-          className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${
-            activeView === 'credentials'
-              ? 'bg-primary/20 text-primary'
-              : 'text-dark-muted hover:bg-dark-border hover:text-white'
-          }`}
-        >
-          <Key className="w-4 h-4" />
-          <span>Credentials</span>
-        </button>
-      </div>
-
-      {/* Claude Code Section */}
-      <div className="flex flex-col border-t border-dark-border min-h-0 flex-shrink-0" style={{ height: isTerminalExpanded ? '240px' : 'auto' }}>
-        {/* Claude Header */}
-        <div className="flex items-center justify-between px-3 py-2 border-b border-dark-border flex-shrink-0">
-          <div className="flex items-center gap-2">
-            <Terminal className="w-4 h-4 text-primary" />
-            <span className="text-sm font-medium text-white">Claude Code</span>
-            <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-success' : 'bg-warning'}`} />
-          </div>
-          <div className="flex items-center gap-1">
-            <button
-              onClick={restartClaude}
-              className="p-1 rounded hover:bg-dark-border text-dark-muted hover:text-white"
-              title="Redemarrer"
-            >
-              <RotateCcw className="w-3 h-3" />
-            </button>
-            <button
-              onClick={() => setIsTerminalExpanded(!isTerminalExpanded)}
-              className="p-1 rounded hover:bg-dark-border text-dark-muted hover:text-white"
-            >
-              {isTerminalExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />}
-            </button>
-          </div>
-        </div>
-
-        {/* Terminal */}
-        {isTerminalExpanded && (
-          <div
-            ref={terminalRef}
-            className="flex-1 overflow-hidden"
-            style={{ backgroundColor: '#0f172a' }}
-            onClick={() => xtermRef.current?.focus()}
-          />
-        )}
-
-        {!isElectron && isTerminalExpanded && (
-          <div className="flex-1 flex items-center justify-center p-4">
-            <p className="text-xs text-dark-muted text-center">
-              npm run electron:dev
-            </p>
-          </div>
-        )}
       </div>
     </aside>
   );
