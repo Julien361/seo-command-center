@@ -361,9 +361,23 @@ export default function SeoCoach({ onNavigate }) {
 
       // Polling pour suivre l'exécution réelle
       let checkCount = 0;
-      const maxChecks = 120; // 2 minutes max (120 * 1s)
+      const maxChecks = 90; // 90 secondes max
       let executionFound = null;
-      let lastStepIndex = 0;
+      let lastDataCount = 0; // Pour détecter les nouvelles données
+
+      // Compter les données existantes avant le workflow (pour WF2)
+      if (workflow.webhook === 'claude-seo-research') {
+        try {
+          const { count } = await supabase
+            .from('market_research')
+            .select('id', { count: 'exact', head: true })
+            .eq('site_id', selectedSite.id);
+          lastDataCount = count || 0;
+          console.log('[Workflow] Donnees market_research avant:', lastDataCount);
+        } catch (e) {
+          console.log('[Workflow] Erreur comptage initial:', e.message);
+        }
+      }
 
       pollingRef.current = setInterval(async () => {
         checkCount++;
@@ -392,12 +406,12 @@ export default function SeoCoach({ onNavigate }) {
 
         // Vérifier le statut réel toutes les 3 secondes
         if (checkCount % 3 === 0) {
+          // Méthode 1: Vérifier les exécutions n8n
           try {
             const executions = await fetchExecutions({ limit: 10 });
-            // Chercher l'exécution la plus récente pour ce workflow
             const recentExec = executions.find(e => {
               const execStart = new Date(e.startedAt).getTime();
-              return execStart > startTime - 5000; // Exécution démarrée après notre appel
+              return execStart > startTime - 5000;
             });
 
             if (recentExec) {
@@ -405,9 +419,8 @@ export default function SeoCoach({ onNavigate }) {
               console.log('[Workflow] Execution trouvee:', recentExec.id, 'status:', recentExec.status);
 
               if (recentExec.status === 'success') {
-                // Terminé avec succès !
                 clearInterval(pollingRef.current);
-                console.log('[Workflow] Termine avec succes');
+                console.log('[Workflow] Termine avec succes (n8n)');
                 loadWorkflowResults(workflow.webhook);
                 setWorkflowExecution(prev => ({
                   ...prev,
@@ -418,7 +431,6 @@ export default function SeoCoach({ onNavigate }) {
                 }));
                 return;
               } else if (recentExec.status === 'error') {
-                // Erreur
                 clearInterval(pollingRef.current);
                 console.log('[Workflow] Erreur detectee');
                 setWorkflowExecution(prev => ({
@@ -429,11 +441,34 @@ export default function SeoCoach({ onNavigate }) {
                 }));
                 return;
               }
-              // Sinon, running ou waiting - continuer le polling
             }
           } catch (e) {
-            console.log('[Workflow] Erreur polling (CORS probable):', e.message);
-            // En cas d'erreur CORS, on continue avec la progression simulée
+            console.log('[Workflow] Erreur polling n8n:', e.message);
+          }
+
+          // Méthode 2: Pour WF2, vérifier si nouvelles données dans Supabase
+          if (workflow.webhook === 'claude-seo-research' && checkCount > 15) {
+            try {
+              const { count } = await supabase
+                .from('market_research')
+                .select('id', { count: 'exact', head: true })
+                .eq('site_id', selectedSite.id);
+
+              if (count > lastDataCount) {
+                clearInterval(pollingRef.current);
+                console.log('[Workflow] Nouvelles donnees detectees:', count, '>', lastDataCount);
+                loadWorkflowResults(workflow.webhook);
+                setWorkflowExecution(prev => ({
+                  ...prev,
+                  status: 'success',
+                  progress: 100,
+                  currentStep: steps.length - 1,
+                }));
+                return;
+              }
+            } catch (e) {
+              console.log('[Workflow] Erreur verification Supabase:', e.message);
+            }
           }
         }
 
