@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import Sidebar from './components/layout/Sidebar';
 import Header from './components/layout/Header';
 import { Dashboard, Sites, Keywords, Workflows, QuickWins, Articles, AddSite, Settings, Cocons, Concurrents, Backlinks, AuditContenu, Idees, Calendrier, SchemaMarkup, LiensInternes, Briefs, ImagesSeo, Pages, Publication, Positions, Performance, Alertes, Ameliorations, Revenus, SeoLocal, SeoTechnique, Credentials } from './views';
-import SeoCoach from './views/SeoCoach';
+import SiteDashboard from './views/SiteDashboard';
 import PlaceholderView from './views/PlaceholderView';
 import { sitesApi } from './lib/supabase';
 
@@ -119,17 +119,15 @@ function App() {
   };
 
   const renderView = () => {
-    // Site detail view
+    // Site detail view - show simplified dashboard
     if (activeView.startsWith('site-') && selectedSite) {
-      return <Sites onNavigate={handleViewChange} selectedSite={selectedSite} />;
+      return <SiteDashboard site={selectedSite} onNavigate={handleViewChange} />;
     }
 
     // Main views
     switch (activeView) {
       case 'dashboard':
         return <Dashboard />;
-      case 'coach':
-        return <SeoCoach onNavigate={handleViewChange} />;
       case 'sites':
         return <Sites onNavigate={handleViewChange} />;
       case 'add-site':
