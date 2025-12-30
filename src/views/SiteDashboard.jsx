@@ -43,7 +43,7 @@ export default function SiteDashboard({ site, onNavigate }) {
         supabase.from('keywords').select('id', { count: 'exact', head: true }).eq('site_id', site.id).eq('is_quick_win', true),
         supabase.from('semantic_clusters').select('id', { count: 'exact', head: true }).eq('site_id', site.id),
         supabase.from('articles').select('id', { count: 'exact', head: true }).eq('site_id', site.id),
-        supabase.from('keyword_history').select('id', { count: 'exact', head: true }).eq('site_id', site.id),
+        supabase.from('gsc_keyword_history').select('id', { count: 'exact', head: true }).eq('site_id', site.id),
         supabase.from('articles').select('id', { count: 'exact', head: true }).eq('site_id', site.id).not('wp_post_id', 'is', null)
       ]);
 

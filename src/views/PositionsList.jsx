@@ -27,12 +27,12 @@ export default function PositionsList({ site, onBack }) {
       if (kwError) throw kwError;
       setKeywords(kwData || []);
 
-      // Load position history
+      // Load position history from GSC
       const { data: histData, error: histError } = await supabase
-        .from('keyword_history')
-        .select('*, keywords(keyword)')
+        .from('gsc_keyword_history')
+        .select('*')
         .eq('site_id', site.id)
-        .order('tracked_at', { ascending: false })
+        .order('recorded_at', { ascending: false })
         .limit(100);
 
       if (histError) throw histError;

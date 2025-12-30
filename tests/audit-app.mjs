@@ -1,7 +1,7 @@
 import { chromium } from 'playwright';
 import fs from 'fs';
 
-const BASE_URL = 'http://localhost:5177';
+const BASE_URL = 'http://localhost:4173';
 const REPORT_PATH = '/tmp/seo-audit-report.json';
 
 async function auditApp() {
