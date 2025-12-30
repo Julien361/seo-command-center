@@ -78,37 +78,84 @@ export default function SiteDashboard({ site, onNavigate }) {
     setSuccess(null);
 
     try {
+      const niche = Array.isArray(site.seo_focus) ? site.seo_focus[0] : site.seo_focus || '';
+
+      // DEBUG: Log site data
+      console.log('[SiteDashboard] Site object:', JSON.stringify(site, null, 2));
+      console.log('[SiteDashboard] site.url:', site.url);
+
+      // Validation: URL is required for workflows
+      if (!site.url) {
+        setError('URL du site manquante. Editez le site pour ajouter son URL.');
+        setLaunching(null);
+        return;
+      }
+
       const webhookData = {
         site_alias: site.mcp_alias,
         site_url: site.url,
+        url: site.url, // Add both for compatibility
         site_id: site.id,
-        niche: Array.isArray(site.seo_focus) ? site.seo_focus.join('; ') : site.seo_focus || '',
+        niche: niche,
+        site_objective: niche, // Required by WF0
+        objective: niche, // Alias for compatibility
         source: 'seo-command-center'
       };
 
       let result;
       switch (type) {
         case 'keywords':
-          result = await n8nApi.triggerWebhook('seo-cascade-start', { ...webhookData, workflow_type: 'keywords_only' });
+          // DataForSEO Keywords + Supabase (table: keywords)
+          result = await n8nApi.triggerWebhook('dataforseo-keywords', {
+            main_keyword: niche,
+            keyword: niche,
+            niche: niche,
+            site_alias: site.mcp_alias,
+            site_id: site.id
+          });
           break;
         case 'research':
-          result = await n8nApi.triggerWebhook('claude-seo-research', webhookData);
+          // Claude Web Search + Supabase (table: market_research)
+          result = await n8nApi.triggerWebhook('claude-seo-research', {
+            keyword_principal: niche,
+            niche: niche,
+            site_alias: site.mcp_alias,
+            site_id: site.id
+          });
           break;
         case 'competitors':
-          result = await n8nApi.triggerWebhook('wf3', webhookData);
+          // DataForSEO Competitor + Supabase (table: competitors)
+          result = await n8nApi.triggerWebhook('dataforseo-competitor', {
+            project_name: site.mcp_alias,
+            site_id: site.id,
+            competitor_urls: '',
+            analyze_with_ai: true
+          });
           break;
         case 'quickwins':
-          result = await n8nApi.triggerWebhook('seo-cascade-start', { ...webhookData, workflow_type: 'quickwins' });
+          // Quick Wins Calculator + Supabase (update: keywords.is_quick_win)
+          result = await n8nApi.triggerWebhook('quick-wins-calculate', {
+            site_id: site.id,
+            site_alias: site.mcp_alias,
+            min_volume: 100,
+            max_difficulty: 40,
+            min_position: 11,
+            max_position: 30
+          });
           break;
         case 'cocons':
-          result = await n8nApi.triggerWebhook('wf6', webhookData);
+          // Semantic Clustering + Supabase (table: semantic_clusters)
+          result = await n8nApi.triggerWebhook('semantic-clustering', {
+            site_id: site.id,
+            site_alias: site.mcp_alias,
+            main_keyword: niche,
+            niche: niche
+          });
           break;
         case 'positions':
           result = await n8nApi.triggerWebhook('position-monitor', webhookData);
           break;
         case 'published':
-          result = await n8nApi.triggerWebhook('auto-publish', webhookData);
-          break;
         case 'articles':
           onNavigate && onNavigate('articles', site);
           setLaunching(null);
