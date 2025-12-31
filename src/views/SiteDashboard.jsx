@@ -7,6 +7,7 @@ import {
 import Card from '../components/common/Card';
 import { supabase } from '../lib/supabase';
 import { n8nApi } from '../lib/n8n';
+import { claudeApi } from '../lib/claude';
 
 /**
  * Dashboard site avec 8 cartes pour Position 0
@@ -125,26 +126,33 @@ export default function SiteDashboard({ site, onNavigate }) {
       let result;
       switch (type) {
         case 'keywords':
-          // DataForSEO Keywords + Supabase (table: keywords)
-          // Run for each extracted keyword/seed
-          if (keywords.length === 0) {
-            setError('Aucun mot-clé configuré. Editez le site pour ajouter un focus SEO.');
+          // OPTIMIZED: 1 Claude call + N DataForSEO calls
+          // Step 1: Claude generates strategic seeds (1 API call)
+          setSuccess('Claude analyse le site...');
+          const seeds = await claudeApi.generateKeywordSeeds(site);
+          console.log('[Keywords] Claude seeds:', seeds);
+
+          if (!seeds || seeds.length === 0) {
+            setError('Impossible de générer des mots-clés. Vérifiez le focus SEO.');
             setLaunching(null);
             return;
           }
 
+          // Step 2: DataForSEO for each seed
+          setSuccess(`Recherche ${seeds.length} seeds...`);
           let totalFound = 0;
-          for (const kw of keywords) {
+          for (const seed of seeds) {
             const kwResult = await n8nApi.triggerWebhook('dataforseo-keywords', {
-              main_keyword: kw,
-              keyword: kw,
-              niche: kw,
+              main_keyword: seed,
+              keyword: seed,
+              niche: seed,
               site_alias: site.mcp_alias,
-              site_id: site.id
+              site_id: site.id,
+              business_model: site.monetization_types?.join(', ') || ''
             });
             totalFound += kwResult?.keywords_found || 0;
           }
-          result = { success: true, keywords_found: totalFound };
+          result = { success: true, keywords_found: totalFound, seeds_used: seeds.length };
           break;
         case 'research':
           // Claude Web Search + Supabase (table: market_research)
@@ -195,9 +203,10 @@ export default function SiteDashboard({ site, onNavigate }) {
       }
 
       if (result?.success !== false) {
-        const msg = type === 'keywords' && result?.keywords_found
-          ? `${result.keywords_found} keywords trouves !`
-          : 'Analyse lancee ! Rafraichis dans 1-2 min.';
+        let msg = 'Analyse lancee ! Rafraichis dans 1-2 min.';
+        if (type === 'keywords' && result?.keywords_found) {
+          msg = `${result.keywords_found} keywords (${result.seeds_used || 1} seeds)`;
+        }
         setSuccess(msg);
         setTimeout(() => {
           loadData();
