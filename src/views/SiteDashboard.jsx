@@ -70,6 +70,27 @@ export default function SiteDashboard({ site, onNavigate }) {
     setRefreshing(false);
   };
 
+  // Extract clean keywords from seo_focus
+  const extractKeywords = (seoFocus) => {
+    if (!seoFocus) return [];
+    const focusArray = Array.isArray(seoFocus) ? seoFocus : [seoFocus];
+
+    // Look for seeds: format first
+    for (const item of focusArray) {
+      if (typeof item === 'string' && item.startsWith('seeds:')) {
+        return item.replace('seeds:', '').split(';').map(s => s.trim()).filter(Boolean);
+      }
+    }
+
+    // Otherwise, extract from first item by splitting on commas
+    const first = focusArray[0] || '';
+    if (first.includes(',')) {
+      return first.split(',').map(s => s.trim()).filter(Boolean);
+    }
+
+    return first ? [first] : [];
+  };
+
   const handleLaunch = async (type) => {
     if (!site) return;
 
@@ -78,11 +99,10 @@ export default function SiteDashboard({ site, onNavigate }) {
     setSuccess(null);
 
     try {
-      const niche = Array.isArray(site.seo_focus) ? site.seo_focus[0] : site.seo_focus || '';
+      const keywords = extractKeywords(site.seo_focus);
+      const niche = keywords[0] || '';
 
-      // DEBUG: Log site data
-      console.log('[SiteDashboard] Site object:', JSON.stringify(site, null, 2));
-      console.log('[SiteDashboard] site.url:', site.url);
+      console.log('[SiteDashboard] Keywords extracted:', keywords);
 
       // Validation: URL is required for workflows
       if (!site.url) {
@@ -106,13 +126,25 @@ export default function SiteDashboard({ site, onNavigate }) {
       switch (type) {
         case 'keywords':
           // DataForSEO Keywords + Supabase (table: keywords)
-          result = await n8nApi.triggerWebhook('dataforseo-keywords', {
-            main_keyword: niche,
-            keyword: niche,
-            niche: niche,
-            site_alias: site.mcp_alias,
-            site_id: site.id
-          });
+          // Run for each extracted keyword/seed
+          if (keywords.length === 0) {
+            setError('Aucun mot-clé configuré. Editez le site pour ajouter un focus SEO.');
+            setLaunching(null);
+            return;
+          }
+
+          let totalFound = 0;
+          for (const kw of keywords) {
+            const kwResult = await n8nApi.triggerWebhook('dataforseo-keywords', {
+              main_keyword: kw,
+              keyword: kw,
+              niche: kw,
+              site_alias: site.mcp_alias,
+              site_id: site.id
+            });
+            totalFound += kwResult?.keywords_found || 0;
+          }
+          result = { success: true, keywords_found: totalFound };
           break;
         case 'research':
           // Claude Web Search + Supabase (table: market_research)
@@ -163,11 +195,14 @@ export default function SiteDashboard({ site, onNavigate }) {
       }
 
       if (result?.success !== false) {
-        setSuccess('Analyse lancee ! Rafraichis dans 1-2 min.');
+        const msg = type === 'keywords' && result?.keywords_found
+          ? `${result.keywords_found} keywords trouves !`
+          : 'Analyse lancee ! Rafraichis dans 1-2 min.';
+        setSuccess(msg);
         setTimeout(() => {
           loadData();
           setSuccess(null);
-        }, 10000);
+        }, 5000);
       } else {
         setError(result?.error || 'Erreur lors du lancement');
       }
