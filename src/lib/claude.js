@@ -21,31 +21,27 @@ export const claudeApi = {
     const urlDomain = site.url || site.domain || '';
     const alias = site.mcp_alias || '';
 
-    const prompt = `Tu es un expert SEO senior. Analyse ce site et génère des mots-clés seeds PERTINENTS.
+    const prompt = `Tu es un expert SEO senior. Génère des mots-clés seeds pour ce site.
 
-## SITE A ANALYSER
-- Nom/Alias: ${alias}
+## FOCUS SEO (SOURCE PRINCIPALE)
+${focusText || 'non spécifié'}
+
+## CONTEXTE ADDITIONNEL
+- Site: ${alias}
 - URL: ${urlDomain}
-- Focus SEO déclaré: ${focusText || 'non spécifié'}
 - Monétisation: ${site.monetization_types?.join(', ') || 'non spécifié'}
-- Audience cible: ${site.target_audience || 'non spécifié'}
+- Audience: ${site.target_audience || 'non spécifié'}
 ${existingSeeds.length ? `- Seeds existants: ${existingSeeds.join(', ')}` : ''}
 
-## ANALYSE REQUISE
-1. Déduis le DOMAINE PRINCIPAL du site depuis son URL et son nom (ex: "monassuranceanimal.fr" = assurance pour animaux)
-2. Identifie le SECTEUR D'ACTIVITÉ précis
-3. Génère des mots-clés qui correspondent EXACTEMENT à ce domaine
+## RÈGLES
+1. Base-toi UNIQUEMENT sur le FOCUS SEO pour générer les mots-clés
+2. Reste STRICTEMENT dans le domaine indiqué par le focus
+3. Mots-clés courts (2-3 mots max) pour DataForSEO
+4. Mix: termes génériques + termes spécifiques + termes transactionnels
 
-## RÈGLES STRICTES
-- TOUS les mots-clés doivent être EN RAPPORT DIRECT avec le domaine du site
-- NE PAS dériver vers d'autres secteurs (ex: si c'est assurance animaux, pas d'assurance auto/vie/retraite)
-- Mots-clés courts (2-3 mots) pour maximiser les résultats DataForSEO
-- Mix: termes génériques du secteur + termes spécifiques
-- Inclure des termes transactionnels si site commercial
-
-## FORMAT DE RÉPONSE
-Réponds UNIQUEMENT avec un tableau JSON de 5-8 strings, sans explication.
-Exemple: ["keyword 1", "keyword 2", "keyword 3"]`;
+## RÉPONSE
+Tableau JSON de 5-8 mots-clés, sans explication.
+["keyword 1", "keyword 2", "keyword 3"]`;
 
     try {
       const response = await fetch('https://api.anthropic.com/v1/messages', {
