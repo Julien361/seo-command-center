@@ -4,7 +4,7 @@ const ANTHROPIC_API_KEY = import.meta.env.VITE_ANTHROPIC_API_KEY;
 export const claudeApi = {
   /**
    * Generate optimized keyword seeds based on site context
-   * ONE call per site - cost optimized
+   * ONE call per site using Sonnet for accuracy
    */
   async generateKeywordSeeds(site) {
     const seoFocus = Array.isArray(site.seo_focus) ? site.seo_focus : [site.seo_focus || ''];
@@ -17,25 +17,35 @@ export const claudeApi = {
       .flat()
       .filter(Boolean);
 
-    const prompt = `Tu es un expert SEO. Analyse ce site et genere des mots-cles de recherche optimises.
+    // Deduce the main topic from URL and alias
+    const urlDomain = site.url || site.domain || '';
+    const alias = site.mcp_alias || '';
 
-SITE: ${site.mcp_alias}
-URL: ${site.url || site.domain}
-FOCUS: ${focusText}
-MONETISATION: ${site.monetization_types?.join(', ') || 'non specifie'}
-AUDIENCE: ${site.target_audience || 'non specifie'}
-${existingSeeds.length ? `SEEDS EXISTANTS: ${existingSeeds.join(', ')}` : ''}
+    const prompt = `Tu es un expert SEO senior. Analyse ce site et génère des mots-clés seeds PERTINENTS.
 
-OBJECTIF: Generer 5-8 mots-cles seeds pour une recherche keyword LARGE et EFFICACE.
+## SITE A ANALYSER
+- Nom/Alias: ${alias}
+- URL: ${urlDomain}
+- Focus SEO déclaré: ${focusText || 'non spécifié'}
+- Monétisation: ${site.monetization_types?.join(', ') || 'non spécifié'}
+- Audience cible: ${site.target_audience || 'non spécifié'}
+${existingSeeds.length ? `- Seeds existants: ${existingSeeds.join(', ')}` : ''}
 
-REGLES:
-- Mots-cles courts (2-3 mots max) pour maximiser les resultats DataForSEO
-- Mix: termes generiques + termes specifiques au business
-- Inclure des termes a forte intention commerciale si monetisation
-- Eviter les termes trop nichés avec peu de volume
+## ANALYSE REQUISE
+1. Déduis le DOMAINE PRINCIPAL du site depuis son URL et son nom (ex: "monassuranceanimal.fr" = assurance pour animaux)
+2. Identifie le SECTEUR D'ACTIVITÉ précis
+3. Génère des mots-clés qui correspondent EXACTEMENT à ce domaine
 
-Reponds UNIQUEMENT avec un tableau JSON de strings. Exemple:
-["mot cle 1", "mot cle 2", "mot cle 3"]`;
+## RÈGLES STRICTES
+- TOUS les mots-clés doivent être EN RAPPORT DIRECT avec le domaine du site
+- NE PAS dériver vers d'autres secteurs (ex: si c'est assurance animaux, pas d'assurance auto/vie/retraite)
+- Mots-clés courts (2-3 mots) pour maximiser les résultats DataForSEO
+- Mix: termes génériques du secteur + termes spécifiques
+- Inclure des termes transactionnels si site commercial
+
+## FORMAT DE RÉPONSE
+Réponds UNIQUEMENT avec un tableau JSON de 5-8 strings, sans explication.
+Exemple: ["keyword 1", "keyword 2", "keyword 3"]`;
 
     try {
       const response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -47,7 +57,7 @@ Reponds UNIQUEMENT avec un tableau JSON de strings. Exemple:
           'anthropic-dangerous-direct-browser-access': 'true'
         },
         body: JSON.stringify({
-          model: 'claude-3-5-haiku-20241022', // Haiku = 3x moins cher
+          model: 'claude-sonnet-4-20250514', // Sonnet for accuracy
           max_tokens: 512,
           messages: [{ role: 'user', content: prompt }]
         })
