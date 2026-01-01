@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import {
   Search, FileText, Target, BookOpen, Play, Eye, Loader2,
   ExternalLink, AlertCircle, CheckCircle, RefreshCw,
-  Zap, GitBranch, TrendingUp, Send
+  Zap, GitBranch, TrendingUp, Send, Sparkles, ArrowRight
 } from 'lucide-react';
 import Card from '../components/common/Card';
 import { supabase } from '../lib/supabase';
@@ -385,6 +385,33 @@ export default function SiteDashboard({ site, onNavigate }) {
           );
         })}
       </div>
+
+      {/* Content Factory CTA */}
+      <Card className="p-6 bg-gradient-to-r from-purple-600/20 to-primary/20 border-purple-500/30 hover:border-purple-500/50 transition-all">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className="p-3 rounded-xl bg-purple-500/20">
+              <Sparkles className="w-8 h-8 text-purple-400" />
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                Content Factory
+                <span className="text-xs bg-purple-500/30 text-purple-300 px-2 py-0.5 rounded-full">6 Agents IA</span>
+              </h3>
+              <p className="text-sm text-dark-muted mt-1">
+                Strategist → Writer → SEO Editor → Humanizer → Fact-Checker → Schema
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => onNavigate && onNavigate('factory', site)}
+            className="flex items-center gap-2 px-6 py-3 bg-purple-500 hover:bg-purple-600 text-white rounded-lg font-medium transition-all"
+          >
+            Creer du contenu
+            <ArrowRight className="w-4 h-4" />
+          </button>
+        </div>
+      </Card>
 
       {/* Légende */}
       <div className="text-center text-xs text-dark-muted pt-2">

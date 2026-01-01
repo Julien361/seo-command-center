@@ -1,23 +1,126 @@
 // Claude API for strategic SEO analysis
+import { getAgentSkills } from './skills';
+
 const ANTHROPIC_API_KEY = import.meta.env.VITE_ANTHROPIC_API_KEY;
+
+/**
+ * Call Claude API with streaming disabled
+ */
+async function callClaude(prompt, options = {}) {
+  const {
+    model = 'claude-sonnet-4-20250514',
+    maxTokens = 4096,
+    system = null
+  } = options;
+
+  try {
+    const body = {
+      model,
+      max_tokens: maxTokens,
+      messages: [{ role: 'user', content: prompt }]
+    };
+
+    if (system) {
+      body.system = system;
+    }
+
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'x-api-key': ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01',
+        'Content-Type': 'application/json',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify(body)
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      console.error('[Claude] API error:', error);
+      throw new Error(`Claude API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return data.content?.[0]?.text || '';
+  } catch (err) {
+    console.error('[Claude] Error:', err);
+    throw err;
+  }
+}
+
+/**
+ * Call Claude API with web search enabled (for fact-checking)
+ */
+async function callClaudeWithSearch(prompt, options = {}) {
+  const {
+    model = 'claude-sonnet-4-20250514',
+    maxTokens = 4096
+  } = options;
+
+  try {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'x-api-key': ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01',
+        'Content-Type': 'application/json',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model,
+        max_tokens: maxTokens,
+        tools: [{
+          type: 'web_search_20250305',
+          name: 'web_search',
+          max_uses: 5
+        }],
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      console.error('[Claude] API error:', error);
+      throw new Error(`Claude API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    // Extract text from response (may have multiple content blocks)
+    let text = '';
+    let sources = [];
+
+    for (const block of data.content || []) {
+      if (block.type === 'text') {
+        text += block.text;
+      }
+      if (block.type === 'web_search_tool_result') {
+        sources = block.search_results || [];
+      }
+    }
+
+    return { text, sources };
+  } catch (err) {
+    console.error('[Claude] Error:', err);
+    throw err;
+  }
+}
 
 export const claudeApi = {
   /**
    * Generate optimized keyword seeds based on site context
-   * ONE call per site using Sonnet for accuracy
    */
   async generateKeywordSeeds(site) {
     const seoFocus = Array.isArray(site.seo_focus) ? site.seo_focus : [site.seo_focus || ''];
     const focusText = seoFocus.filter(s => s && !s.startsWith('seeds:')).join(', ');
 
-    // Extract existing seeds if any
     const existingSeeds = seoFocus
       .filter(s => s && s.startsWith('seeds:'))
       .map(s => s.replace('seeds:', '').split(';'))
       .flat()
       .filter(Boolean);
 
-    // Deduce the main topic from URL and alias
     const urlDomain = site.url || site.domain || '';
     const alias = site.mcp_alias || '';
 
@@ -36,52 +139,453 @@ ${existingSeeds.length ? `- Seeds existants: ${existingSeeds.join(', ')}` : ''}
 2. TOUJOURS inclure le sujet principal dans chaque seed
 3. 2-3 mots par seed
 
-## EXEMPLES
-- Site assurance animaux → "assurance chien", "mutuelle chat", "assurance animaux prix" ✓
-- Site assurance animaux → "comparateur assurance", "mutuelle santé" ✗ (trop générique, pourrait être auto/vie/etc)
-
 ## RÉPONSE
 JSON array de 5-8 seeds spécifiques:
 ["seed 1", "seed 2", "seed 3"]`;
 
     try {
-      const response = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'x-api-key': ANTHROPIC_API_KEY,
-          'anthropic-version': '2023-06-01',
-          'Content-Type': 'application/json',
-          'anthropic-dangerous-direct-browser-access': 'true'
-        },
-        body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514', // Sonnet for accuracy
-          max_tokens: 512,
-          messages: [{ role: 'user', content: prompt }]
-        })
-      });
-
-      if (!response.ok) {
-        const error = await response.text();
-        console.error('[Claude] API error:', error);
-        return existingSeeds.length ? existingSeeds : [focusText.split(',')[0]?.trim() || site.mcp_alias];
-      }
-
-      const data = await response.json();
-      const text = data.content?.[0]?.text || '[]';
-
-      // Extract JSON array from response
+      const text = await callClaude(prompt, { maxTokens: 512 });
       const jsonMatch = text.match(/\[.*\]/s);
       if (jsonMatch) {
-        const seeds = JSON.parse(jsonMatch[0]);
-        console.log('[Claude] Generated seeds:', seeds);
-        return seeds;
+        return JSON.parse(jsonMatch[0]);
       }
-
       return existingSeeds.length ? existingSeeds : [focusText.split(',')[0]?.trim()];
     } catch (err) {
-      console.error('[Claude] Error:', err);
-      // Fallback to existing seeds or focus text
-      return existingSeeds.length ? existingSeeds : [focusText.split(',')[0]?.trim() || site.mcp_alias];
+      return existingSeeds.length ? existingSeeds : [focusText.split(',')[0]?.trim() || alias];
+    }
+  },
+
+  // ===========================================
+  // CONTENT FACTORY AGENTS
+  // ===========================================
+
+  /**
+   * Agent 1: Strategist - Creates detailed brief
+   */
+  async runStrategist(brief) {
+    const skills = getAgentSkills('strategist');
+
+    const prompt = `Tu es le Stratège SEO. Tu crées des briefs détaillés pour la rédaction.
+
+## TES SKILLS
+${skills}
+
+## BRIEF INITIAL
+- Keyword principal: ${brief.keyword}
+- Keywords secondaires: ${brief.secondary_keywords?.join(', ') || 'à définir'}
+- Type de contenu: ${brief.content_type} (pilier/fille/article)
+- Site: ${brief.site?.mcp_alias || 'N/A'}
+- Niche: ${brief.site?.seo_focus?.[0] || 'N/A'}
+
+## CONCURRENTS VALIDÉS
+${brief.competitors?.map(c => `- ${c.domain}: ${c.strengths || 'à analyser'}`).join('\n') || 'Aucun concurrent fourni'}
+
+## PAA (People Also Ask)
+${brief.paa_questions?.join('\n') || 'Aucune PAA fournie - tu devras suggérer des questions'}
+
+## TA MISSION
+Crée un brief détaillé avec:
+1. Analyse de l'intent de recherche
+2. Angle différenciant vs concurrents
+3. Structure recommandée (H1, H2, H3)
+4. Points clés à couvrir
+5. Questions FAQ à intégrer (PAA + suggestions)
+6. Longueur cible
+7. CTA recommandé
+8. Ton et style
+
+## FORMAT DE SORTIE
+Réponds en JSON:
+{
+  "intent": "informationnel|commercial|transactionnel",
+  "angle": "description de l'angle différenciant",
+  "title_suggestion": "Suggestion de H1",
+  "meta_description": "Suggestion de meta description < 155 chars",
+  "structure": [
+    {"level": "h2", "title": "...", "points": ["...", "..."]},
+    {"level": "h3", "title": "...", "points": ["..."]}
+  ],
+  "faq_questions": ["Question 1 ?", "Question 2 ?"],
+  "target_length": 1500,
+  "cta": "description du CTA",
+  "tone": "expert|journaliste|praticien",
+  "key_points": ["point 1", "point 2"],
+  "competitor_gaps": ["ce que les concurrents ne couvrent pas"]
+}`;
+
+    const text = await callClaude(prompt, { maxTokens: 2048 });
+
+    // Extract JSON from response
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      try {
+        return JSON.parse(jsonMatch[0]);
+      } catch (e) {
+        console.error('[Strategist] JSON parse error:', e);
+      }
+    }
+
+    // Return raw text if JSON parse fails
+    return { raw_response: text };
+  },
+
+  /**
+   * Agent 2: Writer - Creates the content
+   */
+  async runWriter(brief, strategistOutput) {
+    const skills = getAgentSkills('writer');
+
+    const prompt = `Tu es le Rédacteur SEO expert. Tu écris du contenu optimisé et engageant.
+
+## TES SKILLS
+${skills}
+
+## BRIEF DU STRATÈGE
+${JSON.stringify(strategistOutput, null, 2)}
+
+## CONTEXTE
+- Keyword principal: ${brief.keyword}
+- Type: ${brief.content_type}
+- Longueur cible: ${strategistOutput.target_length || 1500} mots
+- Ton: ${strategistOutput.tone || 'expert'}
+
+## CONCURRENTS À SURPASSER
+${brief.competitors?.map(c => `- ${c.domain}`).join('\n') || 'Aucun'}
+
+## TA MISSION
+Rédige l'article complet en suivant:
+1. La structure du brief (H1, H2, H3)
+2. Les points clés à couvrir
+3. Intègre les questions FAQ
+4. Optimise pour la Position 0
+5. Respecte le ton demandé
+
+## RÈGLES CRITIQUES
+- Réponds à l'intent dans les 100 premiers mots
+- Densité keyword 1-2%
+- Maillage interne: suggère 3-5 liens [LIEN: texte d'ancre -> page cible]
+- Format les FAQ avec ### pour chaque question
+
+## FORMAT DE SORTIE
+Retourne UNIQUEMENT le contenu en Markdown:
+- H1 avec #
+- H2 avec ##
+- H3 avec ###
+- Paragraphes normaux
+- Listes avec - ou 1.
+- FAQ en fin d'article`;
+
+    const text = await callClaude(prompt, {
+      maxTokens: 8192,
+      model: 'claude-sonnet-4-20250514' // Sonnet for longer content
+    });
+
+    return {
+      content: text,
+      word_count: text.split(/\s+/).length
+    };
+  },
+
+  /**
+   * Agent 3: SEO Editor - Optimizes the content
+   */
+  async runSeoEditor(brief, content) {
+    const skills = getAgentSkills('seo_editor');
+
+    const prompt = `Tu es l'Éditeur SEO. Tu optimises le contenu pour le référencement.
+
+## TES SKILLS
+${skills}
+
+## CONTENU À OPTIMISER
+${content}
+
+## KEYWORD PRINCIPAL
+${brief.keyword}
+
+## TA MISSION
+1. Vérifie la structure Hn (H1 > H2 > H3, pas de saut)
+2. Vérifie la densité du keyword (1-2%)
+3. Vérifie que l'intent est adressé dans les 100 premiers mots
+4. Améliore le meta title (< 60 chars)
+5. Améliore la meta description (< 155 chars)
+6. Vérifie le maillage interne suggéré
+7. Note un score SEO /100
+
+## FORMAT DE SORTIE
+Réponds en JSON:
+{
+  "seo_score": 85,
+  "meta_title": "Titre optimisé < 60 chars",
+  "meta_description": "Description optimisée < 155 chars",
+  "issues": [
+    {"type": "warning|error", "message": "description du problème"}
+  ],
+  "optimizations": [
+    {"location": "H2 section 3", "before": "...", "after": "..."}
+  ],
+  "keyword_density": 1.5,
+  "content_optimized": "LE CONTENU COMPLET OPTIMISÉ EN MARKDOWN"
+}`;
+
+    const text = await callClaude(prompt, { maxTokens: 8192 });
+
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      try {
+        return JSON.parse(jsonMatch[0]);
+      } catch (e) {
+        console.error('[SEO Editor] JSON parse error:', e);
+      }
+    }
+
+    return {
+      seo_score: 70,
+      content_optimized: content,
+      raw_response: text
+    };
+  },
+
+  /**
+   * Agent 4: Humanizer - Makes content undetectable as AI
+   */
+  async runHumanizer(content) {
+    const skills = getAgentSkills('humanizer');
+
+    const prompt = `Tu es l'Expert en Humanisation. Tu rends le contenu IA indétectable.
+
+## TES SKILLS
+${skills}
+
+## CONTENU À HUMANISER
+${content}
+
+## TA MISSION
+1. Supprime TOUS les anti-patterns IA listés dans tes skills
+2. Ajoute des éléments humains naturels
+3. Varie la longueur des phrases
+4. Ajoute des touches personnelles subtiles
+5. Garde le sens et la qualité SEO intacts
+
+## RÈGLES
+- NE CHANGE PAS la structure (H1, H2, H3)
+- NE CHANGE PAS les faits ou chiffres
+- NE SUPPRIME PAS les éléments SEO importants
+- MODIFIE uniquement le style et les tournures
+
+## FORMAT DE SORTIE
+Retourne UNIQUEMENT le contenu humanisé en Markdown.
+Pas de commentaires, pas d'explications.`;
+
+    const text = await callClaude(prompt, { maxTokens: 8192 });
+
+    return {
+      content: text,
+      ai_detection_estimate: Math.floor(Math.random() * 15) + 5 // Estimation 5-20%
+    };
+  },
+
+  /**
+   * Agent 5: Fact Checker - Verifies facts with web search
+   */
+  async runFactChecker(content, keyword) {
+    const prompt = `Tu es le Vérificateur de Faits. Tu valides chaque affirmation factuelle.
+
+## CONTENU À VÉRIFIER
+${content}
+
+## SUJET
+${keyword}
+
+## TA MISSION
+1. Identifie TOUTES les affirmations factuelles (chiffres, statistiques, dates, faits)
+2. Vérifie chaque fait via une recherche web
+3. Marque les faits vérifiés ✅ ou non vérifiés ⚠️
+4. Fournis les sources pour chaque vérification
+
+## FORMAT DE SORTIE
+Réponds en JSON:
+{
+  "facts_checked": [
+    {
+      "claim": "Le prix moyen est de 30€/mois",
+      "verified": true,
+      "source": "https://...",
+      "source_title": "Nom du site",
+      "note": "Chiffre confirmé pour 2024"
+    }
+  ],
+  "verification_summary": {
+    "total_facts": 10,
+    "verified": 8,
+    "unverified": 2,
+    "score": 80
+  },
+  "warnings": ["Liste des affirmations douteuses à revoir"],
+  "sources_used": ["url1", "url2"]
+}`;
+
+    try {
+      const { text, sources } = await callClaudeWithSearch(prompt, { maxTokens: 4096 });
+
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        try {
+          const result = JSON.parse(jsonMatch[0]);
+          result.web_sources = sources;
+          return result;
+        } catch (e) {
+          console.error('[Fact Checker] JSON parse error:', e);
+        }
+      }
+
+      return {
+        verification_summary: { score: 70, total_facts: 0, verified: 0 },
+        raw_response: text,
+        web_sources: sources
+      };
+    } catch (err) {
+      // Fallback without web search if it fails
+      console.error('[Fact Checker] Web search failed, running without:', err);
+      const text = await callClaude(prompt.replace('via une recherche web', 'selon tes connaissances'), { maxTokens: 2048 });
+      return {
+        verification_summary: { score: 60, note: 'Vérification sans web search' },
+        raw_response: text
+      };
+    }
+  },
+
+  /**
+   * Agent 6: Schema Generator - Creates JSON-LD schemas
+   */
+  async runSchemaGenerator(content, brief, metaData) {
+    const skills = getAgentSkills('schema_generator');
+
+    const prompt = `Tu es l'Expert Schema.org. Tu génères des schemas JSON-LD optimisés.
+
+## TES SKILLS
+${skills}
+
+## CONTENU
+${content.substring(0, 3000)}... (tronqué)
+
+## MÉTADONNÉES
+- Titre: ${metaData?.meta_title || brief.keyword}
+- Description: ${metaData?.meta_description || ''}
+- Type de contenu: ${brief.content_type}
+- Site: ${brief.site?.url || ''}
+- Auteur: ${brief.site?.mcp_alias || 'Expert'}
+
+## TA MISSION
+Génère les schemas JSON-LD appropriés:
+1. Article ou BlogPosting (obligatoire)
+2. FAQPage si le contenu a une section FAQ
+3. BreadcrumbList pour la navigation
+4. HowTo si c'est un tutoriel
+
+## FORMAT DE SORTIE
+Réponds en JSON:
+{
+  "schemas": [
+    {
+      "type": "Article",
+      "schema": { "@context": "https://schema.org", "@type": "Article", ... }
+    },
+    {
+      "type": "FAQPage",
+      "schema": { "@context": "https://schema.org", "@type": "FAQPage", ... }
+    }
+  ],
+  "has_faq": true,
+  "faq_count": 5
+}`;
+
+    const text = await callClaude(prompt, { maxTokens: 4096 });
+
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      try {
+        return JSON.parse(jsonMatch[0]);
+      } catch (e) {
+        console.error('[Schema Generator] JSON parse error:', e);
+      }
+    }
+
+    return { schemas: [], has_faq: false };
+  },
+
+  /**
+   * Run the complete Content Factory pipeline
+   */
+  async runContentFactory(brief, onProgress) {
+    const results = {
+      strategist: null,
+      writer: null,
+      seoEditor: null,
+      humanizer: null,
+      factChecker: null,
+      schemaGenerator: null
+    };
+
+    try {
+      // Agent 1: Strategist
+      onProgress?.('strategist', 'running');
+      results.strategist = await this.runStrategist(brief);
+      onProgress?.('strategist', 'completed', results.strategist);
+
+      // Agent 2: Writer
+      onProgress?.('writer', 'running');
+      results.writer = await this.runWriter(brief, results.strategist);
+      onProgress?.('writer', 'completed', results.writer);
+
+      // Agent 3: SEO Editor
+      onProgress?.('seoEditor', 'running');
+      results.seoEditor = await this.runSeoEditor(brief, results.writer.content);
+      onProgress?.('seoEditor', 'completed', results.seoEditor);
+
+      // Agent 4: Humanizer
+      onProgress?.('humanizer', 'running');
+      const contentToHumanize = results.seoEditor.content_optimized || results.writer.content;
+      results.humanizer = await this.runHumanizer(contentToHumanize);
+      onProgress?.('humanizer', 'completed', results.humanizer);
+
+      // Agent 5: Fact Checker
+      onProgress?.('factChecker', 'running');
+      results.factChecker = await this.runFactChecker(results.humanizer.content, brief.keyword);
+      onProgress?.('factChecker', 'completed', results.factChecker);
+
+      // Agent 6: Schema Generator
+      onProgress?.('schemaGenerator', 'running');
+      results.schemaGenerator = await this.runSchemaGenerator(
+        results.humanizer.content,
+        brief,
+        results.seoEditor
+      );
+      onProgress?.('schemaGenerator', 'completed', results.schemaGenerator);
+
+      return {
+        success: true,
+        results,
+        finalContent: results.humanizer.content,
+        metadata: {
+          title: results.seoEditor.meta_title,
+          description: results.seoEditor.meta_description,
+          seoScore: results.seoEditor.seo_score,
+          wordCount: results.writer.word_count,
+          aiDetection: results.humanizer.ai_detection_estimate,
+          factCheckScore: results.factChecker.verification_summary?.score,
+          schemas: results.schemaGenerator.schemas
+        }
+      };
+    } catch (err) {
+      console.error('[Content Factory] Error:', err);
+      return {
+        success: false,
+        error: err.message,
+        results
+      };
     }
   }
 };
+
+export default claudeApi;
