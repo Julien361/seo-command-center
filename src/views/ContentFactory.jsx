@@ -108,13 +108,26 @@ export default function ContentFactory({ site, onBack }) {
     }
   };
 
-  // Run Architect agent to propose architecture
-  const runArchitectAgent = async () => {
+  // Run full analysis: SEO Director first, then Architect
+  const runFullAnalysis = async () => {
     setLoadingProposals(true);
+    setLoadingDirection(true);
     setStep('proposals');
+    setSeoDirection(null);
+    setProposals(null);
 
     try {
-      // Prepare context for Architect
+      // Step 1: SEO Director orients the strategy
+      let direction = null;
+      try {
+        direction = await claudeApi.runSeoDirector(site, analysisData, null);
+        setSeoDirection(direction);
+      } catch (dirErr) {
+        console.error('SEO Director error (continuing):', dirErr);
+      }
+      setLoadingDirection(false);
+
+      // Step 2: Architect uses Director's guidance
       const topKeywords = analysisData.keywords.slice(0, 50).map(k => ({
         keyword: k.keyword,
         volume: k.search_volume,
@@ -128,7 +141,21 @@ export default function ContentFactory({ site, onBack }) {
         r.content?.substring(0, 500) || ''
       ).join('\n');
 
-      const prompt = `Tu es l'Architecte SEO expert. Analyse toutes les données et propose une architecture de contenu optimale.
+      // Include Director's guidance in Architect prompt
+      const directorGuidance = direction ? `
+## DIRECTIVES DU SEO DIRECTOR
+- Focus principal: ${direction.strategic_focus?.main_angle || 'Non défini'}
+- Positionnement: ${direction.strategic_focus?.positioning || 'Non défini'}
+- Ton recommandé: ${direction.strategic_focus?.tone || 'expert'}
+- Cible: ${direction.strategic_focus?.target_audience || 'Non défini'}
+- À inclure: ${direction.content_guidelines?.must_include?.join(', ') || 'N/A'}
+- À éviter: ${direction.content_guidelines?.avoid?.join(', ') || 'N/A'}
+- Priorités: ${direction.priorities?.slice(0, 2).map(p => p.action).join(', ') || 'N/A'}
+` : '';
+
+      const prompt = `Tu es l'Architecte SEO expert. Tu travailles sous la direction du SEO Director.
+${directorGuidance}
+Analyse toutes les données et propose une architecture de contenu optimale ALIGNÉE avec les directives ci-dessus.
 
 ## SITE
 - Alias: ${site.mcp_alias}
@@ -407,15 +434,15 @@ Propose une architecture de contenu avec:
             ) : (
               <div className="flex justify-center">
                 <button
-                  onClick={runArchitectAgent}
-                  className="flex items-center gap-3 px-8 py-4 bg-gradient-to-r from-primary to-purple-600 text-white rounded-xl font-medium hover:opacity-90 transition-all shadow-lg"
+                  onClick={runFullAnalysis}
+                  className="flex items-center gap-3 px-8 py-4 bg-gradient-to-r from-orange-500 to-purple-600 text-white rounded-xl font-medium hover:opacity-90 transition-all shadow-lg"
                 >
-                  <Brain className="w-6 h-6" />
+                  <Compass className="w-6 h-6" />
                   <div className="text-left">
-                    <div className="font-semibold">Analyser et proposer l'architecture</div>
-                    <div className="text-sm opacity-80">L'IA va analyser toutes vos données</div>
+                    <div className="font-semibold">Lancer le SEO Director</div>
+                    <div className="text-sm opacity-80">Oriente la stratégie puis propose l'architecture</div>
                   </div>
-                  <Wand2 className="w-5 h-5" />
+                  <Brain className="w-5 h-5" />
                 </button>
               </div>
             )}
@@ -448,54 +475,73 @@ Propose une architecture de contenu avec:
         <>
           {loadingProposals ? (
             <Card className="p-12 text-center">
-              <Brain className="w-16 h-16 text-primary mx-auto mb-4 animate-pulse" />
-              <h2 className="text-xl font-semibold text-white mb-2">L'Architecte IA analyse vos données...</h2>
-              <p className="text-dark-muted">Analyse des keywords, concurrents et recherches marché</p>
+              {loadingDirection ? (
+                <>
+                  <Compass className="w-16 h-16 text-orange-500 mx-auto mb-4 animate-pulse" />
+                  <h2 className="text-xl font-semibold text-white mb-2">Le SEO Director analyse la stratégie...</h2>
+                  <p className="text-dark-muted">Définition du focus, positionnement et priorités</p>
+                </>
+              ) : (
+                <>
+                  <Brain className="w-16 h-16 text-purple-500 mx-auto mb-4 animate-pulse" />
+                  <h2 className="text-xl font-semibold text-white mb-2">L'Architecte construit les propositions...</h2>
+                  <p className="text-dark-muted">Architecture alignée avec les directives du Director</p>
+                </>
+              )}
               <Loader2 className="w-8 h-8 text-primary animate-spin mx-auto mt-6" />
+              <div className="flex justify-center gap-4 mt-4">
+                <div className={`flex items-center gap-2 ${!loadingDirection ? 'text-success' : 'text-dark-muted'}`}>
+                  <Compass className="w-4 h-4" />
+                  <span className="text-sm">Director</span>
+                  {!loadingDirection && <CheckCircle className="w-4 h-4" />}
+                </div>
+                <div className="text-dark-muted flex items-center gap-2">
+                  <Brain className="w-4 h-4" />
+                  <span className="text-sm">Architecte</span>
+                  {!loadingProposals && <CheckCircle className="w-4 h-4 text-success" />}
+                </div>
+              </div>
             </Card>
           ) : proposals ? (
             <>
-              {/* SEO Director + Planner Controls */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* SEO Director */}
-                <Card className="p-4">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <Compass className="w-5 h-5 text-orange-500" />
-                      <h3 className="font-medium text-white">SEO Director</h3>
+              {/* SEO Director Strategic Vision - Always shown first as the leader */}
+              {seoDirection && (
+                <Card className="p-4 bg-gradient-to-r from-orange-500/10 to-orange-600/5 border-orange-500/30">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="p-2 rounded-lg bg-orange-500/20">
+                      <Compass className="w-6 h-6 text-orange-500" />
                     </div>
-                    <button
-                      onClick={runSeoDirector}
-                      disabled={loadingDirection}
-                      className="px-3 py-1 bg-orange-500 text-white text-sm rounded-lg hover:bg-orange-600 disabled:opacity-50"
-                    >
-                      {loadingDirection ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Orienter'}
-                    </button>
+                    <div>
+                      <h3 className="font-semibold text-white">Directives du SEO Director</h3>
+                      <p className="text-sm text-orange-400">{seoDirection.strategic_focus?.main_angle}</p>
+                    </div>
                   </div>
-                  {seoDirection ? (
-                    <div className="space-y-2 text-sm">
-                      <div className="p-2 bg-orange-500/10 rounded">
-                        <span className="text-orange-400 font-medium">Focus: </span>
-                        <span className="text-white">{seoDirection.strategic_focus?.main_angle}</span>
-                      </div>
-                      <div className="text-dark-muted">
-                        <Users className="w-3 h-3 inline mr-1" />
-                        {seoDirection.strategic_focus?.target_audience}
-                      </div>
-                      {seoDirection.priorities?.[0] && (
-                        <div className="text-dark-muted">
-                          <TrendingUp className="w-3 h-3 inline mr-1 text-success" />
-                          Priorité: {seoDirection.priorities[0].action}
-                        </div>
-                      )}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                    <div className="p-2 bg-dark-bg/50 rounded">
+                      <div className="text-dark-muted text-xs mb-1">Positionnement</div>
+                      <div className="text-white">{seoDirection.strategic_focus?.positioning?.substring(0, 50) || 'N/A'}...</div>
                     </div>
-                  ) : (
-                    <p className="text-dark-muted text-sm">Obtenir les orientations stratégiques</p>
-                  )}
+                    <div className="p-2 bg-dark-bg/50 rounded">
+                      <div className="text-dark-muted text-xs mb-1">Cible</div>
+                      <div className="text-white flex items-center gap-1">
+                        <Users className="w-3 h-3" />
+                        {seoDirection.strategic_focus?.target_audience || 'N/A'}
+                      </div>
+                    </div>
+                    <div className="p-2 bg-dark-bg/50 rounded">
+                      <div className="text-dark-muted text-xs mb-1">Ton</div>
+                      <div className="text-white capitalize">{seoDirection.strategic_focus?.tone || 'expert'}</div>
+                    </div>
+                    <div className="p-2 bg-dark-bg/50 rounded">
+                      <div className="text-dark-muted text-xs mb-1">Priorité #1</div>
+                      <div className="text-success text-xs">{seoDirection.priorities?.[0]?.action || 'N/A'}</div>
+                    </div>
+                  </div>
                 </Card>
+              )}
 
-                {/* Planner */}
-                <Card className="p-4">
+              {/* Planner Controls */}
+              <Card className="p-4">
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2">
                       <CalendarDays className="w-5 h-5 text-cyan-500" />
@@ -538,8 +584,7 @@ Propose une architecture de contenu avec:
                   ) : (
                     <p className="text-dark-muted text-sm">Générer le calendrier éditorial</p>
                   )}
-                </Card>
-              </div>
+              </Card>
 
               {/* Editorial Calendar Display */}
               {showCalendar && editorialCalendar?.calendar && (
@@ -598,74 +643,6 @@ Propose une architecture de contenu avec:
                       </ul>
                     </div>
                   )}
-                </Card>
-              )}
-
-              {/* SEO Director Details */}
-              {seoDirection && (
-                <Card className="p-4">
-                  <h3 className="text-white font-medium mb-4 flex items-center gap-2">
-                    <Compass className="w-5 h-5 text-orange-500" />
-                    Orientations Stratégiques
-                  </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* Priorities */}
-                    {seoDirection.priorities?.length > 0 && (
-                      <div className="space-y-2">
-                        <h4 className="text-sm font-medium text-dark-muted">Priorités</h4>
-                        {seoDirection.priorities.slice(0, 3).map((p, idx) => (
-                          <div key={idx} className="p-2 bg-dark-bg rounded flex items-start gap-2">
-                            <span className="text-orange-500 font-bold">#{p.rank}</span>
-                            <div>
-                              <div className="text-white text-sm">{p.action}</div>
-                              <div className="text-xs text-dark-muted">{p.why}</div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    {/* Opportunities */}
-                    {seoDirection.opportunities?.length > 0 && (
-                      <div className="space-y-2">
-                        <h4 className="text-sm font-medium text-dark-muted flex items-center gap-1">
-                          <Lightbulb className="w-3 h-3 text-warning" />
-                          Opportunités
-                        </h4>
-                        {seoDirection.opportunities.slice(0, 3).map((o, idx) => (
-                          <div key={idx} className="p-2 bg-warning/5 border border-warning/20 rounded">
-                            <div className="text-white text-sm">{o.opportunity}</div>
-                            <div className="text-xs text-dark-muted">{o.how_to_exploit}</div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    {/* Warnings */}
-                    {seoDirection.warnings?.length > 0 && (
-                      <div className="space-y-2">
-                        <h4 className="text-sm font-medium text-dark-muted flex items-center gap-1">
-                          <Shield className="w-3 h-3 text-red-500" />
-                          Points de vigilance
-                        </h4>
-                        {seoDirection.warnings.slice(0, 2).map((w, idx) => (
-                          <div key={idx} className="p-2 bg-red-500/5 border border-red-500/20 rounded">
-                            <div className="text-red-400 text-sm">{w.risk}</div>
-                            <div className="text-xs text-dark-muted">{w.mitigation}</div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    {/* Content Guidelines */}
-                    {seoDirection.content_guidelines && (
-                      <div className="space-y-2">
-                        <h4 className="text-sm font-medium text-dark-muted">Guidelines contenu</h4>
-                        <div className="p-2 bg-dark-bg rounded text-sm">
-                          <div className="text-success mb-1">✓ {seoDirection.content_guidelines.must_include?.join(', ')}</div>
-                          <div className="text-red-400 mb-1">✗ {seoDirection.content_guidelines.avoid?.join(', ')}</div>
-                          <div className="text-info">★ {seoDirection.content_guidelines.differentiation}</div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
                 </Card>
               )}
 
@@ -837,7 +814,7 @@ Propose une architecture de contenu avec:
               {/* Refresh button */}
               <div className="text-center">
                 <button
-                  onClick={runArchitectAgent}
+                  onClick={runFullAnalysis}
                   className="text-dark-muted hover:text-white text-sm flex items-center gap-2 mx-auto"
                 >
                   <RefreshCw className="w-4 h-4" />
