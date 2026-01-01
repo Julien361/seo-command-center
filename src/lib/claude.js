@@ -292,21 +292,30 @@ Retourne UNIQUEMENT le contenu en Markdown:
   },
 
   /**
-   * Agent 3: SEO Editor - Optimizes the content
+   * Agent 4: SEO Editor - Optimizes the content with minimum score 85
    */
-  async runSeoEditor(brief, content) {
+  async runSeoEditor(brief, content, minScore = 85, maxRetries = 3) {
     const skills = getAgentSkills('seo_editor');
+    let currentContent = content;
+    let lastResult = null;
+    let attempt = 0;
 
-    const prompt = `Tu es l'Éditeur SEO. Tu optimises le contenu pour le référencement.
+    while (attempt < maxRetries) {
+      attempt++;
+      const prompt = `Tu es l'Éditeur SEO. Tu optimises le contenu pour le référencement.
+${attempt > 1 ? `\n⚠️ TENTATIVE ${attempt}/${maxRetries} - Le score précédent était ${lastResult?.seo_score || 'N/A'}. Tu DOIS atteindre ${minScore}+ !` : ''}
 
 ## TES SKILLS
 ${skills}
 
 ## CONTENU À OPTIMISER
-${content}
+${currentContent}
 
 ## KEYWORD PRINCIPAL
 ${brief.keyword}
+
+## OBJECTIF SCORE
+Tu DOIS atteindre un score SEO de ${minScore}/100 minimum.
 
 ## TA MISSION
 1. Vérifie la structure Hn (H1 > H2 > H3, pas de saut)
@@ -314,8 +323,8 @@ ${brief.keyword}
 3. Vérifie que l'intent est adressé dans les 100 premiers mots
 4. Améliore le meta title (< 60 chars)
 5. Améliore la meta description (< 155 chars)
-6. Vérifie le maillage interne suggéré
-7. Note un score SEO /100
+6. Ajoute les liens internes suggérés avec format: [LIEN: ancre -> cible]
+7. Note un score SEO /100 - DOIT être >= ${minScore}
 
 ## FORMAT DE SORTIE
 Réponds en JSON:
@@ -323,31 +332,51 @@ Réponds en JSON:
   "seo_score": 85,
   "meta_title": "Titre optimisé < 60 chars",
   "meta_description": "Description optimisée < 155 chars",
+  "internal_links": [
+    {"anchor": "texte d'ancre", "target": "page cible suggérée"}
+  ],
   "issues": [
     {"type": "warning|error", "message": "description du problème"}
   ],
-  "optimizations": [
-    {"location": "H2 section 3", "before": "...", "after": "..."}
-  ],
+  "optimizations_applied": ["liste des optimisations faites"],
   "keyword_density": 1.5,
   "content_optimized": "LE CONTENU COMPLET OPTIMISÉ EN MARKDOWN"
 }`;
 
-    const text = await callClaude(prompt, { maxTokens: 8192 });
+      const text = await callClaude(prompt, { maxTokens: 8192 });
 
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      try {
-        return JSON.parse(jsonMatch[0]);
-      } catch (e) {
-        console.error('[SEO Editor] JSON parse error:', e);
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        try {
+          lastResult = JSON.parse(jsonMatch[0]);
+
+          // If score >= minScore, we're done
+          if (lastResult.seo_score >= minScore) {
+            lastResult.attempts = attempt;
+            return lastResult;
+          }
+
+          // Otherwise, use the optimized content for next iteration
+          currentContent = lastResult.content_optimized || currentContent;
+          console.log(`[SEO Editor] Attempt ${attempt}: score ${lastResult.seo_score} < ${minScore}, retrying...`);
+        } catch (e) {
+          console.error('[SEO Editor] JSON parse error:', e);
+        }
       }
+    }
+
+    // Return last result even if score < minScore
+    if (lastResult) {
+      lastResult.attempts = attempt;
+      lastResult.min_score_reached = lastResult.seo_score >= minScore;
+      return lastResult;
     }
 
     return {
       seo_score: 70,
       content_optimized: content,
-      raw_response: text
+      attempts: attempt,
+      min_score_reached: false
     };
   },
 
@@ -391,7 +420,7 @@ Pas de commentaires, pas d'explications.`;
   },
 
   /**
-   * Agent 5: Fact Checker - Verifies facts with web search
+   * Agent 3: Fact Checker - Verifies facts with web search (uses Haiku for cost)
    */
   async runFactChecker(content, keyword) {
     const prompt = `Tu es le Vérificateur de Faits. Tu valides chaque affirmation factuelle.
@@ -406,7 +435,7 @@ ${keyword}
 1. Identifie TOUTES les affirmations factuelles (chiffres, statistiques, dates, faits)
 2. Vérifie chaque fait via une recherche web
 3. Marque les faits vérifiés ✅ ou non vérifiés ⚠️
-4. Fournis les sources pour chaque vérification
+4. Si un fait est FAUX, propose la correction
 
 ## FORMAT DE SORTIE
 Réponds en JSON:
@@ -416,8 +445,13 @@ Réponds en JSON:
       "claim": "Le prix moyen est de 30€/mois",
       "verified": true,
       "source": "https://...",
-      "source_title": "Nom du site",
-      "note": "Chiffre confirmé pour 2024"
+      "correction": null
+    }
+  ],
+  "corrections_needed": [
+    {
+      "original": "texte original faux",
+      "corrected": "texte corrigé"
     }
   ],
   "verification_summary": {
@@ -426,12 +460,14 @@ Réponds en JSON:
     "unverified": 2,
     "score": 80
   },
-  "warnings": ["Liste des affirmations douteuses à revoir"],
-  "sources_used": ["url1", "url2"]
+  "warnings": ["Liste des affirmations douteuses"]
 }`;
 
     try {
-      const { text, sources } = await callClaudeWithSearch(prompt, { maxTokens: 4096 });
+      const { text, sources } = await callClaudeWithSearch(prompt, {
+        maxTokens: 4096,
+        model: 'claude-3-5-haiku-20241022' // Haiku for cost optimization
+      });
 
       const jsonMatch = text.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
@@ -446,22 +482,26 @@ Réponds en JSON:
 
       return {
         verification_summary: { score: 70, total_facts: 0, verified: 0 },
+        corrections_needed: [],
         raw_response: text,
         web_sources: sources
       };
     } catch (err) {
-      // Fallback without web search if it fails
       console.error('[Fact Checker] Web search failed, running without:', err);
-      const text = await callClaude(prompt.replace('via une recherche web', 'selon tes connaissances'), { maxTokens: 2048 });
+      const text = await callClaude(prompt.replace('via une recherche web', 'selon tes connaissances'), {
+        maxTokens: 2048,
+        model: 'claude-3-5-haiku-20241022'
+      });
       return {
         verification_summary: { score: 60, note: 'Vérification sans web search' },
+        corrections_needed: [],
         raw_response: text
       };
     }
   },
 
   /**
-   * Agent 6: Schema Generator - Creates JSON-LD schemas
+   * Agent 6: Schema Generator - Creates JSON-LD schemas (uses Haiku for cost)
    */
   async runSchemaGenerator(content, brief, metaData) {
     const skills = getAgentSkills('schema_generator');
@@ -505,7 +545,10 @@ Réponds en JSON:
   "faq_count": 5
 }`;
 
-    const text = await callClaude(prompt, { maxTokens: 4096 });
+    const text = await callClaude(prompt, {
+      maxTokens: 4096,
+      model: 'claude-3-5-haiku-20241022' // Haiku for cost optimization
+    });
 
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
@@ -735,45 +778,54 @@ En tant que Directeur SEO, donne des ORIENTATIONS STRATÉGIQUES claires :
 
   /**
    * Run the complete Content Factory pipeline
+   * Order: Strategist → Writer → Fact Checker → SEO Editor (85+) → Humanizer → Schema
    */
   async runContentFactory(brief, onProgress) {
     const results = {
       strategist: null,
       writer: null,
+      factChecker: null,
       seoEditor: null,
       humanizer: null,
-      factChecker: null,
       schemaGenerator: null
     };
 
     try {
-      // Agent 1: Strategist
+      // Agent 1: Strategist - Creates the brief
       onProgress?.('strategist', 'running');
       results.strategist = await this.runStrategist(brief);
       onProgress?.('strategist', 'completed', results.strategist);
 
-      // Agent 2: Writer
+      // Agent 2: Writer - Writes the content
       onProgress?.('writer', 'running');
       results.writer = await this.runWriter(brief, results.strategist);
       onProgress?.('writer', 'completed', results.writer);
 
-      // Agent 3: SEO Editor
+      // Agent 3: Fact Checker - Verifies facts BEFORE optimization (Haiku)
+      onProgress?.('factChecker', 'running');
+      results.factChecker = await this.runFactChecker(results.writer.content, brief.keyword);
+      onProgress?.('factChecker', 'completed', results.factChecker);
+
+      // Apply fact corrections if any
+      let contentForSeo = results.writer.content;
+      if (results.factChecker.corrections_needed?.length > 0) {
+        for (const correction of results.factChecker.corrections_needed) {
+          contentForSeo = contentForSeo.replace(correction.original, correction.corrected);
+        }
+      }
+
+      // Agent 4: SEO Editor - Optimizes with minimum score 85 (with retry)
       onProgress?.('seoEditor', 'running');
-      results.seoEditor = await this.runSeoEditor(brief, results.writer.content);
+      results.seoEditor = await this.runSeoEditor(brief, contentForSeo, 85, 3);
       onProgress?.('seoEditor', 'completed', results.seoEditor);
 
-      // Agent 4: Humanizer
+      // Agent 5: Humanizer - Makes content natural (LAST text modification)
       onProgress?.('humanizer', 'running');
-      const contentToHumanize = results.seoEditor.content_optimized || results.writer.content;
+      const contentToHumanize = results.seoEditor.content_optimized || contentForSeo;
       results.humanizer = await this.runHumanizer(contentToHumanize);
       onProgress?.('humanizer', 'completed', results.humanizer);
 
-      // Agent 5: Fact Checker
-      onProgress?.('factChecker', 'running');
-      results.factChecker = await this.runFactChecker(results.humanizer.content, brief.keyword);
-      onProgress?.('factChecker', 'completed', results.factChecker);
-
-      // Agent 6: Schema Generator
+      // Agent 6: Schema Generator - Creates JSON-LD (Haiku)
       onProgress?.('schemaGenerator', 'running');
       results.schemaGenerator = await this.runSchemaGenerator(
         results.humanizer.content,
@@ -790,9 +842,13 @@ En tant que Directeur SEO, donne des ORIENTATIONS STRATÉGIQUES claires :
           title: results.seoEditor.meta_title,
           description: results.seoEditor.meta_description,
           seoScore: results.seoEditor.seo_score,
+          seoAttempts: results.seoEditor.attempts,
           wordCount: results.writer.word_count,
           aiDetection: results.humanizer.ai_detection_estimate,
           factCheckScore: results.factChecker.verification_summary?.score,
+          factsVerified: results.factChecker.verification_summary?.verified || 0,
+          correctionsApplied: results.factChecker.corrections_needed?.length || 0,
+          internalLinks: results.seoEditor.internal_links || [],
           schemas: results.schemaGenerator.schemas
         }
       };

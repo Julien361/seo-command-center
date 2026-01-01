@@ -12,14 +12,14 @@ import Card from '../components/common/Card';
 import { supabase } from '../lib/supabase';
 import { claudeApi } from '../lib/claude';
 
-// Agent configuration
+// Agent configuration - New optimized order
 const AGENTS = [
-  { id: 'strategist', name: 'Stratège', icon: Target, color: 'text-blue-500', description: 'Crée le brief détaillé' },
-  { id: 'writer', name: 'Rédacteur', icon: PenTool, color: 'text-green-500', description: 'Écrit le contenu' },
-  { id: 'seoEditor', name: 'SEO Editor', icon: Search, color: 'text-yellow-500', description: 'Optimise pour le SEO' },
-  { id: 'humanizer', name: 'Humanizer', icon: Sparkles, color: 'text-purple-500', description: 'Rend naturel' },
-  { id: 'factChecker', name: 'Fact-Checker', icon: CheckCircle, color: 'text-red-500', description: 'Vérifie les faits' },
-  { id: 'schemaGenerator', name: 'Schema', icon: FileCode, color: 'text-cyan-500', description: 'Génère JSON-LD' }
+  { id: 'strategist', name: 'Stratège', icon: Target, color: 'text-blue-500', description: 'Crée le brief détaillé', model: 'Sonnet' },
+  { id: 'writer', name: 'Rédacteur', icon: PenTool, color: 'text-green-500', description: 'Écrit le contenu', model: 'Sonnet' },
+  { id: 'factChecker', name: 'Fact-Checker', icon: CheckCircle, color: 'text-red-500', description: 'Vérifie les faits', model: 'Haiku' },
+  { id: 'seoEditor', name: 'SEO Editor', icon: Search, color: 'text-yellow-500', description: 'Optimise pour 85+', model: 'Sonnet' },
+  { id: 'humanizer', name: 'Humanizer', icon: Sparkles, color: 'text-purple-500', description: 'Rend naturel', model: 'Sonnet' },
+  { id: 'schemaGenerator', name: 'Schema', icon: FileCode, color: 'text-cyan-500', description: 'Génère JSON-LD', model: 'Haiku' }
 ];
 
 // Content types
@@ -1005,10 +1005,15 @@ Propose une architecture de contenu avec:
         <>
           {/* Metrics */}
           <Card className="p-4">
-            <div className="grid grid-cols-5 gap-4 text-center">
+            <div className="grid grid-cols-6 gap-4 text-center">
               <div>
-                <div className="text-2xl font-bold text-primary">{finalResult.metadata.seoScore || '-'}</div>
+                <div className={`text-2xl font-bold ${finalResult.metadata.seoScore >= 85 ? 'text-success' : 'text-warning'}`}>
+                  {finalResult.metadata.seoScore || '-'}
+                </div>
                 <div className="text-xs text-dark-muted">Score SEO</div>
+                {finalResult.metadata.seoAttempts > 1 && (
+                  <div className="text-xs text-warning">{finalResult.metadata.seoAttempts} essais</div>
+                )}
               </div>
               <div>
                 <div className="text-2xl font-bold text-white">{finalResult.metadata.wordCount || '-'}</div>
@@ -1017,6 +1022,10 @@ Propose une architecture de contenu avec:
               <div>
                 <div className="text-2xl font-bold text-success">{finalResult.metadata.factCheckScore || '-'}%</div>
                 <div className="text-xs text-dark-muted">Faits vérifiés</div>
+              </div>
+              <div>
+                <div className="text-2xl font-bold text-info">{finalResult.metadata.factsVerified || 0}</div>
+                <div className="text-xs text-dark-muted">Faits OK</div>
               </div>
               <div>
                 <div className="text-2xl font-bold text-purple-500">{finalResult.metadata.aiDetection || '-'}%</div>
@@ -1029,13 +1038,65 @@ Propose une architecture de contenu avec:
             </div>
           </Card>
 
-          {/* Content */}
+          {/* Meta Tags - Easy Copy */}
+          <Card className="p-4">
+            <h3 className="text-sm font-medium text-dark-muted mb-3 flex items-center gap-2">
+              <FileCode className="w-4 h-4" />
+              Meta Tags (cliquer pour copier)
+            </h3>
+            <div className="space-y-2">
+              <div
+                onClick={() => { navigator.clipboard.writeText(finalResult.metadata.title); }}
+                className="p-2 bg-dark-bg rounded cursor-pointer hover:bg-dark-border transition-colors"
+              >
+                <span className="text-xs text-primary">Title:</span>
+                <span className="text-white ml-2">{finalResult.metadata.title}</span>
+              </div>
+              <div
+                onClick={() => { navigator.clipboard.writeText(finalResult.metadata.description); }}
+                className="p-2 bg-dark-bg rounded cursor-pointer hover:bg-dark-border transition-colors"
+              >
+                <span className="text-xs text-primary">Description:</span>
+                <span className="text-white ml-2">{finalResult.metadata.description}</span>
+              </div>
+            </div>
+          </Card>
+
+          {/* Internal Links */}
+          {finalResult.metadata.internalLinks?.length > 0 && (
+            <Card className="p-4">
+              <h3 className="text-sm font-medium text-dark-muted mb-3 flex items-center gap-2">
+                <Link className="w-4 h-4" />
+                Maillage interne suggéré ({finalResult.metadata.internalLinks.length})
+              </h3>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                {finalResult.metadata.internalLinks.map((link, idx) => (
+                  <div key={idx} className="p-2 bg-info/10 border border-info/20 rounded text-sm">
+                    <div className="text-info font-medium">{link.anchor}</div>
+                    <div className="text-dark-muted text-xs flex items-center gap-1">
+                      <ArrowRight className="w-3 h-3" />
+                      {link.target}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
+
+          {/* Content with Structure View */}
           <Card className="p-6">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-white">{editMode ? 'Modifier' : 'Aperçu'}</h2>
+              <h2 className="text-lg font-semibold text-white">{editMode ? 'Modifier' : 'Contenu'}</h2>
               <div className="flex gap-2">
-                <button onClick={() => { navigator.clipboard.writeText(editedContent); alert('Copié !'); }} className="p-2 rounded-lg hover:bg-dark-border text-dark-muted">
+                <button
+                  onClick={() => {
+                    const fullContent = `<!-- Title: ${finalResult.metadata.title} -->\n<!-- Description: ${finalResult.metadata.description} -->\n\n${editedContent}`;
+                    navigator.clipboard.writeText(fullContent);
+                  }}
+                  className="flex items-center gap-1 px-3 py-1 bg-primary/20 text-primary rounded-lg hover:bg-primary/30 text-sm"
+                >
                   <Copy className="w-4 h-4" />
+                  Tout copier
                 </button>
                 <button onClick={() => setEditMode(!editMode)} className={`p-2 rounded-lg ${editMode ? 'bg-primary text-white' : 'hover:bg-dark-border text-dark-muted'}`}>
                   {editMode ? <Eye className="w-4 h-4" /> : <Edit3 className="w-4 h-4" />}
@@ -1043,19 +1104,68 @@ Propose une architecture de contenu avec:
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4 mb-4 p-3 bg-dark-bg rounded-lg text-sm">
-              <div><span className="text-dark-muted">Title:</span> <span className="text-white">{finalResult.metadata.title}</span></div>
-              <div><span className="text-dark-muted">Description:</span> <span className="text-white">{finalResult.metadata.description?.substring(0, 80)}...</span></div>
-            </div>
+            {/* Structure Summary */}
+            {!editMode && (
+              <div className="mb-4 p-3 bg-dark-bg rounded-lg">
+                <h4 className="text-xs text-dark-muted mb-2">Structure détectée:</h4>
+                <div className="flex flex-wrap gap-2">
+                  {editedContent.match(/^# .+$/gm)?.map((h, i) => (
+                    <span key={`h1-${i}`} className="px-2 py-1 bg-purple-500/20 text-purple-400 rounded text-xs">
+                      H1: {h.replace('# ', '').substring(0, 30)}...
+                    </span>
+                  ))}
+                  {editedContent.match(/^## .+$/gm)?.map((h, i) => (
+                    <span key={`h2-${i}`} className="px-2 py-1 bg-blue-500/20 text-blue-400 rounded text-xs">
+                      H2: {h.replace('## ', '').substring(0, 25)}...
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {editMode ? (
               <textarea value={editedContent} onChange={(e) => setEditedContent(e.target.value)} className="w-full h-96 bg-dark-bg border border-dark-border rounded-lg p-4 text-white font-mono text-sm" />
             ) : (
-              <div className="h-96 overflow-auto p-4 bg-dark-bg rounded-lg whitespace-pre-wrap text-sm text-white">
-                {editedContent}
+              <div className="h-96 overflow-auto p-4 bg-dark-bg rounded-lg text-sm text-white prose prose-invert max-w-none">
+                {editedContent.split('\n').map((line, idx) => {
+                  if (line.startsWith('# ')) return <h1 key={idx} className="text-xl font-bold text-purple-400 mt-4 mb-2">{line.replace('# ', '')}</h1>;
+                  if (line.startsWith('## ')) return <h2 key={idx} className="text-lg font-semibold text-blue-400 mt-3 mb-2">{line.replace('## ', '')}</h2>;
+                  if (line.startsWith('### ')) return <h3 key={idx} className="text-base font-medium text-green-400 mt-2 mb-1">{line.replace('### ', '')}</h3>;
+                  if (line.startsWith('- ')) return <li key={idx} className="ml-4 text-dark-text">{line.replace('- ', '')}</li>;
+                  if (line.match(/^\d+\. /)) return <li key={idx} className="ml-4 text-dark-text list-decimal">{line.replace(/^\d+\. /, '')}</li>;
+                  if (line.includes('[LIEN:')) return <p key={idx} className="text-info bg-info/10 px-2 py-1 rounded my-1">{line}</p>;
+                  if (line.trim() === '') return <br key={idx} />;
+                  return <p key={idx} className="text-dark-text my-1">{line}</p>;
+                })}
               </div>
             )}
           </Card>
+
+          {/* Schemas JSON-LD */}
+          {finalResult.metadata.schemas?.length > 0 && (
+            <Card className="p-4">
+              <h3 className="text-sm font-medium text-dark-muted mb-3 flex items-center gap-2">
+                <FileCode className="w-4 h-4" />
+                Schemas JSON-LD ({finalResult.metadata.schemas.length})
+              </h3>
+              <div className="space-y-2">
+                {finalResult.metadata.schemas.map((schema, idx) => (
+                  <div key={idx} className="flex items-center justify-between p-2 bg-dark-bg rounded">
+                    <span className="text-cyan-400">{schema.type}</span>
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(JSON.stringify(schema.schema, null, 2));
+                      }}
+                      className="text-xs text-dark-muted hover:text-white flex items-center gap-1"
+                    >
+                      <Copy className="w-3 h-3" />
+                      Copier
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
 
           {/* Save */}
           <Card className="p-6">
