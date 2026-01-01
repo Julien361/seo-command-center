@@ -338,6 +338,39 @@ export default function ContentFactory({ site, onBack }) {
             Pipeline des agents
           </h2>
 
+          {/* Progress Bar */}
+          {(() => {
+            const completedCount = Object.values(agentStatus).filter(s => s === 'completed').length;
+            const runningAgent = AGENTS.find(a => agentStatus[a.id] === 'running');
+            const progress = (completedCount / AGENTS.length) * 100;
+
+            return (
+              <div className="mb-6">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm text-dark-muted">
+                    {runningAgent ? (
+                      <span className="flex items-center gap-2">
+                        <Loader2 className="w-3 h-3 animate-spin text-warning" />
+                        {runningAgent.name} en cours...
+                      </span>
+                    ) : finalResult?.success ? (
+                      <span className="text-success">Terminé !</span>
+                    ) : (
+                      'En attente...'
+                    )}
+                  </span>
+                  <span className="text-sm font-medium text-white">{completedCount}/{AGENTS.length}</span>
+                </div>
+                <div className="h-2 bg-dark-border rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-primary to-purple-500 rounded-full transition-all duration-500"
+                    style={{ width: `${progress}%` }}
+                  />
+                </div>
+              </div>
+            );
+          })()}
+
           <div className="space-y-3">
             {AGENTS.map((agent, idx) => {
               const status = agentStatus[agent.id];
