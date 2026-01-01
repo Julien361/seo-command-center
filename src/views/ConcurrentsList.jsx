@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft, Target, ExternalLink, Loader2, RefreshCw, Play, TrendingUp, Users, Link2, Plus, X } from 'lucide-react';
+import { ArrowLeft, Target, ExternalLink, Loader2, RefreshCw, Play, TrendingUp, Users, Link2, Plus, X, Trash2 } from 'lucide-react';
 import Card from '../components/common/Card';
 import { supabase } from '../lib/supabase';
 import { n8nApi } from '../lib/n8n';
@@ -69,6 +69,24 @@ export default function ConcurrentsList({ site, onBack }) {
   const handleManualAnalysis = () => {
     if (manualUrls.trim()) {
       handleLaunchAnalysis(manualUrls.trim());
+    }
+  };
+
+  const handleDeleteCompetitor = async (competitorId) => {
+    if (!confirm('Supprimer ce concurrent ?')) return;
+
+    try {
+      const { error } = await supabase
+        .from('competitors')
+        .delete()
+        .eq('id', competitorId);
+
+      if (error) throw error;
+
+      // Remove from local state
+      setCompetitors(prev => prev.filter(c => c.id !== competitorId));
+    } catch (err) {
+      console.error('Delete error:', err);
     }
   };
 
@@ -228,6 +246,7 @@ export default function ConcurrentsList({ site, onBack }) {
                 <th className="text-center px-4 py-3 text-sm font-medium text-dark-muted">Type</th>
                 <th className="text-center px-4 py-3 text-sm font-medium text-dark-muted">Traffic</th>
                 <th className="text-left px-4 py-3 text-sm font-medium text-dark-muted">Notes</th>
+                <th className="w-12"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-dark-border">
@@ -268,6 +287,15 @@ export default function ConcurrentsList({ site, onBack }) {
                     <span className="text-sm text-dark-muted line-clamp-2">
                       {c.notes || c.primary_focus || '-'}
                     </span>
+                  </td>
+                  <td className="px-4 py-3 text-center">
+                    <button
+                      onClick={() => handleDeleteCompetitor(c.id)}
+                      className="p-1 rounded hover:bg-error/20 text-dark-muted hover:text-error transition-colors"
+                      title="Supprimer"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                   </td>
                 </tr>
               ))}
