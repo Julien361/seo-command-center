@@ -230,6 +230,8 @@ export default function SiteDashboard({ site, onNavigate }) {
         onNavigate('keywords', site);
         break;
       case 'research':
+        onNavigate('recherches', site);
+        break;
       case 'competitors':
         onNavigate('concurrents', site);
         break;

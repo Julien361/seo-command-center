@@ -21,27 +21,28 @@ export const claudeApi = {
     const urlDomain = site.url || site.domain || '';
     const alias = site.mcp_alias || '';
 
-    const prompt = `Tu es un expert SEO senior. Génère des mots-clés seeds pour ce site.
+    const prompt = `Tu es un expert SEO. Génère des mots-clés seeds SPÉCIFIQUES pour ce site.
 
-## FOCUS SEO (SOURCE PRINCIPALE)
-${focusText || 'non spécifié'}
+## DOMAINE DU SITE
+${focusText || alias}
 
-## CONTEXTE ADDITIONNEL
+## CONTEXTE
 - Site: ${alias}
 - URL: ${urlDomain}
-- Monétisation: ${site.monetization_types?.join(', ') || 'non spécifié'}
-- Audience: ${site.target_audience || 'non spécifié'}
 ${existingSeeds.length ? `- Seeds existants: ${existingSeeds.join(', ')}` : ''}
 
-## RÈGLES
-1. Base-toi UNIQUEMENT sur le FOCUS SEO pour générer les mots-clés
-2. Reste STRICTEMENT dans le domaine indiqué par le focus
-3. Mots-clés courts (2-3 mots max) pour DataForSEO
-4. Mix: termes génériques + termes spécifiques + termes transactionnels
+## RÈGLES CRITIQUES
+1. CHAQUE seed doit être SPÉCIFIQUE au domaine (pas de termes génériques)
+2. TOUJOURS inclure le sujet principal dans chaque seed
+3. 2-3 mots par seed
+
+## EXEMPLES
+- Site assurance animaux → "assurance chien", "mutuelle chat", "assurance animaux prix" ✓
+- Site assurance animaux → "comparateur assurance", "mutuelle santé" ✗ (trop générique, pourrait être auto/vie/etc)
 
 ## RÉPONSE
-Tableau JSON de 5-8 mots-clés, sans explication.
-["keyword 1", "keyword 2", "keyword 3"]`;
+JSON array de 5-8 seeds spécifiques:
+["seed 1", "seed 2", "seed 3"]`;
 
     try {
       const response = await fetch('https://api.anthropic.com/v1/messages', {

@@ -3,6 +3,7 @@ import Sidebar from './components/layout/Sidebar';
 import Header from './components/layout/Header';
 import SiteDashboard from './views/SiteDashboard';
 import KeywordsList from './views/KeywordsList';
+import RecherchesList from './views/RecherchesList';
 import ConcurrentsList from './views/ConcurrentsList';
 import ArticlesList from './views/ArticlesList';
 import QuickWinsList from './views/QuickWinsList';
@@ -15,7 +16,8 @@ import { sitesApi } from './lib/supabase';
 // View titles
 const viewConfig = {
   keywords: { title: 'Keywords' },
-  concurrents: { title: 'Recherches & Concurrents' },
+  recherches: { title: 'Analyses Marche' },
+  concurrents: { title: 'Concurrents' },
   articles: { title: 'Articles' },
   quickwins: { title: 'Quick Wins' },
   cocons: { title: 'Cocons Semantiques' },
@@ -81,6 +83,8 @@ function App() {
     switch (activeView) {
       case 'keywords':
         return <KeywordsList site={selectedSite} onBack={handleBack} />;
+      case 'recherches':
+        return <RecherchesList site={selectedSite} onBack={handleBack} />;
       case 'concurrents':
         return <ConcurrentsList site={selectedSite} onBack={handleBack} />;
       case 'articles':
@@ -118,6 +122,10 @@ function App() {
         <main className="flex-1 overflow-auto p-6">
           {renderView()}
         </main>
+
+        <div className="text-center text-xs text-dark-muted py-2 border-t border-dark-border">
+          v1.0.109
+        </div>
       </div>
     </div>
   );
