@@ -109,6 +109,11 @@ async function callClaudeWithSearch(prompt, options = {}) {
 
 export const claudeApi = {
   /**
+   * Raw Claude API call - exposed for direct use
+   */
+  callClaudeRaw: callClaude,
+
+  /**
    * Generate optimized keyword seeds based on site context
    */
   async generateKeywordSeeds(site) {
