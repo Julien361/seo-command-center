@@ -520,6 +520,220 @@ Réponds en JSON:
   },
 
   /**
+   * Agent 7: Planner - Creates editorial calendar
+   */
+  async runPlanner(proposals, options = {}) {
+    const { articlesPerWeek = 4, weeks = 8 } = options;
+
+    // Flatten all content from proposals
+    const allContent = [];
+    proposals.piliers?.forEach((pilier, pIdx) => {
+      allContent.push({
+        type: 'pilier',
+        keyword: pilier.keyword,
+        title: pilier.title_suggestion,
+        priority: 1,
+        cluster: `M${pIdx + 1}`
+      });
+      pilier.filles?.forEach(fille => {
+        allContent.push({
+          type: 'fille',
+          keyword: fille.keyword,
+          title: fille.title_suggestion,
+          priority: 2,
+          cluster: `M${pIdx + 1}`,
+          parent: pilier.keyword
+        });
+      });
+      pilier.articles?.forEach(article => {
+        allContent.push({
+          type: 'article',
+          keyword: article.keyword,
+          title: article.title_suggestion,
+          priority: 3,
+          cluster: `M${pIdx + 1}`,
+          parent: pilier.keyword
+        });
+      });
+    });
+
+    // Add quick wins with high priority
+    proposals.quick_wins?.forEach(kw => {
+      if (!allContent.find(c => c.keyword === kw)) {
+        allContent.push({
+          type: 'article',
+          keyword: kw,
+          title: kw,
+          priority: 0, // Highest priority
+          cluster: 'Quick Win'
+        });
+      }
+    });
+
+    const prompt = `Tu es le Planificateur Éditorial expert. Tu crées des calendriers de publication optimisés.
+
+## CONTENU À PLANIFIER (${allContent.length} éléments)
+${JSON.stringify(allContent, null, 2)}
+
+## CONTRAINTES
+- ${articlesPerWeek} articles par semaine
+- Planifier sur ${weeks} semaines
+- Date de début: ${new Date().toISOString().split('T')[0]}
+
+## RÈGLES DE PRIORISATION
+1. Quick Wins en premier (gains rapides)
+2. Pages Mères AVANT leurs Filles (le pilier doit exister)
+3. Pages Filles AVANT leurs Articles supports
+4. Alterner les clusters pour diversifier
+5. Éviter de publier 2 contenus du même cluster le même jour
+
+## FORMAT JSON STRICT
+{
+  "calendar": [
+    {
+      "week": 1,
+      "start_date": "2025-01-06",
+      "publications": [
+        {
+          "day": "lundi",
+          "date": "2025-01-06",
+          "keyword": "...",
+          "title": "...",
+          "type": "pilier|fille|article",
+          "cluster": "M1",
+          "reason": "Quick win prioritaire"
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "total_planned": 32,
+    "piliers": 3,
+    "filles": 12,
+    "articles": 17,
+    "duration_weeks": 8
+  },
+  "recommendations": ["conseil 1", "conseil 2"]
+}`;
+
+    const text = await callClaude(prompt, { maxTokens: 6000 });
+
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      try {
+        return JSON.parse(jsonMatch[0]);
+      } catch (e) {
+        console.error('[Planner] JSON parse error:', e);
+      }
+    }
+
+    return { calendar: [], summary: {}, recommendations: [] };
+  },
+
+  /**
+   * Agent 8: SEO Director - Orients the SEO strategy
+   */
+  async runSeoDirector(site, analysisData, proposals) {
+    const topKeywords = analysisData.keywords?.slice(0, 30).map(k => ({
+      keyword: k.keyword,
+      volume: k.search_volume,
+      position: k.current_position,
+      difficulty: k.difficulty
+    })) || [];
+
+    const competitorDomains = analysisData.competitors?.map(c => c.domain).join(', ') || 'Non analysés';
+
+    const prompt = `Tu es le Directeur SEO expert. Tu orientes la stratégie globale et donnes des directions claires.
+
+## SITE
+- Alias: ${site.mcp_alias}
+- URL: ${site.url}
+- Focus SEO: ${JSON.stringify(site.seo_focus)}
+
+## DONNÉES ANALYSÉES
+- Keywords: ${analysisData.keywords?.length || 0} (top 30 ci-dessous)
+- Concurrents: ${competitorDomains}
+- Recherches marché: ${analysisData.research?.length || 0}
+
+## TOP KEYWORDS
+${JSON.stringify(topKeywords, null, 2)}
+
+## ARCHITECTURE PROPOSÉE
+${proposals ? `${proposals.piliers?.length || 0} piliers proposés` : 'Pas encore définie'}
+
+## TA MISSION
+En tant que Directeur SEO, donne des ORIENTATIONS STRATÉGIQUES claires :
+
+1. **Focus Principal** : Quel angle attaquer en priorité ?
+2. **Positionnement** : Comment se différencier des concurrents ?
+3. **Quick Wins** : Actions rapides à fort impact ?
+4. **Risques** : Points de vigilance ?
+5. **Opportunités** : Niches ou angles sous-exploités ?
+
+## FORMAT JSON STRICT
+{
+  "strategic_focus": {
+    "main_angle": "L'angle principal à attaquer",
+    "positioning": "Comment se positionner vs concurrence",
+    "tone": "expert|accessible|technique|vulgarisé",
+    "target_audience": "Qui cibler en priorité"
+  },
+  "priorities": [
+    {
+      "rank": 1,
+      "action": "Action prioritaire",
+      "why": "Pourquoi c'est prioritaire",
+      "expected_impact": "high|medium|low",
+      "keywords_to_focus": ["kw1", "kw2"]
+    }
+  ],
+  "quick_wins": [
+    {
+      "action": "Action rapide",
+      "effort": "low|medium",
+      "impact": "high|medium"
+    }
+  ],
+  "warnings": [
+    {
+      "risk": "Risque identifié",
+      "mitigation": "Comment l'éviter"
+    }
+  ],
+  "opportunities": [
+    {
+      "opportunity": "Opportunité détectée",
+      "how_to_exploit": "Comment l'exploiter"
+    }
+  ],
+  "content_guidelines": {
+    "must_include": ["élément obligatoire 1", "élément 2"],
+    "avoid": ["à éviter 1", "à éviter 2"],
+    "differentiation": "Ce qui doit nous différencier"
+  }
+}`;
+
+    const text = await callClaude(prompt, { maxTokens: 4096 });
+
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      try {
+        return JSON.parse(jsonMatch[0]);
+      } catch (e) {
+        console.error('[SEO Director] JSON parse error:', e);
+      }
+    }
+
+    return {
+      strategic_focus: { main_angle: 'Non défini' },
+      priorities: [],
+      quick_wins: [],
+      warnings: [],
+      opportunities: []
+    };
+  },
+
+  /**
    * Run the complete Content Factory pipeline
    */
   async runContentFactory(brief, onProgress) {

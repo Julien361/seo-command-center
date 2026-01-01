@@ -4,7 +4,9 @@ import {
   CheckCircle, FileCode, Loader2, Play, Eye, Edit3,
   AlertTriangle, Copy, Calendar, Send, Brain,
   ChevronDown, ChevronRight, RefreshCw, X, Link,
-  FileText, Circle, HelpCircle, ArrowRight, Wand2
+  FileText, Circle, HelpCircle, ArrowRight, Wand2,
+  CalendarDays, Clock, TrendingUp, Zap, Compass,
+  Shield, Lightbulb, Users
 } from 'lucide-react';
 import Card from '../components/common/Card';
 import { supabase } from '../lib/supabase';
@@ -42,6 +44,16 @@ export default function ContentFactory({ site, onBack }) {
   // Architecture proposals from Architect agent
   const [proposals, setProposals] = useState(null);
   const [loadingProposals, setLoadingProposals] = useState(false);
+
+  // SEO Director strategic orientation
+  const [seoDirection, setSeoDirection] = useState(null);
+  const [loadingDirection, setLoadingDirection] = useState(false);
+
+  // Editorial calendar from Planner agent
+  const [editorialCalendar, setEditorialCalendar] = useState(null);
+  const [loadingCalendar, setLoadingCalendar] = useState(false);
+  const [articlesPerWeek, setArticlesPerWeek] = useState(4);
+  const [showCalendar, setShowCalendar] = useState(false);
 
   // Selected page to create
   const [selectedPage, setSelectedPage] = useState(null);
@@ -188,6 +200,34 @@ Propose une architecture de contenu avec:
       setStep('analyze');
     } finally {
       setLoadingProposals(false);
+    }
+  };
+
+  // Run SEO Director agent
+  const runSeoDirector = async () => {
+    setLoadingDirection(true);
+    try {
+      const direction = await claudeApi.runSeoDirector(site, analysisData, proposals);
+      setSeoDirection(direction);
+    } catch (err) {
+      console.error('SEO Director error:', err);
+    } finally {
+      setLoadingDirection(false);
+    }
+  };
+
+  // Run Planner agent
+  const runPlanner = async () => {
+    if (!proposals) return;
+    setLoadingCalendar(true);
+    try {
+      const calendar = await claudeApi.runPlanner(proposals, { articlesPerWeek });
+      setEditorialCalendar(calendar);
+      setShowCalendar(true);
+    } catch (err) {
+      console.error('Planner error:', err);
+    } finally {
+      setLoadingCalendar(false);
     }
   };
 
@@ -415,6 +455,220 @@ Propose une architecture de contenu avec:
             </Card>
           ) : proposals ? (
             <>
+              {/* SEO Director + Planner Controls */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* SEO Director */}
+                <Card className="p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <Compass className="w-5 h-5 text-orange-500" />
+                      <h3 className="font-medium text-white">SEO Director</h3>
+                    </div>
+                    <button
+                      onClick={runSeoDirector}
+                      disabled={loadingDirection}
+                      className="px-3 py-1 bg-orange-500 text-white text-sm rounded-lg hover:bg-orange-600 disabled:opacity-50"
+                    >
+                      {loadingDirection ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Orienter'}
+                    </button>
+                  </div>
+                  {seoDirection ? (
+                    <div className="space-y-2 text-sm">
+                      <div className="p-2 bg-orange-500/10 rounded">
+                        <span className="text-orange-400 font-medium">Focus: </span>
+                        <span className="text-white">{seoDirection.strategic_focus?.main_angle}</span>
+                      </div>
+                      <div className="text-dark-muted">
+                        <Users className="w-3 h-3 inline mr-1" />
+                        {seoDirection.strategic_focus?.target_audience}
+                      </div>
+                      {seoDirection.priorities?.[0] && (
+                        <div className="text-dark-muted">
+                          <TrendingUp className="w-3 h-3 inline mr-1 text-success" />
+                          Priorité: {seoDirection.priorities[0].action}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-dark-muted text-sm">Obtenir les orientations stratégiques</p>
+                  )}
+                </Card>
+
+                {/* Planner */}
+                <Card className="p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <CalendarDays className="w-5 h-5 text-cyan-500" />
+                      <h3 className="font-medium text-white">Planner</h3>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <select
+                        value={articlesPerWeek}
+                        onChange={(e) => setArticlesPerWeek(Number(e.target.value))}
+                        className="bg-dark-bg border border-dark-border rounded px-2 py-1 text-sm text-white"
+                      >
+                        <option value={2}>2/sem</option>
+                        <option value={3}>3/sem</option>
+                        <option value={4}>4/sem</option>
+                        <option value={5}>5/sem</option>
+                      </select>
+                      <button
+                        onClick={runPlanner}
+                        disabled={loadingCalendar}
+                        className="px-3 py-1 bg-cyan-500 text-white text-sm rounded-lg hover:bg-cyan-600 disabled:opacity-50"
+                      >
+                        {loadingCalendar ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Planifier'}
+                      </button>
+                    </div>
+                  </div>
+                  {editorialCalendar ? (
+                    <div className="space-y-2 text-sm">
+                      <div className="p-2 bg-cyan-500/10 rounded flex justify-between">
+                        <span className="text-cyan-400">{editorialCalendar.summary?.total_planned} contenus</span>
+                        <span className="text-white">{editorialCalendar.summary?.duration_weeks} semaines</span>
+                      </div>
+                      <button
+                        onClick={() => setShowCalendar(!showCalendar)}
+                        className="text-cyan-400 hover:text-cyan-300 text-xs flex items-center gap-1"
+                      >
+                        {showCalendar ? 'Masquer' : 'Voir'} le calendrier
+                        <ChevronRight className={`w-3 h-3 transition-transform ${showCalendar ? 'rotate-90' : ''}`} />
+                      </button>
+                    </div>
+                  ) : (
+                    <p className="text-dark-muted text-sm">Générer le calendrier éditorial</p>
+                  )}
+                </Card>
+              </div>
+
+              {/* Editorial Calendar Display */}
+              {showCalendar && editorialCalendar?.calendar && (
+                <Card className="p-4 overflow-x-auto">
+                  <h3 className="text-white font-medium mb-4 flex items-center gap-2">
+                    <CalendarDays className="w-5 h-5 text-cyan-500" />
+                    Calendrier Éditorial
+                  </h3>
+                  <div className="space-y-3">
+                    {editorialCalendar.calendar.slice(0, 4).map((week, wIdx) => (
+                      <div key={wIdx} className="border border-dark-border rounded-lg overflow-hidden">
+                        <div className="p-2 bg-dark-border/50 flex justify-between items-center">
+                          <span className="text-sm font-medium text-white">Semaine {week.week}</span>
+                          <span className="text-xs text-dark-muted">{week.start_date}</span>
+                        </div>
+                        <div className="p-2 grid grid-cols-2 md:grid-cols-4 gap-2">
+                          {week.publications?.map((pub, pIdx) => (
+                            <div
+                              key={pIdx}
+                              className={`p-2 rounded text-xs ${
+                                pub.type === 'pilier' ? 'bg-purple-500/10 border-purple-500/30' :
+                                pub.type === 'fille' ? 'bg-blue-500/10 border-blue-500/30' :
+                                'bg-green-500/10 border-green-500/30'
+                              } border`}
+                            >
+                              <div className="text-dark-muted">{pub.day}</div>
+                              <div className="text-white font-medium truncate">{pub.keyword}</div>
+                              <div className="text-dark-muted flex items-center gap-1 mt-1">
+                                <span className={`w-2 h-2 rounded-full ${
+                                  pub.type === 'pilier' ? 'bg-purple-500' :
+                                  pub.type === 'fille' ? 'bg-blue-500' : 'bg-green-500'
+                                }`}></span>
+                                {pub.cluster}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                    {editorialCalendar.calendar.length > 4 && (
+                      <p className="text-center text-dark-muted text-sm">
+                        + {editorialCalendar.calendar.length - 4} semaines...
+                      </p>
+                    )}
+                  </div>
+                  {editorialCalendar.recommendations?.length > 0 && (
+                    <div className="mt-4 p-3 bg-info/5 border border-info/20 rounded-lg">
+                      <h4 className="text-info text-sm font-medium mb-2 flex items-center gap-1">
+                        <Lightbulb className="w-4 h-4" />
+                        Recommandations
+                      </h4>
+                      <ul className="text-sm text-dark-muted space-y-1">
+                        {editorialCalendar.recommendations.map((rec, idx) => (
+                          <li key={idx}>• {rec}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </Card>
+              )}
+
+              {/* SEO Director Details */}
+              {seoDirection && (
+                <Card className="p-4">
+                  <h3 className="text-white font-medium mb-4 flex items-center gap-2">
+                    <Compass className="w-5 h-5 text-orange-500" />
+                    Orientations Stratégiques
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Priorities */}
+                    {seoDirection.priorities?.length > 0 && (
+                      <div className="space-y-2">
+                        <h4 className="text-sm font-medium text-dark-muted">Priorités</h4>
+                        {seoDirection.priorities.slice(0, 3).map((p, idx) => (
+                          <div key={idx} className="p-2 bg-dark-bg rounded flex items-start gap-2">
+                            <span className="text-orange-500 font-bold">#{p.rank}</span>
+                            <div>
+                              <div className="text-white text-sm">{p.action}</div>
+                              <div className="text-xs text-dark-muted">{p.why}</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {/* Opportunities */}
+                    {seoDirection.opportunities?.length > 0 && (
+                      <div className="space-y-2">
+                        <h4 className="text-sm font-medium text-dark-muted flex items-center gap-1">
+                          <Lightbulb className="w-3 h-3 text-warning" />
+                          Opportunités
+                        </h4>
+                        {seoDirection.opportunities.slice(0, 3).map((o, idx) => (
+                          <div key={idx} className="p-2 bg-warning/5 border border-warning/20 rounded">
+                            <div className="text-white text-sm">{o.opportunity}</div>
+                            <div className="text-xs text-dark-muted">{o.how_to_exploit}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {/* Warnings */}
+                    {seoDirection.warnings?.length > 0 && (
+                      <div className="space-y-2">
+                        <h4 className="text-sm font-medium text-dark-muted flex items-center gap-1">
+                          <Shield className="w-3 h-3 text-red-500" />
+                          Points de vigilance
+                        </h4>
+                        {seoDirection.warnings.slice(0, 2).map((w, idx) => (
+                          <div key={idx} className="p-2 bg-red-500/5 border border-red-500/20 rounded">
+                            <div className="text-red-400 text-sm">{w.risk}</div>
+                            <div className="text-xs text-dark-muted">{w.mitigation}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {/* Content Guidelines */}
+                    {seoDirection.content_guidelines && (
+                      <div className="space-y-2">
+                        <h4 className="text-sm font-medium text-dark-muted">Guidelines contenu</h4>
+                        <div className="p-2 bg-dark-bg rounded text-sm">
+                          <div className="text-success mb-1">✓ {seoDirection.content_guidelines.must_include?.join(', ')}</div>
+                          <div className="text-red-400 mb-1">✗ {seoDirection.content_guidelines.avoid?.join(', ')}</div>
+                          <div className="text-info">★ {seoDirection.content_guidelines.differentiation}</div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </Card>
+              )}
+
               {/* Analysis summary */}
               <Card className="p-4 bg-gradient-to-r from-primary/10 to-purple-600/10 border-primary/30">
                 <div className="flex items-start gap-3">
