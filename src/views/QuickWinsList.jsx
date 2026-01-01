@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft, Zap, TrendingUp, Target, Loader2, ExternalLink } from 'lucide-react';
+import { ArrowLeft, Zap, TrendingUp, Target, Loader2, ExternalLink, RefreshCw, MousePointer } from 'lucide-react';
 import Card from '../components/common/Card';
 import { supabase } from '../lib/supabase';
 
@@ -15,15 +15,28 @@ export default function QuickWinsList({ site, onBack }) {
   const loadQuickWins = async () => {
     setLoading(true);
     try {
+      // Query GSC keyword history for positions 11-30 (page 2-3 = quick win territory)
       const { data, error } = await supabase
-        .from('keywords')
+        .from('gsc_keyword_history')
         .select('*')
         .eq('site_id', site.id)
-        .eq('is_quick_win', true)
-        .order('search_volume', { ascending: false });
+        .gte('position', 11)
+        .lte('position', 30)
+        .gte('impressions', 3)  // At least 3 impressions to be relevant
+        .order('impressions', { ascending: false });
 
       if (error) throw error;
-      setQuickwins(data || []);
+
+      // Deduplicate by keyword (keep highest impressions)
+      const uniqueKeywords = {};
+      (data || []).forEach(kw => {
+        const key = kw.keyword.toLowerCase();
+        if (!uniqueKeywords[key] || uniqueKeywords[key].impressions < kw.impressions) {
+          uniqueKeywords[key] = kw;
+        }
+      });
+
+      setQuickwins(Object.values(uniqueKeywords).sort((a, b) => b.impressions - a.impressions));
     } catch (err) {
       console.error('Error loading quick wins:', err);
     } finally {
@@ -32,9 +45,9 @@ export default function QuickWinsList({ site, onBack }) {
   };
 
   const getPriorityScore = (kw) => {
-    // Score = Volume / (Position * Difficulty)
-    if (!kw.current_position || !kw.difficulty) return 0;
-    return Math.round((kw.search_volume || 0) / (kw.current_position * (kw.difficulty || 1)) * 100);
+    // Score = Impressions / Position (higher = better opportunity)
+    if (!kw.position) return 0;
+    return Math.round((kw.impressions || 0) / kw.position * 10);
   };
 
   const getPriorityClass = (score) => {
@@ -66,7 +79,7 @@ export default function QuickWinsList({ site, onBack }) {
             <Zap className="w-6 h-6 text-warning" />
             Quick Wins
           </h1>
-          <p className="text-dark-muted">{quickwins.length} opportunites P11-20 pour {site?.mcp_alias}</p>
+          <p className="text-dark-muted">{quickwins.length} opportunites P11-30 (GSC) pour {site?.mcp_alias}</p>
         </div>
       </div>
 
@@ -77,7 +90,7 @@ export default function QuickWinsList({ site, onBack }) {
           <div>
             <h3 className="text-white font-medium mb-1">Qu'est-ce qu'un Quick Win ?</h3>
             <p className="text-sm text-dark-muted">
-              Keywords en position 11-20 (page 2) avec volume &gt; 100 et difficulte &lt; 40.
+              Keywords en position 11-30 (pages 2-3) avec des impressions dans Google Search Console.
               Un petit effort d'optimisation peut les faire passer en page 1 !
             </p>
           </div>
@@ -85,20 +98,26 @@ export default function QuickWinsList({ site, onBack }) {
       </Card>
 
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-4 gap-4">
         <Card className="p-4 text-center">
           <div className="text-2xl font-bold text-warning">{quickwins.length}</div>
           <div className="text-sm text-dark-muted">Opportunites</div>
         </Card>
         <Card className="p-4 text-center">
           <div className="text-2xl font-bold text-white">
-            {quickwins.reduce((sum, kw) => sum + (kw.search_volume || 0), 0).toLocaleString()}
+            {quickwins.reduce((sum, kw) => sum + (kw.impressions || 0), 0).toLocaleString()}
           </div>
-          <div className="text-sm text-dark-muted">Volume total</div>
+          <div className="text-sm text-dark-muted">Impressions</div>
+        </Card>
+        <Card className="p-4 text-center">
+          <div className="text-2xl font-bold text-info">
+            {quickwins.reduce((sum, kw) => sum + (kw.clicks || 0), 0).toLocaleString()}
+          </div>
+          <div className="text-sm text-dark-muted">Clics</div>
         </Card>
         <Card className="p-4 text-center">
           <div className="text-2xl font-bold text-success">
-            {quickwins.filter(kw => kw.current_position <= 15).length}
+            {quickwins.filter(kw => kw.position <= 15).length}
           </div>
           <div className="text-sm text-dark-muted">P11-15 (priorite)</div>
         </Card>
@@ -110,47 +129,68 @@ export default function QuickWinsList({ site, onBack }) {
           <thead className="bg-dark-border">
             <tr>
               <th className="text-left px-4 py-3 text-sm font-medium text-dark-muted">Keyword</th>
-              <th className="text-center px-4 py-3 text-sm font-medium text-dark-muted">Volume</th>
               <th className="text-center px-4 py-3 text-sm font-medium text-dark-muted">Position</th>
-              <th className="text-center px-4 py-3 text-sm font-medium text-dark-muted">Difficulte</th>
+              <th className="text-center px-4 py-3 text-sm font-medium text-dark-muted">Impressions</th>
+              <th className="text-center px-4 py-3 text-sm font-medium text-dark-muted">Clics</th>
               <th className="text-center px-4 py-3 text-sm font-medium text-dark-muted">Priorite</th>
+              <th className="text-left px-4 py-3 text-sm font-medium text-dark-muted">Page</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-dark-border">
             {quickwins.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-dark-muted">
-                  Aucun quick win detecte. Lancez l'analyse !
+                <td colSpan={6} className="px-4 py-8 text-center text-dark-muted">
+                  <div className="space-y-2">
+                    <p>Aucun quick win detecte dans Google Search Console.</p>
+                    <p className="text-xs">Les quick wins sont des keywords en position 11-30 avec des impressions.</p>
+                  </div>
                 </td>
               </tr>
             ) : (
               quickwins.map((kw) => {
                 const priority = getPriorityScore(kw);
+                const pagePath = kw.page_url ? new URL(kw.page_url).pathname : '';
                 return (
                   <tr key={kw.id} className="hover:bg-dark-border/50">
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
-                        <Zap className="w-4 h-4 text-warning" />
+                        <Zap className="w-4 h-4 text-warning flex-shrink-0" />
                         <span className="text-white">{kw.keyword}</span>
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-center text-white">
-                      {kw.search_volume?.toLocaleString() || '-'}
-                    </td>
                     <td className="px-4 py-3 text-center">
                       <span className={`font-medium ${
-                        kw.current_position <= 15 ? 'text-success' : 'text-warning'
+                        kw.position <= 15 ? 'text-success' : 'text-warning'
                       }`}>
-                        #{kw.current_position}
+                        #{Math.round(kw.position)}
                       </span>
                     </td>
+                    <td className="px-4 py-3 text-center text-white">
+                      {kw.impressions?.toLocaleString() || '0'}
+                    </td>
                     <td className="px-4 py-3 text-center">
-                      <span className="text-success">{kw.difficulty || '-'}</span>
+                      <span className={kw.clicks > 0 ? 'text-success' : 'text-dark-muted'}>
+                        {kw.clicks || '0'}
+                      </span>
                     </td>
                     <td className="px-4 py-3 text-center">
                       <span className={`px-2 py-1 text-xs rounded font-medium ${getPriorityClass(priority)}`}>
                         {priority > 0 ? priority : '-'}
                       </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      {kw.page_url && (
+                        <a
+                          href={kw.page_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1 text-xs text-info hover:underline max-w-[200px] truncate"
+                          title={kw.page_url}
+                        >
+                          {pagePath || '/'}
+                          <ExternalLink className="w-3 h-3 flex-shrink-0" />
+                        </a>
+                      )}
                     </td>
                   </tr>
                 );

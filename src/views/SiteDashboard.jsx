@@ -37,22 +37,26 @@ export default function SiteDashboard({ site, onNavigate }) {
     if (!site?.id) return;
 
     try {
-      const [keywords, research, competitors, quickwins, cocons, articles, positions, published] = await Promise.all([
+      const [keywords, research, competitors, quickwinsData, cocons, articles, positions, published] = await Promise.all([
         supabase.from('keywords').select('id', { count: 'exact', head: true }).eq('site_id', site.id),
         supabase.from('market_research').select('id', { count: 'exact', head: true }).eq('site_id', site.id),
         supabase.from('competitors').select('id', { count: 'exact', head: true }).eq('site_id', site.id),
-        supabase.from('keywords').select('id', { count: 'exact', head: true }).eq('site_id', site.id).eq('is_quick_win', true),
+        // Quick wins from GSC: position 11-30 with impressions
+        supabase.from('gsc_keyword_history').select('keyword').eq('site_id', site.id).gte('position', 11).lte('position', 30).gte('impressions', 3),
         supabase.from('semantic_clusters').select('id', { count: 'exact', head: true }).eq('site_id', site.id),
         supabase.from('articles').select('id', { count: 'exact', head: true }).eq('site_id', site.id),
         supabase.from('gsc_keyword_history').select('id', { count: 'exact', head: true }).eq('site_id', site.id),
         supabase.from('articles').select('id', { count: 'exact', head: true }).eq('site_id', site.id).not('wp_post_id', 'is', null)
       ]);
 
+      // Count unique keywords for quick wins
+      const uniqueQuickWins = new Set((quickwinsData.data || []).map(k => k.keyword.toLowerCase())).size;
+
       setData({
         keywords: { count: keywords.count || 0, loading: false },
         research: { count: research.count || 0, loading: false },
         competitors: { count: competitors.count || 0, loading: false },
-        quickwins: { count: quickwins.count || 0, loading: false },
+        quickwins: { count: uniqueQuickWins, loading: false },
         cocons: { count: cocons.count || 0, loading: false },
         articles: { count: articles.count || 0, loading: false },
         positions: { count: positions.count || 0, loading: false },
