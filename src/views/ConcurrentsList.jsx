@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft, Target, ExternalLink, Loader2, RefreshCw, Play, TrendingUp, Users, Link2 } from 'lucide-react';
+import { ArrowLeft, Target, ExternalLink, Loader2, RefreshCw, Play, TrendingUp, Users, Link2, Plus, X } from 'lucide-react';
 import Card from '../components/common/Card';
 import { supabase } from '../lib/supabase';
 import { n8nApi } from '../lib/n8n';
@@ -9,6 +9,8 @@ export default function ConcurrentsList({ site, onBack }) {
   const [loading, setLoading] = useState(true);
   const [launching, setLaunching] = useState(false);
   const [success, setSuccess] = useState(null);
+  const [showManualInput, setShowManualInput] = useState(false);
+  const [manualUrls, setManualUrls] = useState('');
 
   useEffect(() => {
     if (!site?.id) return;
@@ -33,7 +35,7 @@ export default function ConcurrentsList({ site, onBack }) {
     }
   };
 
-  const handleLaunchAnalysis = async () => {
+  const handleLaunchAnalysis = async (urls = '') => {
     if (!site) return;
     setLaunching(true);
     setSuccess(null);
@@ -43,12 +45,15 @@ export default function ConcurrentsList({ site, onBack }) {
         project_name: site.mcp_alias,
         site_id: site.id,
         site_url: site.url,
-        competitor_urls: '',
+        competitor_urls: urls,
         analyze_with_ai: true
       });
 
       if (result?.success !== false) {
-        setSuccess('Analyse lancee ! Rafraichis dans 1-2 min.');
+        const msg = urls ? 'Analyse des URLs lancee !' : 'Auto-detection lancee !';
+        setSuccess(msg + ' Rafraichis dans 1-2 min.');
+        setShowManualInput(false);
+        setManualUrls('');
         setTimeout(() => {
           loadCompetitors();
           setSuccess(null);
@@ -58,6 +63,12 @@ export default function ConcurrentsList({ site, onBack }) {
       console.error('Launch error:', err);
     } finally {
       setLaunching(false);
+    }
+  };
+
+  const handleManualAnalysis = () => {
+    if (manualUrls.trim()) {
+      handleLaunchAnalysis(manualUrls.trim());
     }
   };
 
@@ -103,18 +114,63 @@ export default function ConcurrentsList({ site, onBack }) {
             <RefreshCw className="w-4 h-4" />
           </button>
           <button
-            onClick={handleLaunchAnalysis}
+            onClick={() => setShowManualInput(!showManualInput)}
+            className="flex items-center gap-2 px-3 py-2 rounded-lg bg-dark-border hover:bg-dark-muted/20 text-white transition-colors"
+            title="Entrer des URLs manuellement"
+          >
+            <Plus className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => handleLaunchAnalysis('')}
             disabled={launching}
             className="flex items-center gap-2 px-4 py-2 rounded-lg bg-warning text-white hover:opacity-90 transition-colors disabled:opacity-50"
           >
             {launching ? (
               <><Loader2 className="w-4 h-4 animate-spin" /> Analyse...</>
             ) : (
-              <><Play className="w-4 h-4" /> Nouvelle analyse</>
+              <><Play className="w-4 h-4" /> Auto-detect</>
             )}
           </button>
         </div>
       </div>
+
+      {/* Manual URL Input */}
+      {showManualInput && (
+        <Card className="p-4">
+          <div className="flex items-start gap-4">
+            <div className="flex-1">
+              <label className="block text-sm font-medium text-white mb-2">
+                URLs des concurrents (une par ligne)
+              </label>
+              <textarea
+                value={manualUrls}
+                onChange={(e) => setManualUrls(e.target.value)}
+                placeholder="https://concurrent1.fr&#10;https://concurrent2.fr&#10;https://concurrent3.fr"
+                className="w-full h-24 px-3 py-2 rounded-lg bg-dark-bg border border-dark-border text-white placeholder-dark-muted focus:border-primary focus:outline-none resize-none"
+              />
+              <p className="text-xs text-dark-muted mt-1">
+                Pour les petits sites, l'auto-detection peut ne pas trouver de concurrents. Entrez les URLs manuellement.
+              </p>
+            </div>
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={handleManualAnalysis}
+                disabled={launching || !manualUrls.trim()}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-white hover:opacity-90 transition-colors disabled:opacity-50"
+              >
+                {launching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
+                Analyser
+              </button>
+              <button
+                onClick={() => { setShowManualInput(false); setManualUrls(''); }}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-dark-border text-white hover:bg-dark-muted/20 transition-colors"
+              >
+                <X className="w-4 h-4" /> Annuler
+              </button>
+            </div>
+          </div>
+        </Card>
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-3 gap-4">
@@ -137,18 +193,31 @@ export default function ConcurrentsList({ site, onBack }) {
         <Card className="p-8 text-center">
           <Target className="w-12 h-12 text-dark-muted mx-auto mb-4" />
           <h3 className="text-lg font-medium text-white mb-2">Aucun concurrent</h3>
-          <p className="text-dark-muted mb-4">Lancez une analyse pour detecter les concurrents</p>
-          <button
-            onClick={handleLaunchAnalysis}
-            disabled={launching}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-warning text-white hover:opacity-90 transition-colors disabled:opacity-50"
-          >
-            {launching ? (
-              <><Loader2 className="w-4 h-4 animate-spin" /> Analyse...</>
-            ) : (
-              <><Play className="w-4 h-4" /> Lancer l'analyse</>
-            )}
-          </button>
+          <p className="text-dark-muted mb-4">
+            Lancez l'auto-detection ou entrez des URLs manuellement
+          </p>
+          <div className="flex justify-center gap-3">
+            <button
+              onClick={() => handleLaunchAnalysis('')}
+              disabled={launching}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-warning text-white hover:opacity-90 transition-colors disabled:opacity-50"
+            >
+              {launching ? (
+                <><Loader2 className="w-4 h-4 animate-spin" /> Detection...</>
+              ) : (
+                <><Play className="w-4 h-4" /> Auto-detect</>
+              )}
+            </button>
+            <button
+              onClick={() => setShowManualInput(true)}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-white hover:opacity-90 transition-colors"
+            >
+              <Plus className="w-4 h-4" /> URLs manuelles
+            </button>
+          </div>
+          <p className="text-xs text-dark-muted mt-4">
+            Note: L'auto-detection utilise DataForSEO et peut ne pas fonctionner pour les petits sites.
+          </p>
         </Card>
       ) : (
         <Card className="overflow-hidden">
