@@ -563,10 +563,11 @@ Réponds en JSON:
   },
 
   /**
-   * Agent 7: Planner - Creates editorial calendar
+   * Agent 7: Planner - Creates editorial calendar (supports up to 1 year)
    */
   async runPlanner(proposals, options = {}) {
     const { articlesPerWeek = 4, weeks = 8 } = options;
+    const totalNeeded = articlesPerWeek * weeks;
 
     // Flatten all content from proposals
     const allContent = [];
@@ -607,28 +608,56 @@ Réponds en JSON:
           type: 'article',
           keyword: kw,
           title: kw,
-          priority: 0, // Highest priority
+          priority: 0,
           cluster: 'Quick Win'
         });
       }
     });
 
+    // Add content gaps as potential articles
+    proposals.content_gaps?.forEach(gap => {
+      if (!allContent.find(c => c.keyword === gap)) {
+        allContent.push({
+          type: 'article',
+          keyword: gap,
+          title: gap,
+          priority: 4,
+          cluster: 'Opportunité'
+        });
+      }
+    });
+
+    const needsMoreContent = allContent.length < totalNeeded;
+
     const prompt = `Tu es le Planificateur Éditorial expert. Tu crées des calendriers de publication optimisés.
 
-## CONTENU À PLANIFIER (${allContent.length} éléments)
-${JSON.stringify(allContent, null, 2)}
+## CONTENU DISPONIBLE (${allContent.length} éléments)
+${JSON.stringify(allContent.slice(0, 100), null, 2)}
+${allContent.length > 100 ? `... et ${allContent.length - 100} autres` : ''}
 
-## CONTRAINTES
+## OBJECTIF
 - ${articlesPerWeek} articles par semaine
-- Planifier sur ${weeks} semaines
+- Planifier sur ${weeks} semaines (${Math.round(weeks/4.3)} mois)
+- Total nécessaire: ${totalNeeded} articles
 - Date de début: ${new Date().toISOString().split('T')[0]}
+
+${needsMoreContent ? `
+## ⚠️ CONTENU INSUFFISANT
+Tu n'as que ${allContent.length} contenus mais il en faut ${totalNeeded}.
+Tu DOIS générer des suggestions supplémentaires basées sur les clusters existants:
+- Variations des keywords existants
+- Sous-thématiques non couvertes
+- Questions longue traîne
+- Comparatifs et guides
+` : ''}
 
 ## RÈGLES DE PRIORISATION
 1. Quick Wins en premier (gains rapides)
 2. Pages Mères AVANT leurs Filles (le pilier doit exister)
 3. Pages Filles AVANT leurs Articles supports
 4. Alterner les clusters pour diversifier
-5. Éviter de publier 2 contenus du même cluster le même jour
+5. Répartir équitablement sur toute la période
+6. Prévoir des contenus saisonniers si pertinent
 
 ## FORMAT JSON STRICT
 {
@@ -644,22 +673,31 @@ ${JSON.stringify(allContent, null, 2)}
           "title": "...",
           "type": "pilier|fille|article",
           "cluster": "M1",
-          "reason": "Quick win prioritaire"
+          "reason": "Quick win prioritaire",
+          "is_suggested": false
         }
       ]
     }
   ],
   "summary": {
-    "total_planned": 32,
-    "piliers": 3,
-    "filles": 12,
-    "articles": 17,
-    "duration_weeks": 8
+    "total_planned": ${totalNeeded},
+    "from_proposals": ${allContent.length},
+    "suggested": ${Math.max(0, totalNeeded - allContent.length)},
+    "piliers": 0,
+    "filles": 0,
+    "articles": 0,
+    "duration_weeks": ${weeks}
   },
+  "suggested_topics": [
+    {"keyword": "...", "cluster": "M1", "rationale": "Pourquoi ce sujet"}
+  ],
   "recommendations": ["conseil 1", "conseil 2"]
 }`;
 
-    const text = await callClaude(prompt, { maxTokens: 6000 });
+    // Use higher token limit for long calendars
+    const maxTokens = weeks > 26 ? 16000 : weeks > 13 ? 12000 : 8000;
+
+    const text = await callClaude(prompt, { maxTokens });
 
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
@@ -670,7 +708,7 @@ ${JSON.stringify(allContent, null, 2)}
       }
     }
 
-    return { calendar: [], summary: {}, recommendations: [] };
+    return { calendar: [], summary: { total_planned: 0, duration_weeks: weeks }, recommendations: [] };
   },
 
   /**

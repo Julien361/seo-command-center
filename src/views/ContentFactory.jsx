@@ -53,6 +53,7 @@ export default function ContentFactory({ site, onBack }) {
   const [editorialCalendar, setEditorialCalendar] = useState(null);
   const [loadingCalendar, setLoadingCalendar] = useState(false);
   const [articlesPerWeek, setArticlesPerWeek] = useState(4);
+  const [planningDuration, setPlanningDuration] = useState(8); // weeks
   const [showCalendar, setShowCalendar] = useState(false);
 
   // Selected page to create
@@ -248,7 +249,10 @@ Propose une architecture de contenu avec:
     if (!proposals) return;
     setLoadingCalendar(true);
     try {
-      const calendar = await claudeApi.runPlanner(proposals, { articlesPerWeek });
+      const calendar = await claudeApi.runPlanner(proposals, {
+        articlesPerWeek,
+        weeks: planningDuration
+      });
       setEditorialCalendar(calendar);
       setShowCalendar(true);
     } catch (err) {
@@ -545,19 +549,36 @@ Propose une architecture de contenu avec:
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2">
                       <CalendarDays className="w-5 h-5 text-cyan-500" />
-                      <h3 className="font-medium text-white">Planner</h3>
+                      <h3 className="font-medium text-white">Planner Éditorial</h3>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <select
-                        value={articlesPerWeek}
-                        onChange={(e) => setArticlesPerWeek(Number(e.target.value))}
-                        className="bg-dark-bg border border-dark-border rounded px-2 py-1 text-sm text-white"
-                      >
-                        <option value={2}>2/sem</option>
-                        <option value={3}>3/sem</option>
-                        <option value={4}>4/sem</option>
-                        <option value={5}>5/sem</option>
-                      </select>
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-1">
+                        <span className="text-xs text-dark-muted">Durée:</span>
+                        <select
+                          value={planningDuration}
+                          onChange={(e) => setPlanningDuration(Number(e.target.value))}
+                          className="bg-dark-bg border border-dark-border rounded px-2 py-1 text-sm text-white"
+                        >
+                          <option value={4}>1 mois</option>
+                          <option value={8}>2 mois</option>
+                          <option value={13}>3 mois</option>
+                          <option value={26}>6 mois</option>
+                          <option value={52}>1 an</option>
+                        </select>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <span className="text-xs text-dark-muted">Rythme:</span>
+                        <select
+                          value={articlesPerWeek}
+                          onChange={(e) => setArticlesPerWeek(Number(e.target.value))}
+                          className="bg-dark-bg border border-dark-border rounded px-2 py-1 text-sm text-white"
+                        >
+                          <option value={2}>2/sem</option>
+                          <option value={3}>3/sem</option>
+                          <option value={4}>4/sem</option>
+                          <option value={5}>5/sem</option>
+                        </select>
+                      </div>
                       <button
                         onClick={runPlanner}
                         disabled={loadingCalendar}
@@ -567,12 +588,23 @@ Propose une architecture de contenu avec:
                       </button>
                     </div>
                   </div>
+
+                  {/* Estimation */}
+                  <div className="text-xs text-dark-muted mb-2">
+                    → {planningDuration} semaines × {articlesPerWeek}/sem = <span className="text-cyan-400 font-medium">{planningDuration * articlesPerWeek} articles</span>
+                  </div>
+
                   {editorialCalendar ? (
                     <div className="space-y-2 text-sm">
                       <div className="p-2 bg-cyan-500/10 rounded flex justify-between">
-                        <span className="text-cyan-400">{editorialCalendar.summary?.total_planned} contenus</span>
+                        <span className="text-cyan-400">{editorialCalendar.summary?.total_planned} contenus planifiés</span>
                         <span className="text-white">{editorialCalendar.summary?.duration_weeks} semaines</span>
                       </div>
+                      {editorialCalendar.summary?.total_planned < planningDuration * articlesPerWeek && (
+                        <div className="p-2 bg-warning/10 rounded text-warning text-xs">
+                          ⚠️ Pas assez de contenu proposé. Relancez l'Architecte avec plus de keywords.
+                        </div>
+                      )}
                       <button
                         onClick={() => setShowCalendar(!showCalendar)}
                         className="text-cyan-400 hover:text-cyan-300 text-xs flex items-center gap-1"
@@ -582,22 +614,69 @@ Propose une architecture de contenu avec:
                       </button>
                     </div>
                   ) : (
-                    <p className="text-dark-muted text-sm">Générer le calendrier éditorial</p>
+                    <p className="text-dark-muted text-sm">Générer le calendrier éditorial sur {planningDuration} semaines</p>
                   )}
               </Card>
 
               {/* Editorial Calendar Display */}
               {showCalendar && editorialCalendar?.calendar && (
                 <Card className="p-4 overflow-x-auto">
-                  <h3 className="text-white font-medium mb-4 flex items-center gap-2">
-                    <CalendarDays className="w-5 h-5 text-cyan-500" />
-                    Calendrier Éditorial
-                  </h3>
-                  <div className="space-y-3">
-                    {editorialCalendar.calendar.slice(0, 4).map((week, wIdx) => (
-                      <div key={wIdx} className="border border-dark-border rounded-lg overflow-hidden">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-white font-medium flex items-center gap-2">
+                      <CalendarDays className="w-5 h-5 text-cyan-500" />
+                      Calendrier Éditorial
+                    </h3>
+                    <div className="flex items-center gap-4 text-xs">
+                      <span className="flex items-center gap-1">
+                        <span className="w-2 h-2 rounded-full bg-purple-500"></span>
+                        Mères ({editorialCalendar.summary?.piliers || 0})
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+                        Filles ({editorialCalendar.summary?.filles || 0})
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <span className="w-2 h-2 rounded-full bg-green-500"></span>
+                        Articles ({editorialCalendar.summary?.articles || 0})
+                      </span>
+                      {editorialCalendar.summary?.suggested > 0 && (
+                        <span className="flex items-center gap-1 text-warning">
+                          <Wand2 className="w-3 h-3" />
+                          +{editorialCalendar.summary.suggested} suggérés
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Month Navigation for long calendars */}
+                  {editorialCalendar.calendar.length > 8 && (
+                    <div className="flex flex-wrap gap-2 mb-4">
+                      {Array.from({ length: Math.ceil(editorialCalendar.calendar.length / 4) }, (_, i) => (
+                        <button
+                          key={i}
+                          onClick={() => {
+                            document.getElementById(`month-${i}`)?.scrollIntoView({ behavior: 'smooth' });
+                          }}
+                          className="px-2 py-1 bg-dark-bg rounded text-xs text-dark-muted hover:text-white hover:bg-dark-border"
+                        >
+                          Mois {i + 1}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="space-y-3 max-h-[600px] overflow-y-auto">
+                    {editorialCalendar.calendar.map((week, wIdx) => (
+                      <div
+                        key={wIdx}
+                        id={wIdx % 4 === 0 ? `month-${Math.floor(wIdx / 4)}` : undefined}
+                        className="border border-dark-border rounded-lg overflow-hidden"
+                      >
                         <div className="p-2 bg-dark-border/50 flex justify-between items-center">
-                          <span className="text-sm font-medium text-white">Semaine {week.week}</span>
+                          <span className="text-sm font-medium text-white">
+                            Semaine {week.week}
+                            {wIdx % 4 === 0 && <span className="ml-2 text-cyan-400 text-xs">Mois {Math.floor(wIdx / 4) + 1}</span>}
+                          </span>
                           <span className="text-xs text-dark-muted">{week.start_date}</span>
                         </div>
                         <div className="p-2 grid grid-cols-2 md:grid-cols-4 gap-2">
@@ -608,10 +687,13 @@ Propose une architecture de contenu avec:
                                 pub.type === 'pilier' ? 'bg-purple-500/10 border-purple-500/30' :
                                 pub.type === 'fille' ? 'bg-blue-500/10 border-blue-500/30' :
                                 'bg-green-500/10 border-green-500/30'
-                              } border`}
+                              } border ${pub.is_suggested ? 'border-dashed' : ''}`}
                             >
-                              <div className="text-dark-muted">{pub.day}</div>
-                              <div className="text-white font-medium truncate">{pub.keyword}</div>
+                              <div className="flex justify-between">
+                                <span className="text-dark-muted">{pub.day}</span>
+                                {pub.is_suggested && <Wand2 className="w-3 h-3 text-warning" />}
+                              </div>
+                              <div className="text-white font-medium truncate" title={pub.keyword}>{pub.keyword}</div>
                               <div className="text-dark-muted flex items-center gap-1 mt-1">
                                 <span className={`w-2 h-2 rounded-full ${
                                   pub.type === 'pilier' ? 'bg-purple-500' :
@@ -624,12 +706,26 @@ Propose une architecture de contenu avec:
                         </div>
                       </div>
                     ))}
-                    {editorialCalendar.calendar.length > 4 && (
-                      <p className="text-center text-dark-muted text-sm">
-                        + {editorialCalendar.calendar.length - 4} semaines...
-                      </p>
-                    )}
                   </div>
+
+                  {/* Suggested Topics */}
+                  {editorialCalendar.suggested_topics?.length > 0 && (
+                    <div className="mt-4 p-3 bg-warning/5 border border-warning/20 rounded-lg">
+                      <h4 className="text-warning text-sm font-medium mb-2 flex items-center gap-1">
+                        <Wand2 className="w-4 h-4" />
+                        Sujets suggérés pour compléter ({editorialCalendar.suggested_topics.length})
+                      </h4>
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-xs">
+                        {editorialCalendar.suggested_topics.slice(0, 9).map((topic, idx) => (
+                          <div key={idx} className="p-2 bg-dark-bg rounded">
+                            <div className="text-white">{topic.keyword}</div>
+                            <div className="text-dark-muted">{topic.cluster} - {topic.rationale}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   {editorialCalendar.recommendations?.length > 0 && (
                     <div className="mt-4 p-3 bg-info/5 border border-info/20 rounded-lg">
                       <h4 className="text-info text-sm font-medium mb-2 flex items-center gap-1">
