@@ -257,11 +257,16 @@ ${JSON.stringify(strategistOutput, null, 2)}
 ## CONCURRENTS À SURPASSER
 ${brief.competitors?.map(c => `- ${c.domain}`).join('\n') || 'Aucun'}
 
+## QUESTIONS PAA (People Also Ask) - À INTÉGRER EN FAQ
+${brief.paa_questions?.length > 0
+  ? brief.paa_questions.map((q, i) => `${i + 1}. ${q}`).join('\n')
+  : 'Aucune PAA fournie - suggère 4-6 questions pertinentes'}
+
 ## TA MISSION
 Rédige l'article complet en suivant:
 1. La structure du brief (H1, H2, H3)
 2. Les points clés à couvrir
-3. Intègre les questions FAQ
+3. IMPORTANT: Intègre une section FAQ avec les questions PAA ci-dessus
 4. Optimise pour la Position 0
 5. Respecte le ton demandé
 

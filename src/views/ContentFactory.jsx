@@ -91,16 +91,18 @@ export default function ContentFactory({ site, onBack }) {
 
   const loadAnalysisData = async () => {
     try {
-      const [kw, comp, research] = await Promise.all([
+      const [kw, comp, research, paa] = await Promise.all([
         supabase.from('keywords').select('*').eq('site_id', site.id).order('search_volume', { ascending: false }).limit(200),
         supabase.from('competitors').select('*').eq('site_id', site.id),
-        supabase.from('market_research').select('*').eq('site_id', site.id).limit(10)
+        supabase.from('market_research').select('*').eq('site_id', site.id).limit(10),
+        supabase.from('paa_questions').select('*').eq('site_id', site.id).order('position', { ascending: true })
       ]);
 
       setAnalysisData({
         keywords: kw.data || [],
         competitors: comp.data || [],
         research: research.data || [],
+        paaQuestions: paa.data || [],
         loading: false
       });
     } catch (err) {
@@ -262,6 +264,20 @@ Propose une architecture de contenu avec:
     }
   };
 
+  // Get PAA questions related to a keyword
+  const getPaaForKeyword = (keyword) => {
+    if (!keyword || !analysisData.paaQuestions) return [];
+    const kwLower = keyword.toLowerCase();
+    return analysisData.paaQuestions
+      .filter(paa =>
+        paa.seed_keyword?.toLowerCase() === kwLower ||
+        paa.seed_keyword?.toLowerCase().includes(kwLower) ||
+        kwLower.includes(paa.seed_keyword?.toLowerCase() || '')
+      )
+      .map(paa => paa.question)
+      .filter(Boolean);
+  };
+
   // Select a page to create
   const selectPage = (type, pilierKeyword, pageData) => {
     // Find related pages for internal linking
@@ -278,6 +294,9 @@ Propose une architecture de contenu avec:
       });
     }
 
+    // Get PAA questions for this keyword
+    const relatedPaa = getPaaForKeyword(pageData.keyword);
+
     setSelectedPage({ type, pilierKeyword, ...pageData });
     setBrief({
       keyword: pageData.keyword,
@@ -285,7 +304,7 @@ Propose une architecture de contenu avec:
         ? proposals?.piliers?.find(p => p.keyword === pageData.keyword)?.filles?.map(f => f.keyword) || []
         : [],
       content_type: type,
-      paa_questions: pageData.paa_questions || [],
+      paa_questions: pageData.paa_questions?.length > 0 ? pageData.paa_questions : relatedPaa,
       competitors: analysisData.competitors,
       site: site,
       internal_links: internalLinks
@@ -962,20 +981,60 @@ Propose une architecture de contenu avec:
               </div>
             )}
 
-            {/* PAA */}
-            {brief.paa_questions.length > 0 && (
-              <div>
-                <label className="block text-sm text-dark-muted mb-1">
-                  <HelpCircle className="w-4 h-4 inline mr-1" />
-                  Questions PAA ({brief.paa_questions.length})
-                </label>
-                <div className="flex flex-wrap gap-2">
+            {/* PAA Questions */}
+            <div>
+              <label className="block text-sm text-dark-muted mb-2">
+                <HelpCircle className="w-4 h-4 inline mr-1" />
+                Questions PAA pour FAQ ({brief.paa_questions.length} sélectionnées)
+              </label>
+
+              {/* Selected PAA */}
+              {brief.paa_questions.length > 0 && (
+                <div className="flex flex-wrap gap-2 mb-2">
                   {brief.paa_questions.map((q, idx) => (
-                    <span key={idx} className="px-2 py-1 bg-dark-bg rounded text-sm text-white">{q}</span>
+                    <span
+                      key={idx}
+                      className="px-2 py-1 bg-purple-500/20 text-purple-400 rounded text-sm flex items-center gap-1 cursor-pointer hover:bg-purple-500/30"
+                      onClick={() => setBrief(prev => ({
+                        ...prev,
+                        paa_questions: prev.paa_questions.filter((_, i) => i !== idx)
+                      }))}
+                      title="Cliquer pour retirer"
+                    >
+                      {q.length > 50 ? q.substring(0, 50) + '...' : q}
+                      <X className="w-3 h-3" />
+                    </span>
                   ))}
                 </div>
-              </div>
-            )}
+              )}
+
+              {/* Available PAA suggestions */}
+              {analysisData.paaQuestions?.length > 0 && (
+                <div className="mt-2">
+                  <div className="text-xs text-dark-muted mb-1">
+                    PAA disponibles ({analysisData.paaQuestions.filter(p => !brief.paa_questions.includes(p.question)).length}) - cliquer pour ajouter
+                  </div>
+                  <div className="flex flex-wrap gap-1 max-h-24 overflow-y-auto">
+                    {analysisData.paaQuestions
+                      .filter(p => p.question && !brief.paa_questions.includes(p.question))
+                      .slice(0, 20)
+                      .map((paa, idx) => (
+                        <button
+                          key={idx}
+                          onClick={() => setBrief(prev => ({
+                            ...prev,
+                            paa_questions: [...prev.paa_questions, paa.question]
+                          }))}
+                          className="px-2 py-0.5 bg-dark-bg text-dark-muted rounded text-xs hover:bg-dark-border hover:text-white transition-colors"
+                          title={paa.question}
+                        >
+                          + {paa.question.length > 40 ? paa.question.substring(0, 40) + '...' : paa.question}
+                        </button>
+                      ))}
+                  </div>
+                </div>
+              )}
+            </div>
 
             {/* Internal links */}
             {brief.internal_links.length > 0 && (
