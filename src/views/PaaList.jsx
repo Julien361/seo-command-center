@@ -11,7 +11,11 @@ export default function PaaList({ site, onBack }) {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [enriching, setEnriching] = useState(false);
-  const [seedKeyword, setSeedKeyword] = useState('');
+
+  // Get site niche from seo_focus
+  const siteNiche = Array.isArray(site?.seo_focus)
+    ? site.seo_focus.filter(s => s && !s.startsWith('seeds:')).join(' ')
+    : (site?.seo_focus || site?.mcp_alias || '');
 
   useEffect(() => {
     if (!site?.id) return;
@@ -36,9 +40,12 @@ export default function PaaList({ site, onBack }) {
     }
   };
 
-  // Search PAA for a keyword
+  // Search PAA for the site's niche (general search)
   const searchPaa = async () => {
-    if (!seedKeyword.trim()) return;
+    if (!siteNiche.trim()) {
+      alert('Aucune niche définie pour ce site. Ajoutez un seo_focus.');
+      return;
+    }
 
     setEnriching(true);
     try {
@@ -46,16 +53,14 @@ export default function PaaList({ site, onBack }) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          keyword: seedKeyword.trim(),
+          keyword: siteNiche.trim(),
           site_id: site.id,
           save_to_db: true
         })
       });
 
       if (response.ok) {
-        // Reload PAA
         await loadPaa();
-        setSeedKeyword('');
       } else {
         console.error('PAA search failed');
       }
@@ -108,34 +113,25 @@ export default function PaaList({ site, onBack }) {
         </div>
       </div>
 
-      {/* Search new PAA */}
+      {/* Search PAA for site niche */}
       <Card className="p-4">
-        <div className="flex items-center gap-4">
-          <div className="flex-1">
-            <label className="block text-sm text-dark-muted mb-1">Rechercher PAA pour un keyword</label>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                placeholder="Ex: maprimeadapt conditions"
-                value={seedKeyword}
-                onChange={(e) => setSeedKeyword(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && searchPaa()}
-                className="flex-1 bg-dark-bg border border-dark-border rounded-lg px-3 py-2 text-white placeholder:text-dark-muted focus:outline-none focus:border-primary"
-              />
-              <button
-                onClick={searchPaa}
-                disabled={enriching || !seedKeyword.trim()}
-                className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-dark-border disabled:text-dark-muted text-white rounded-lg transition-colors"
-              >
-                {enriching ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Search className="w-4 h-4" />
-                )}
-                Rechercher
-              </button>
-            </div>
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-sm text-dark-muted mb-1">Niche du site</div>
+            <div className="text-white font-medium">{siteNiche || 'Non définie'}</div>
           </div>
+          <button
+            onClick={searchPaa}
+            disabled={enriching || !siteNiche.trim()}
+            className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-dark-border disabled:text-dark-muted text-white rounded-lg transition-colors"
+          >
+            {enriching ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <RefreshCw className="w-4 h-4" />
+            )}
+            {enriching ? 'Recherche en cours...' : 'Rechercher PAA'}
+          </button>
         </div>
       </Card>
 
@@ -176,7 +172,7 @@ export default function PaaList({ site, onBack }) {
         <Card className="p-8 text-center text-dark-muted">
           <MessageCircleQuestion className="w-12 h-12 mx-auto mb-4 opacity-50" />
           <p>Aucune question PAA pour ce site.</p>
-          <p className="text-sm mt-2">Utilisez le champ ci-dessus pour rechercher des PAA.</p>
+          <p className="text-sm mt-2">Cliquez sur "Rechercher PAA" pour enrichir les questions.</p>
         </Card>
       ) : (
         <div className="space-y-4">
