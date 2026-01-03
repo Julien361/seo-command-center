@@ -425,10 +425,10 @@ Pas de commentaires, pas d'explications.`;
   },
 
   /**
-   * Agent 3: Fact Checker - Verifies facts with web search (uses Haiku for cost)
+   * Agent 3: Fact Checker - Verifies facts with web search on OFFICIAL sources
    */
   async runFactChecker(content, keyword) {
-    const prompt = `Tu es le Vérificateur de Faits. Tu valides chaque affirmation factuelle.
+    const prompt = `Tu es le Vérificateur de Faits EXPERT. Tu valides CHAQUE affirmation factuelle avec une RIGUEUR ABSOLUE.
 
 ## CONTENU À VÉRIFIER
 ${content}
@@ -436,36 +436,65 @@ ${content}
 ## SUJET
 ${keyword}
 
+## SOURCES PRIORITAIRES OBLIGATOIRES
+Pour les sujets gouvernementaux (aides, subventions, réglementations), tu DOIS vérifier sur ces sites OFFICIELS :
+- service-public.gouv.fr (référence principale)
+- france-renov.gouv.fr (MaPrimeRénov, MaPrimeAdapt)
+- solidarites.gouv.fr (aides sociales)
+- economie.gouv.fr (économie, fiscalité)
+- anah.gouv.fr (aides à l'habitat)
+- legifrance.gouv.fr (textes de loi)
+- ameli.fr (santé, CPAM)
+
+## ÉLÉMENTS À VÉRIFIER IMPÉRATIVEMENT
+1. **Pourcentages d'aide** : 50%, 70%, 90%... CHAQUE pourcentage doit correspondre aux barèmes officiels
+2. **Plafonds de ressources** : Vérifier les montants exacts selon la composition du foyer
+3. **Conditions d'éligibilité** : Âge, revenus, GIR, handicap... TOUTES les conditions
+4. **Montants maximum** : Plafonds de travaux, montants d'aide
+5. **Dates et délais** : Validité des dispositifs, délais de traitement
+
+## RÈGLES STRICTES
+- Un pourcentage d'aide INVENTÉ = ERREUR GRAVE (ex: "60% d'aide" si ça n'existe pas)
+- Une condition d'éligibilité FAUSSE = ERREUR GRAVE
+- Un montant APPROXIMATIF = À CORRIGER avec le montant exact
+- Si tu ne trouves pas de source officielle = marquer comme NON VÉRIFIÉ
+
 ## TA MISSION
-1. Identifie TOUTES les affirmations factuelles (chiffres, statistiques, dates, faits)
-2. Vérifie chaque fait via une recherche web
-3. Marque les faits vérifiés ✅ ou non vérifiés ⚠️
-4. Si un fait est FAUX, propose la correction
+1. LISTE toutes les affirmations factuelles (chiffres, %, conditions, montants)
+2. RECHERCHE CHAQUE fait sur les sites gouvernementaux EN PRIORITÉ
+3. VÉRIFIE avec la source EXACTE (pas de "selon mes connaissances")
+4. CORRIGE impérativement tout ce qui est faux ou approximatif
 
 ## FORMAT DE SORTIE
 Réponds en JSON:
 {
   "facts_checked": [
     {
-      "claim": "Le prix moyen est de 30€/mois",
+      "claim": "MaPrimeAdapt couvre 50% des travaux pour les ménages modestes",
+      "category": "pourcentage_aide|plafond_ressources|condition_eligibilite|montant|date",
       "verified": true,
-      "source": "https://...",
+      "source": "https://service-public.gouv.fr/...",
+      "official_value": "50% pour revenus modestes, 70% pour très modestes",
       "correction": null
     }
   ],
   "corrections_needed": [
     {
-      "original": "texte original faux",
-      "corrected": "texte corrigé"
+      "original": "Les ménages peuvent recevoir 60% d'aide",
+      "corrected": "Les ménages aux revenus modestes peuvent recevoir 50% d'aide, et ceux aux revenus très modestes 70%",
+      "source": "https://service-public.gouv.fr/particuliers/vosdroits/F37501",
+      "severity": "critical"
     }
   ],
   "verification_summary": {
     "total_facts": 10,
     "verified": 8,
     "unverified": 2,
+    "critical_errors": 1,
     "score": 80
   },
-  "warnings": ["Liste des affirmations douteuses"]
+  "official_sources_used": ["service-public.gouv.fr", "france-renov.gouv.fr"],
+  "warnings": ["Liste des affirmations non vérifiées sur sources officielles"]
 }`;
 
     try {

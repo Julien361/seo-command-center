@@ -132,7 +132,7 @@ function App() {
         </main>
 
         <div className="text-center text-xs text-dark-muted py-2 border-t border-dark-border">
-          v1.0.129
+          v1.0.130
         </div>
       </div>
     </div>
