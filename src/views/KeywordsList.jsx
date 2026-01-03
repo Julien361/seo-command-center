@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import {
   ArrowLeft, Search, TrendingUp, TrendingDown, Minus, ExternalLink,
-  Loader2, HelpCircle, ChevronDown, ChevronRight, MessageCircleQuestion,
-  CheckCircle, Circle, RefreshCw
+  Loader2, ChevronDown, ChevronRight, MessageCircleQuestion,
+  CheckCircle, Circle
 } from 'lucide-react';
 import Card from '../components/common/Card';
 import { supabase } from '../lib/supabase';
@@ -14,8 +14,6 @@ export default function KeywordsList({ site, onBack }) {
   const [search, setSearch] = useState('');
   const [expandedKeyword, setExpandedKeyword] = useState(null);
   const [showPaaOnly, setShowPaaOnly] = useState(false);
-  const [enriching, setEnriching] = useState(false);
-  const [enrichProgress, setEnrichProgress] = useState({ current: 0, total: 0 });
 
   useEffect(() => {
     if (!site?.id) return;
@@ -46,51 +44,6 @@ export default function KeywordsList({ site, onBack }) {
       console.error('Error loading keywords:', err);
     } finally {
       setLoading(false);
-    }
-  };
-
-  // Enrich keywords with PAA from DataForSEO
-  const enrichWithPaa = async (keywordsToEnrich = null) => {
-    const targetKeywords = keywordsToEnrich || keywords.filter(k => k.keyword);
-    if (targetKeywords.length === 0) return;
-
-    setEnriching(true);
-    setEnrichProgress({ current: 0, total: targetKeywords.length });
-
-    try {
-      for (let i = 0; i < targetKeywords.length; i++) {
-        const kw = targetKeywords[i];
-        setEnrichProgress({ current: i + 1, total: targetKeywords.length });
-
-        try {
-          const response = await fetch('https://julien1sikoutris.app.n8n.cloud/webhook/paa-enrich', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              keyword: kw.keyword,
-              site_id: site.id,
-              save_to_db: true
-            })
-          });
-
-          if (!response.ok) {
-            console.error(`PAA enrichment failed for ${kw.keyword}`);
-          }
-        } catch (err) {
-          console.error(`PAA enrichment error for ${kw.keyword}:`, err);
-        }
-
-        // Small delay between requests
-        if (i < targetKeywords.length - 1) {
-          await new Promise(r => setTimeout(r, 1000));
-        }
-      }
-
-      // Reload to get new PAA
-      await loadKeywords();
-    } finally {
-      setEnriching(false);
-      setEnrichProgress({ current: 0, total: 0 });
     }
   };
 
@@ -141,38 +94,17 @@ export default function KeywordsList({ site, onBack }) {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <button
-            onClick={onBack}
-            className="p-2 rounded-lg hover:bg-dark-border text-dark-muted hover:text-white transition-colors"
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </button>
-          <div>
-            <h1 className="text-2xl font-bold text-white">Keywords</h1>
-            <p className="text-dark-muted">{keywords.length} mots-cles pour {site?.mcp_alias}</p>
-          </div>
-        </div>
-
-        {/* Enrich Button */}
+      <div className="flex items-center gap-4">
         <button
-          onClick={() => enrichWithPaa()}
-          disabled={enriching || keywords.length === 0}
-          className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-dark-border disabled:text-dark-muted text-white rounded-lg transition-colors"
+          onClick={onBack}
+          className="p-2 rounded-lg hover:bg-dark-border text-dark-muted hover:text-white transition-colors"
         >
-          {enriching ? (
-            <>
-              <Loader2 className="w-4 h-4 animate-spin" />
-              <span>PAA {enrichProgress.current}/{enrichProgress.total}</span>
-            </>
-          ) : (
-            <>
-              <MessageCircleQuestion className="w-4 h-4" />
-              <span>Enrichir PAA</span>
-            </>
-          )}
+          <ArrowLeft className="w-5 h-5" />
         </button>
+        <div>
+          <h1 className="text-2xl font-bold text-white">Keywords</h1>
+          <p className="text-dark-muted">{keywords.length} mots-cles pour {site?.mcp_alias}</p>
+        </div>
       </div>
 
       {/* Search */}
@@ -308,26 +240,13 @@ export default function KeywordsList({ site, onBack }) {
                         </span>
                       </td>
                       <td className="px-4 py-3 text-center">
-                        <div className="flex items-center justify-center gap-2">
-                          {hasPaa ? (
-                            <span className="px-2 py-1 text-xs rounded bg-purple-500/20 text-purple-400 font-medium">
-                              {kwPaa.length}
-                            </span>
-                          ) : (
-                            <span className="text-dark-muted">-</span>
-                          )}
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              enrichWithPaa([kw]);
-                            }}
-                            disabled={enriching}
-                            className="p-1 rounded hover:bg-purple-500/20 text-dark-muted hover:text-purple-400 transition-colors disabled:opacity-50"
-                            title="Enrichir avec PAA"
-                          >
-                            <RefreshCw className={`w-3 h-3 ${enriching ? 'animate-spin' : ''}`} />
-                          </button>
-                        </div>
+                        {hasPaa ? (
+                          <span className="px-2 py-1 text-xs rounded bg-purple-500/20 text-purple-400 font-medium">
+                            {kwPaa.length}
+                          </span>
+                        ) : (
+                          <span className="text-dark-muted">-</span>
+                        )}
                       </td>
                     </tr>
                     {/* PAA Expanded Row */}

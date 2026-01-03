@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import {
   Search, FileText, Target, BookOpen, Play, Eye, Loader2,
   ExternalLink, AlertCircle, CheckCircle, RefreshCw,
-  Zap, GitBranch, TrendingUp, Send, Sparkles, ArrowRight
+  Zap, GitBranch, TrendingUp, Send, Sparkles, ArrowRight,
+  MessageCircleQuestion
 } from 'lucide-react';
 import Card from '../components/common/Card';
 import { supabase } from '../lib/supabase';
@@ -21,7 +22,8 @@ export default function SiteDashboard({ site, onNavigate }) {
     cocons: { count: 0, loading: true },
     articles: { count: 0, loading: true },
     positions: { count: 0, loading: true },
-    published: { count: 0, loading: true }
+    published: { count: 0, loading: true },
+    paa: { count: 0, loading: true }
   });
   const [launching, setLaunching] = useState(null);
   const [error, setError] = useState(null);
@@ -37,7 +39,7 @@ export default function SiteDashboard({ site, onNavigate }) {
     if (!site?.id) return;
 
     try {
-      const [keywords, research, competitors, quickwinsData, cocons, articles, positions, published] = await Promise.all([
+      const [keywords, research, competitors, quickwinsData, cocons, articles, positions, published, paa] = await Promise.all([
         supabase.from('keywords').select('id', { count: 'exact', head: true }).eq('site_id', site.id),
         supabase.from('market_research').select('id', { count: 'exact', head: true }).eq('site_id', site.id),
         supabase.from('competitors').select('id', { count: 'exact', head: true }).eq('site_id', site.id),
@@ -46,7 +48,8 @@ export default function SiteDashboard({ site, onNavigate }) {
         supabase.from('semantic_clusters').select('id', { count: 'exact', head: true }).eq('site_id', site.id),
         supabase.from('articles').select('id', { count: 'exact', head: true }).eq('site_id', site.id),
         supabase.from('gsc_keyword_history').select('id', { count: 'exact', head: true }).eq('site_id', site.id),
-        supabase.from('articles').select('id', { count: 'exact', head: true }).eq('site_id', site.id).not('wp_post_id', 'is', null)
+        supabase.from('articles').select('id', { count: 'exact', head: true }).eq('site_id', site.id).not('wp_post_id', 'is', null),
+        supabase.from('paa_questions').select('id', { count: 'exact', head: true }).eq('site_id', site.id)
       ]);
 
       // Count unique keywords for quick wins
@@ -60,7 +63,8 @@ export default function SiteDashboard({ site, onNavigate }) {
         cocons: { count: cocons.count || 0, loading: false },
         articles: { count: articles.count || 0, loading: false },
         positions: { count: positions.count || 0, loading: false },
-        published: { count: published.count || 0, loading: false }
+        published: { count: published.count || 0, loading: false },
+        paa: { count: paa.count || 0, loading: false }
       });
     } catch (err) {
       console.error('Error loading data:', err);
@@ -252,6 +256,9 @@ export default function SiteDashboard({ site, onNavigate }) {
       case 'positions':
         onNavigate('positions', site);
         break;
+      case 'paa':
+        onNavigate('paa', site);
+        break;
     }
   };
 
@@ -264,6 +271,7 @@ export default function SiteDashboard({ site, onNavigate }) {
     { id: 'quickwins', title: 'Quick Wins', icon: Zap, color: 'yellow', data: data.quickwins, description: 'Opportunites P11-20' },
     // Rangée 2: Production
     { id: 'cocons', title: 'Cocons', icon: GitBranch, color: 'purple', data: data.cocons, description: 'Clusters semantiques' },
+    { id: 'paa', title: 'PAA', icon: MessageCircleQuestion, color: 'violet', data: data.paa, description: 'People Also Ask' },
     { id: 'articles', title: 'Articles', icon: FileText, color: 'success', data: data.articles, description: 'Contenus crees' },
     { id: 'positions', title: 'Positions', icon: TrendingUp, color: 'cyan', data: data.positions, description: 'Suivi rankings' },
     { id: 'published', title: 'Publies', icon: Send, color: 'green', data: data.published, description: 'Articles en ligne' }

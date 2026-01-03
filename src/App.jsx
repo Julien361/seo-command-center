@@ -10,6 +10,7 @@ import QuickWinsList from './views/QuickWinsList';
 import CoconsList from './views/CoconsList';
 import PositionsList from './views/PositionsList';
 import ContentFactory from './views/ContentFactory';
+import PaaList from './views/PaaList';
 import AddSite from './views/AddSite';
 import Workflows from './views/Workflows';
 import { sitesApi } from './lib/supabase';
@@ -24,6 +25,7 @@ const viewConfig = {
   cocons: { title: 'Cocons Semantiques' },
   positions: { title: 'Suivi Positions' },
   factory: { title: 'Content Factory' },
+  paa: { title: 'People Also Ask' },
   'add-site': { title: 'Ajouter un site' },
   workflows: { title: 'Workflows n8n' },
 };
@@ -99,6 +101,8 @@ function App() {
         return <PositionsList site={selectedSite} onBack={handleBack} />;
       case 'factory':
         return <ContentFactory site={selectedSite} onBack={handleBack} />;
+      case 'paa':
+        return <PaaList site={selectedSite} onBack={handleBack} />;
       case 'add-site':
         return <AddSite onNavigate={setActiveView} />;
       case 'workflows':
@@ -128,7 +132,7 @@ function App() {
         </main>
 
         <div className="text-center text-xs text-dark-muted py-2 border-t border-dark-border">
-          v1.0.125
+          v1.0.128
         </div>
       </div>
     </div>
