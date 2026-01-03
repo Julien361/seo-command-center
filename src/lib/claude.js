@@ -436,8 +436,10 @@ ${content}
 ## SUJET
 ${keyword}
 
-## SOURCES PRIORITAIRES OBLIGATOIRES
-Pour les sujets gouvernementaux (aides, subventions, réglementations), tu DOIS vérifier sur ces sites OFFICIELS :
+## STRATÉGIE DE VÉRIFICATION PAR TYPE DE SUJET
+
+### Si le sujet concerne des AIDES PUBLIQUES, SUBVENTIONS, RÉGLEMENTATIONS :
+Cherche EN PRIORITÉ sur les sites gouvernementaux :
 - service-public.gouv.fr (référence principale)
 - france-renov.gouv.fr (MaPrimeRénov, MaPrimeAdapt)
 - solidarites.gouv.fr (aides sociales)
@@ -446,44 +448,53 @@ Pour les sujets gouvernementaux (aides, subventions, réglementations), tu DOIS 
 - legifrance.gouv.fr (textes de loi)
 - ameli.fr (santé, CPAM)
 
-## ÉLÉMENTS À VÉRIFIER IMPÉRATIVEMENT
-1. **Pourcentages d'aide** : 50%, 70%, 90%... CHAQUE pourcentage doit correspondre aux barèmes officiels
-2. **Plafonds de ressources** : Vérifier les montants exacts selon la composition du foyer
-3. **Conditions d'éligibilité** : Âge, revenus, GIR, handicap... TOUTES les conditions
-4. **Montants maximum** : Plafonds de travaux, montants d'aide
-5. **Dates et délais** : Validité des dispositifs, délais de traitement
+### Pour les AUTRES sujets (assurance, services, produits, etc.) :
+Utilise les sources les plus fiables disponibles :
+- Sites officiels des organismes concernés
+- Sources sectorielles reconnues
+- Études et rapports d'experts
+- Sites de référence du domaine
+
+## ÉLÉMENTS À VÉRIFIER
+1. **Chiffres et statistiques** : Pourcentages, montants, quantités
+2. **Conditions et critères** : Éligibilité, prérequis, restrictions
+3. **Dates et délais** : Validité, durée, échéances
+4. **Prix et tarifs** : Coûts, fourchettes de prix
+5. **Réglementations** : Lois, normes, obligations
 
 ## RÈGLES STRICTES
-- Un pourcentage d'aide INVENTÉ = ERREUR GRAVE (ex: "60% d'aide" si ça n'existe pas)
-- Une condition d'éligibilité FAUSSE = ERREUR GRAVE
-- Un montant APPROXIMATIF = À CORRIGER avec le montant exact
-- Si tu ne trouves pas de source officielle = marquer comme NON VÉRIFIÉ
+- Un chiffre INVENTÉ ou FAUX = ERREUR GRAVE
+- Une condition INEXACTE = ERREUR GRAVE
+- Un montant APPROXIMATIF = À CORRIGER avec la valeur exacte ou une fourchette sourcée
+- Si aucune source fiable = marquer comme NON VÉRIFIÉ
 
 ## TA MISSION
-1. LISTE toutes les affirmations factuelles (chiffres, %, conditions, montants)
-2. RECHERCHE CHAQUE fait sur les sites gouvernementaux EN PRIORITÉ
-3. VÉRIFIE avec la source EXACTE (pas de "selon mes connaissances")
-4. CORRIGE impérativement tout ce qui est faux ou approximatif
+1. IDENTIFIE le type de sujet (gouvernemental, commercial, technique...)
+2. LISTE toutes les affirmations factuelles
+3. RECHERCHE sur les sources appropriées au sujet
+4. VÉRIFIE avec des sources EXACTES (pas "selon mes connaissances")
+5. CORRIGE ce qui est faux ou imprécis
 
 ## FORMAT DE SORTIE
 Réponds en JSON:
 {
+  "subject_type": "gouvernemental|commercial|technique|general",
   "facts_checked": [
     {
-      "claim": "MaPrimeAdapt couvre 50% des travaux pour les ménages modestes",
-      "category": "pourcentage_aide|plafond_ressources|condition_eligibilite|montant|date",
+      "claim": "L'affirmation vérifiée",
+      "category": "chiffre|condition|date|prix|reglementation",
       "verified": true,
-      "source": "https://service-public.gouv.fr/...",
-      "official_value": "50% pour revenus modestes, 70% pour très modestes",
+      "source": "https://source-exacte.fr/...",
+      "source_value": "La valeur trouvée dans la source",
       "correction": null
     }
   ],
   "corrections_needed": [
     {
-      "original": "Les ménages peuvent recevoir 60% d'aide",
-      "corrected": "Les ménages aux revenus modestes peuvent recevoir 50% d'aide, et ceux aux revenus très modestes 70%",
-      "source": "https://service-public.gouv.fr/particuliers/vosdroits/F37501",
-      "severity": "critical"
+      "original": "Texte original incorrect",
+      "corrected": "Texte corrigé avec information exacte",
+      "source": "https://source-de-reference.fr/...",
+      "severity": "critical|minor"
     }
   ],
   "verification_summary": {
@@ -493,8 +504,8 @@ Réponds en JSON:
     "critical_errors": 1,
     "score": 80
   },
-  "official_sources_used": ["service-public.gouv.fr", "france-renov.gouv.fr"],
-  "warnings": ["Liste des affirmations non vérifiées sur sources officielles"]
+  "sources_used": ["domaine1.fr", "domaine2.gouv.fr"],
+  "warnings": ["Faits non vérifiables par manque de sources fiables"]
 }`;
 
     try {
