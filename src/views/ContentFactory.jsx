@@ -6,7 +6,7 @@ import {
   ChevronDown, ChevronRight, RefreshCw, X, Link,
   FileText, Circle, HelpCircle, ArrowRight, Wand2,
   CalendarDays, Clock, TrendingUp, Zap, Compass,
-  Shield, Lightbulb, Users
+  Shield, Lightbulb, Users, MessageCircleQuestion
 } from 'lucide-react';
 import Card from '../components/common/Card';
 import { supabase } from '../lib/supabase';
@@ -82,6 +82,9 @@ export default function ContentFactory({ site, onBack }) {
   const [editedContent, setEditedContent] = useState('');
   const [scheduledDate, setScheduledDate] = useState('');
   const [publishing, setPublishing] = useState(false);
+
+  // PAA Researcher state
+  const [researchingPaa, setResearchingPaa] = useState(false);
 
   // Load all analysis data
   useEffect(() => {
@@ -276,6 +279,49 @@ Propose une architecture de contenu avec:
       )
       .map(paa => paa.question)
       .filter(Boolean);
+  };
+
+  // Research new PAA questions for a keyword
+  const researchPaa = async (keyword) => {
+    if (!keyword?.trim() || !site?.id) return;
+    setResearchingPaa(true);
+    try {
+      const response = await fetch('https://julien1sikoutris.app.n8n.cloud/webhook/paa-enrich', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          keyword: keyword.trim(),
+          site_id: site.id,
+          save_to_db: true
+        })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        // Add new PAA to analysisData
+        if (result.paa_questions?.length > 0) {
+          const newPaaQuestions = result.paa_questions.map(q => ({
+            question: q.question || q,
+            seed_keyword: keyword,
+            site_id: site.id
+          }));
+          setAnalysisData(prev => ({
+            ...prev,
+            paaQuestions: [...(prev.paaQuestions || []), ...newPaaQuestions]
+          }));
+          // Also add to brief
+          const newQuestions = result.paa_questions.map(q => q.question || q).filter(Boolean);
+          setBrief(prev => ({
+            ...prev,
+            paa_questions: [...new Set([...prev.paa_questions, ...newQuestions])]
+          }));
+        }
+      }
+    } catch (err) {
+      console.error('PAA Research error:', err);
+    } finally {
+      setResearchingPaa(false);
+    }
   };
 
   // Select a page to create
@@ -983,10 +1029,24 @@ Propose une architecture de contenu avec:
 
             {/* PAA Questions */}
             <div>
-              <label className="block text-sm text-dark-muted mb-2">
-                <HelpCircle className="w-4 h-4 inline mr-1" />
-                Questions PAA pour FAQ ({brief.paa_questions.length} sélectionnées)
-              </label>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-sm text-dark-muted flex items-center gap-1">
+                  <HelpCircle className="w-4 h-4" />
+                  Questions PAA pour FAQ ({brief.paa_questions.length} sélectionnées)
+                </label>
+                <button
+                  onClick={() => researchPaa(brief.keyword)}
+                  disabled={researchingPaa || !brief.keyword}
+                  className="flex items-center gap-2 px-3 py-1.5 bg-purple-600 hover:bg-purple-700 disabled:bg-dark-border disabled:text-dark-muted text-white text-sm rounded-lg transition-colors"
+                >
+                  {researchingPaa ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <MessageCircleQuestion className="w-4 h-4" />
+                  )}
+                  {researchingPaa ? 'Recherche...' : 'Rechercher PAA'}
+                </button>
+              </div>
 
               {/* Selected PAA */}
               {brief.paa_questions.length > 0 && (
