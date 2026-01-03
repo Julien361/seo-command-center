@@ -6,7 +6,7 @@ import {
   ChevronDown, ChevronRight, RefreshCw, X, Link,
   FileText, Circle, HelpCircle, ArrowRight, Wand2,
   CalendarDays, Clock, TrendingUp, Zap, Compass,
-  Shield, Lightbulb, Users, MessageCircleQuestion
+  Shield, Lightbulb, Users
 } from 'lucide-react';
 import Card from '../components/common/Card';
 import { supabase } from '../lib/supabase';
@@ -22,11 +22,42 @@ const AGENTS = [
   { id: 'schemaGenerator', name: 'Schema', icon: FileCode, color: 'text-cyan-500', description: 'Génère JSON-LD', model: 'Haiku' }
 ];
 
-// Content types
+// Content types with tone guidance
 const CONTENT_TYPES = {
-  pilier: { label: 'Page Mère', icon: Target, color: 'text-purple-500', bgColor: 'bg-purple-500/10', words: '3000+' },
-  fille: { label: 'Page Fille', icon: Circle, color: 'text-blue-500', bgColor: 'bg-blue-500/10', words: '1500-2000' },
-  article: { label: 'Article', icon: FileText, color: 'text-green-500', bgColor: 'bg-green-500/10', words: '800-1500' }
+  pilier: {
+    label: 'Page Mère',
+    icon: Target,
+    color: 'text-purple-500',
+    bgColor: 'bg-purple-500/10',
+    words: '3000+',
+    defaultTone: 'nous',
+    toneDescription: 'Ton institutionnel, autorité de marque'
+  },
+  fille: {
+    label: 'Page Fille',
+    icon: Circle,
+    color: 'text-blue-500',
+    bgColor: 'bg-blue-500/10',
+    words: '1500-2000',
+    defaultTone: 'neutre',
+    toneDescription: 'Ton informatif, expertise technique'
+  },
+  article: {
+    label: 'Article',
+    icon: FileText,
+    color: 'text-green-500',
+    bgColor: 'bg-green-500/10',
+    words: '800-1500',
+    defaultTone: 'je',
+    toneDescription: 'Ton personnel, expertise individuelle'
+  }
+};
+
+// Tone options
+const TONE_OPTIONS = {
+  je: { label: 'Je', description: 'Expertise personnelle, storytelling' },
+  nous: { label: 'Nous', description: 'Autorité institutionnelle, équipe' },
+  neutre: { label: 'Neutre', description: 'Informatif, objectif' }
 };
 
 export default function ContentFactory({ site, onBack }) {
@@ -64,6 +95,7 @@ export default function ContentFactory({ site, onBack }) {
     keyword: '',
     secondary_keywords: [],
     content_type: 'article',
+    tone: 'je', // je, nous, neutre
     paa_questions: [],
     competitors: [],
     site: site,
@@ -83,9 +115,7 @@ export default function ContentFactory({ site, onBack }) {
   const [scheduledDate, setScheduledDate] = useState('');
   const [publishing, setPublishing] = useState(false);
 
-  // PAA Researcher state
-  const [researchingPaa, setResearchingPaa] = useState(false);
-
+  
   // Load all analysis data
   useEffect(() => {
     if (!site?.id) return;
@@ -281,49 +311,6 @@ Propose une architecture de contenu avec:
       .filter(Boolean);
   };
 
-  // Research new PAA questions for a keyword
-  const researchPaa = async (keyword) => {
-    if (!keyword?.trim() || !site?.id) return;
-    setResearchingPaa(true);
-    try {
-      const response = await fetch('https://julien1sikoutris.app.n8n.cloud/webhook/paa-enrich', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          keyword: keyword.trim(),
-          site_id: site.id,
-          save_to_db: true
-        })
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        // Add new PAA to analysisData
-        if (result.paa_questions?.length > 0) {
-          const newPaaQuestions = result.paa_questions.map(q => ({
-            question: q.question || q,
-            seed_keyword: keyword,
-            site_id: site.id
-          }));
-          setAnalysisData(prev => ({
-            ...prev,
-            paaQuestions: [...(prev.paaQuestions || []), ...newPaaQuestions]
-          }));
-          // Also add to brief
-          const newQuestions = result.paa_questions.map(q => q.question || q).filter(Boolean);
-          setBrief(prev => ({
-            ...prev,
-            paa_questions: [...new Set([...prev.paa_questions, ...newQuestions])]
-          }));
-        }
-      }
-    } catch (err) {
-      console.error('PAA Research error:', err);
-    } finally {
-      setResearchingPaa(false);
-    }
-  };
-
   // Select a page to create
   const selectPage = (type, pilierKeyword, pageData) => {
     // Find related pages for internal linking
@@ -350,6 +337,7 @@ Propose une architecture de contenu avec:
         ? proposals?.piliers?.find(p => p.keyword === pageData.keyword)?.filles?.map(f => f.keyword) || []
         : [],
       content_type: type,
+      tone: CONTENT_TYPES[type]?.defaultTone || 'neutre',
       paa_questions: pageData.paa_questions?.length > 0 ? pageData.paa_questions : relatedPaa,
       competitors: analysisData.competitors,
       site: site,
@@ -1015,6 +1003,30 @@ Propose une architecture de contenu avec:
               />
             </div>
 
+            {/* Tone selector */}
+            <div>
+              <label className="block text-sm text-dark-muted mb-2">Ton du contenu</label>
+              <div className="flex gap-2">
+                {Object.entries(TONE_OPTIONS).map(([key, option]) => (
+                  <button
+                    key={key}
+                    onClick={() => setBrief(prev => ({ ...prev, tone: key }))}
+                    className={`flex-1 px-3 py-2 rounded-lg text-sm transition-all ${
+                      brief.tone === key
+                        ? 'bg-primary text-white'
+                        : 'bg-dark-bg text-dark-muted hover:bg-dark-border hover:text-white'
+                    }`}
+                  >
+                    <div className="font-medium">{option.label}</div>
+                    <div className="text-xs opacity-70">{option.description}</div>
+                  </button>
+                ))}
+              </div>
+              <div className="text-xs text-dark-muted mt-1">
+                Recommandé pour {CONTENT_TYPES[brief.content_type]?.label}: <span className="text-primary">{TONE_OPTIONS[CONTENT_TYPES[brief.content_type]?.defaultTone]?.label}</span>
+              </div>
+            </div>
+
             {/* Secondary keywords */}
             {brief.secondary_keywords.length > 0 && (
               <div>
@@ -1029,24 +1041,10 @@ Propose une architecture de contenu avec:
 
             {/* PAA Questions */}
             <div>
-              <div className="flex items-center justify-between mb-2">
-                <label className="text-sm text-dark-muted flex items-center gap-1">
-                  <HelpCircle className="w-4 h-4" />
-                  Questions PAA pour FAQ ({brief.paa_questions.length} sélectionnées)
-                </label>
-                <button
-                  onClick={() => researchPaa(brief.keyword)}
-                  disabled={researchingPaa || !brief.keyword}
-                  className="flex items-center gap-2 px-3 py-1.5 bg-purple-600 hover:bg-purple-700 disabled:bg-dark-border disabled:text-dark-muted text-white text-sm rounded-lg transition-colors"
-                >
-                  {researchingPaa ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <MessageCircleQuestion className="w-4 h-4" />
-                  )}
-                  {researchingPaa ? 'Recherche...' : 'Rechercher PAA'}
-                </button>
-              </div>
+              <label className="text-sm text-dark-muted flex items-center gap-1 mb-2">
+                <HelpCircle className="w-4 h-4" />
+                Questions PAA pour FAQ ({brief.paa_questions.length} sélectionnées)
+              </label>
 
               {/* Selected PAA */}
               {brief.paa_questions.length > 0 && (

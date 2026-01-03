@@ -240,6 +240,25 @@ Réponds en JSON:
   async runWriter(brief, strategistOutput) {
     const skills = getAgentSkills('writer');
 
+    // Tone guidance based on brief.tone
+    const toneGuidance = {
+      je: `UTILISE LE PRONOM "JE" - Tu es l'expert qui partage son expérience personnelle.
+- Phrases comme: "Dans ma pratique, je constate que...", "Je recommande..."
+- Anecdotes personnelles et retours d'expérience
+- Ton chaleureux et accessible
+- Crée une connexion avec le lecteur`,
+      nous: `UTILISE LE PRONOM "NOUS" - Tu représentes l'autorité de l'entreprise/équipe.
+- Phrases comme: "Chez nous, nous accompagnons...", "Notre équipe vous guide..."
+- Ton institutionnel mais accessible
+- Met en avant l'expertise collective
+- Inspire confiance et professionnalisme`,
+      neutre: `TON NEUTRE ET INFORMATIF - Évite les pronoms personnels.
+- Phrases comme: "Il est recommandé de...", "Les experts conseillent..."
+- Style objectif et factuel
+- Focus sur l'information pure
+- Crédibilité par la neutralité`
+    };
+
     const prompt = `Tu es le Rédacteur SEO expert. Tu écris du contenu optimisé et engageant.
 
 ## TES SKILLS
@@ -250,9 +269,11 @@ ${JSON.stringify(strategistOutput, null, 2)}
 
 ## CONTEXTE
 - Keyword principal: ${brief.keyword}
-- Type: ${brief.content_type}
+- Type de page: ${brief.content_type}
 - Longueur cible: ${strategistOutput.target_length || 1500} mots
-- Ton: ${strategistOutput.tone || 'expert'}
+
+## TON À ADOPTER (TRÈS IMPORTANT)
+${toneGuidance[brief.tone] || toneGuidance.neutre}
 
 ## CONCURRENTS À SURPASSER
 ${brief.competitors?.map(c => `- ${c.domain}`).join('\n') || 'Aucun'}
@@ -268,13 +289,14 @@ Rédige l'article complet en suivant:
 2. Les points clés à couvrir
 3. IMPORTANT: Intègre une section FAQ avec les questions PAA ci-dessus
 4. Optimise pour la Position 0
-5. Respecte le ton demandé
+5. RESPECTE IMPÉRATIVEMENT LE TON DEMANDÉ (${brief.tone || 'neutre'})
 
 ## RÈGLES CRITIQUES
 - Réponds à l'intent dans les 100 premiers mots
 - Densité keyword 1-2%
 - Maillage interne: suggère 3-5 liens [LIEN: texte d'ancre -> page cible]
 - Format les FAQ avec ### pour chaque question
+- COHÉRENCE DU TON: Maintiens le même pronom tout au long du texte
 
 ## FORMAT DE SORTIE
 Retourne UNIQUEMENT le contenu en Markdown:
