@@ -165,10 +165,86 @@ JSON array de 5-8 seeds spécifiques:
   // ===========================================
 
   /**
+   * Agent 0: PAA Analyst - Analyzes existing PAA and generates relevant questions
+   */
+  async runPaaAnalyst(brief, existingPaa = []) {
+    // Format existing PAA as examples
+    const paaExamples = existingPaa.slice(0, 10).map(p => p.question || p).filter(Boolean);
+
+    const prompt = `Tu es l'Analyste PAA (People Also Ask). Tu génères des questions pertinentes pour un article SEO.
+
+## KEYWORD DE L'ARTICLE
+${brief.keyword}
+
+## TYPE DE CONTENU
+${brief.content_type} (${brief.content_type === 'pilier' ? 'Page complète, questions générales' : brief.content_type === 'fille' ? 'Page spécifique, questions ciblées' : 'Article blog, questions pratiques'})
+
+## NICHE DU SITE
+${brief.site?.seo_focus?.[0] || brief.site?.mcp_alias || 'Non définie'}
+
+## EXEMPLES DE PAA EXISTANTES (pour t'inspirer du style)
+${paaExamples.length > 0 ? paaExamples.map((q, i) => `${i + 1}. ${q}`).join('\n') : 'Aucun exemple disponible'}
+
+## TA MISSION
+1. Analyse le keyword et le type de contenu
+2. Génère 5-8 questions que les utilisateurs poseraient sur Google
+3. Priorise les questions par importance (intent fort → faible)
+4. Identifie les opportunités de Position 0
+
+## RÈGLES
+- Questions naturelles (comme un utilisateur les poserait)
+- Mix de questions : définition, comment, pourquoi, combien, comparaison
+- Adaptées au type de contenu (pilier = large, fille = spécifique)
+- En français
+
+## FORMAT JSON
+{
+  "keyword_analysis": {
+    "main_intent": "informationnel|commercial|transactionnel",
+    "user_needs": ["besoin 1", "besoin 2"]
+  },
+  "generated_questions": [
+    {
+      "question": "La question ?",
+      "priority": 1,
+      "type": "definition|how_to|why|comparison|cost|list",
+      "position_zero_potential": true,
+      "suggested_format": "paragraph|list|table"
+    }
+  ],
+  "faq_structure_suggestion": "Comment organiser la FAQ dans l'article"
+}`;
+
+    const text = await callClaude(prompt, {
+      maxTokens: 1500,
+      model: 'claude-3-5-haiku-20241022' // Haiku for speed
+    });
+
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      try {
+        return JSON.parse(jsonMatch[0]);
+      } catch (e) {
+        console.error('[PAA Analyst] JSON parse error:', e);
+      }
+    }
+
+    return {
+      generated_questions: [],
+      raw_response: text
+    };
+  },
+
+  /**
    * Agent 1: Strategist - Creates detailed brief
    */
-  async runStrategist(brief) {
+  async runStrategist(brief, paaAnalysis = null) {
     const skills = getAgentSkills('strategist');
+
+    // Format PAA questions from PAA Analyst
+    const paaQuestions = paaAnalysis?.generated_questions?.map(q => q.question) || [];
+    const paaIntent = paaAnalysis?.keyword_analysis?.main_intent || 'informationnel';
+    const userNeeds = paaAnalysis?.keyword_analysis?.user_needs || [];
 
     const prompt = `Tu es le Stratège SEO. Tu crées des briefs détaillés pour la rédaction.
 
@@ -179,14 +255,19 @@ ${skills}
 - Keyword principal: ${brief.keyword}
 - Keywords secondaires: ${brief.secondary_keywords?.join(', ') || 'à définir'}
 - Type de contenu: ${brief.content_type} (pilier/fille/article)
+- Ton demandé: ${brief.tone || 'neutre'} (je/nous/neutre)
 - Site: ${brief.site?.mcp_alias || 'N/A'}
 - Niche: ${brief.site?.seo_focus?.[0] || 'N/A'}
 
+## ANALYSE PAA (par l'Agent PAA Analyst)
+- Intent principal détecté: ${paaIntent}
+- Besoins utilisateurs: ${userNeeds.join(', ') || 'Non analysés'}
+- Questions générées à intégrer:
+${paaQuestions.length > 0 ? paaQuestions.map((q, i) => `${i + 1}. ${q}`).join('\n') : 'Aucune question générée'}
+${paaAnalysis?.faq_structure_suggestion ? `\n- Suggestion structure FAQ: ${paaAnalysis.faq_structure_suggestion}` : ''}
+
 ## CONCURRENTS VALIDÉS
 ${brief.competitors?.map(c => `- ${c.domain}: ${c.strengths || 'à analyser'}`).join('\n') || 'Aucun concurrent fourni'}
-
-## PAA (People Also Ask)
-${brief.paa_questions?.join('\n') || 'Aucune PAA fournie - tu devras suggérer des questions'}
 
 ## TA MISSION
 Crée un brief détaillé avec:
@@ -885,8 +966,9 @@ En tant que Directeur SEO, donne des ORIENTATIONS STRATÉGIQUES claires :
    * Run the complete Content Factory pipeline
    * Order: Strategist → Writer → Fact Checker → SEO Editor (85+) → Humanizer → Schema
    */
-  async runContentFactory(brief, onProgress) {
+  async runContentFactory(brief, existingPaa, onProgress) {
     const results = {
+      paaAnalyst: null,
       strategist: null,
       writer: null,
       factChecker: null,
@@ -896,9 +978,14 @@ En tant que Directeur SEO, donne des ORIENTATIONS STRATÉGIQUES claires :
     };
 
     try {
-      // Agent 1: Strategist - Creates the brief
+      // Agent 0: PAA Analyst - Generates relevant questions
+      onProgress?.('paaAnalyst', 'running');
+      results.paaAnalyst = await this.runPaaAnalyst(brief, existingPaa || []);
+      onProgress?.('paaAnalyst', 'completed', results.paaAnalyst);
+
+      // Agent 1: Strategist - Creates the brief using PAA analysis
       onProgress?.('strategist', 'running');
-      results.strategist = await this.runStrategist(brief);
+      results.strategist = await this.runStrategist(brief, results.paaAnalyst);
       onProgress?.('strategist', 'completed', results.strategist);
 
       // Agent 2: Writer - Writes the content
@@ -954,7 +1041,9 @@ En tant que Directeur SEO, donne des ORIENTATIONS STRATÉGIQUES claires :
           factsVerified: results.factChecker.verification_summary?.verified || 0,
           correctionsApplied: results.factChecker.corrections_needed?.length || 0,
           internalLinks: results.seoEditor.internal_links || [],
-          schemas: results.schemaGenerator.schemas
+          schemas: results.schemaGenerator.schemas,
+          paaGenerated: results.paaAnalyst?.generated_questions?.length || 0,
+          paaIntent: results.paaAnalyst?.keyword_analysis?.main_intent
         }
       };
     } catch (err) {

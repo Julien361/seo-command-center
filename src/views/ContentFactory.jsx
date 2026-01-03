@@ -12,8 +12,9 @@ import Card from '../components/common/Card';
 import { supabase } from '../lib/supabase';
 import { claudeApi } from '../lib/claude';
 
-// Agent configuration - New optimized order
+// Agent configuration - PAA Analyst first, then rest of pipeline
 const AGENTS = [
+  { id: 'paaAnalyst', name: 'PAA Analyst', icon: HelpCircle, color: 'text-violet-500', description: 'Génère questions PAA', model: 'Haiku' },
   { id: 'strategist', name: 'Stratège', icon: Target, color: 'text-blue-500', description: 'Crée le brief détaillé', model: 'Sonnet' },
   { id: 'writer', name: 'Rédacteur', icon: PenTool, color: 'text-green-500', description: 'Écrit le contenu', model: 'Sonnet' },
   { id: 'factChecker', name: 'Fact-Checker', icon: CheckCircle, color: 'text-red-500', description: 'Vérifie les faits', model: 'Haiku' },
@@ -365,7 +366,7 @@ Propose une architecture de contenu avec:
     setFinalResult(null);
 
     try {
-      const result = await claudeApi.runContentFactory(brief, handleProgress);
+      const result = await claudeApi.runContentFactory(brief, analysisData.paaQuestions || [], handleProgress);
       setFinalResult(result);
       if (result.success) {
         setEditedContent(result.finalContent);
