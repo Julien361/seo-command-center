@@ -237,21 +237,20 @@ ${paaExamples.length > 0 ? paaExamples.map((q, i) => `${i + 1}. ${q}`).join('\n'
 
   /**
    * Agent 1: Strategist - Creates detailed brief
+   * Strategy based on: keyword, niche, competitors. PAA is just for FAQ enrichment.
    */
   async runStrategist(brief, paaAnalysis = null) {
     const skills = getAgentSkills('strategist');
 
-    // Format PAA questions from PAA Analyst
+    // PAA questions are OPTIONAL enrichment for FAQ section only
     const paaQuestions = paaAnalysis?.generated_questions?.map(q => q.question) || [];
-    const paaIntent = paaAnalysis?.keyword_analysis?.main_intent || 'informationnel';
-    const userNeeds = paaAnalysis?.keyword_analysis?.user_needs || [];
 
     const prompt = `Tu es le Stratège SEO. Tu crées des briefs détaillés pour la rédaction.
 
 ## TES SKILLS
 ${skills}
 
-## BRIEF INITIAL
+## BRIEF INITIAL (BASE DE TA STRATÉGIE)
 - Keyword principal: ${brief.keyword}
 - Keywords secondaires: ${brief.secondary_keywords?.join(', ') || 'à définir'}
 - Type de contenu: ${brief.content_type} (pilier/fille/article)
@@ -259,43 +258,43 @@ ${skills}
 - Site: ${brief.site?.mcp_alias || 'N/A'}
 - Niche: ${brief.site?.seo_focus?.[0] || 'N/A'}
 
-## ANALYSE PAA (par l'Agent PAA Analyst)
-- Intent principal détecté: ${paaIntent}
-- Besoins utilisateurs: ${userNeeds.join(', ') || 'Non analysés'}
-- Questions générées à intégrer:
-${paaQuestions.length > 0 ? paaQuestions.map((q, i) => `${i + 1}. ${q}`).join('\n') : 'Aucune question générée'}
-${paaAnalysis?.faq_structure_suggestion ? `\n- Suggestion structure FAQ: ${paaAnalysis.faq_structure_suggestion}` : ''}
-
-## CONCURRENTS VALIDÉS
+## CONCURRENTS À SURPASSER (ANALYSE PRIORITAIRE)
 ${brief.competitors?.map(c => `- ${c.domain}: ${c.strengths || 'à analyser'}`).join('\n') || 'Aucun concurrent fourni'}
 
-## TA MISSION
+## TA MISSION PRINCIPALE
+Base ta stratégie sur :
+1. **Le keyword et la niche** - Comprendre l'intent et le contexte
+2. **Les concurrents** - Identifier les angles différenciants
+3. **Le type de contenu** - Adapter la profondeur et structure
+
 Crée un brief détaillé avec:
-1. Analyse de l'intent de recherche
+1. Analyse de l'intent de recherche (basée sur le keyword)
 2. Angle différenciant vs concurrents
-3. Structure recommandée (H1, H2, H3)
+3. Structure recommandée (H1, H2, H3) - logique et complète
 4. Points clés à couvrir
-5. Questions FAQ à intégrer (PAA + suggestions)
-6. Longueur cible
-7. CTA recommandé
-8. Ton et style
+5. Longueur cible
+6. CTA recommandé
+7. Ton et style
+
+## ENRICHISSEMENT FAQ (OPTIONNEL)
+${paaQuestions.length > 0 ? `Questions PAA disponibles pour enrichir la FAQ:\n${paaQuestions.slice(0, 5).map((q, i) => `- ${q}`).join('\n')}\nUtilise-les OU propose tes propres questions plus pertinentes.` : 'Propose 3-5 questions FAQ pertinentes pour le sujet.'}
 
 ## FORMAT DE SORTIE
 Réponds en JSON:
 {
   "intent": "informationnel|commercial|transactionnel",
-  "angle": "description de l'angle différenciant",
+  "angle": "description de l'angle différenciant vs concurrents",
   "title_suggestion": "Suggestion de H1",
   "meta_description": "Suggestion de meta description < 155 chars",
   "structure": [
     {"level": "h2", "title": "...", "points": ["...", "..."]},
     {"level": "h3", "title": "...", "points": ["..."]}
   ],
-  "faq_questions": ["Question 1 ?", "Question 2 ?"],
+  "faq_questions": ["Question FAQ 1 ?", "Question FAQ 2 ?"],
   "target_length": 1500,
   "cta": "description du CTA",
   "tone": "expert|journaliste|praticien",
-  "key_points": ["point 1", "point 2"],
+  "key_points": ["point clé 1", "point clé 2"],
   "competitor_gaps": ["ce que les concurrents ne couvrent pas"]
 }`;
 
