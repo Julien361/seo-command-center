@@ -112,7 +112,7 @@ function App() {
         return (
           <div className="flex items-center justify-center h-full">
             <div className="text-center">
-              <h2 className="text-2xl font-bold text-white mb-2">SEO Command Center</h2>
+              <h2 className="text-2xl font-bold text-white mb-2">SEO Command Center v2</h2>
               <p className="text-dark-muted">Selectionnez un site dans le menu</p>
             </div>
           </div>
