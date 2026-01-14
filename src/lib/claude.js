@@ -811,11 +811,11 @@ Tu DOIS générer des suggestions supplémentaires basées sur les clusters exis
   "calendar": [
     {
       "week": 1,
-      "start_date": "2025-01-06",
+      "start_date": "${new Date().toISOString().split('T')[0]}",
       "publications": [
         {
           "day": "lundi",
-          "date": "2025-01-06",
+          "date": "${new Date().toISOString().split('T')[0]}",
           "keyword": "...",
           "title": "...",
           "type": "pilier|fille|article",
