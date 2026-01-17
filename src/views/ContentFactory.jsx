@@ -309,9 +309,37 @@ export default function ContentFactory({ site, onBack }) {
 - Priorités: ${direction.priorities?.slice(0, 2).map(p => p.action).join(', ') || 'N/A'}
 ` : '';
 
+      // Analyze competitors for content length insights
+      const competitorDetails = analysisData.competitors.slice(0, 5).map(c => ({
+        domain: c.domain,
+        avg_word_count: c.avg_word_count || null,
+        top_pages: c.top_pages?.slice(0, 3) || []
+      }));
+
+      // Calculate keyword clusters to help determine pillar count
+      const keywordClusters = {};
+      topKeywords.forEach(k => {
+        const mainWord = k.keyword.split(' ')[0];
+        if (!keywordClusters[mainWord]) keywordClusters[mainWord] = 0;
+        keywordClusters[mainWord]++;
+      });
+      const clusterCount = Object.keys(keywordClusters).length;
+
       const prompt = `Tu es l'Architecte SEO expert. Tu travailles sous la direction du SEO Director.
 ${directorGuidance}
-Analyse toutes les données et propose une architecture de contenu optimale ALIGNÉE avec les directives ci-dessus.
+
+## ANALYSE CONTEXTUELLE REQUISE
+Tu dois ANALYSER le contexte pour déterminer toi-même :
+1. Le NOMBRE OPTIMAL de pages piliers (pas une fourchette fixe !)
+2. Le NOMBRE OPTIMAL de pages filles PAR pilier (variable selon la complexité)
+3. Le NOMBRE DE MOTS recommandé par type de page (basé sur la concurrence)
+
+## FACTEURS À ANALYSER
+- Complexité de la niche : simple (3 piliers max) vs complexe (5-7 piliers)
+- Nombre de clusters identifiés : ~${clusterCount} clusters potentiels
+- Volume total de keywords : ${analysisData.keywords.length}
+- Niveau de concurrence : ${analysisData.competitors.length > 0 ? 'Concurrents analysés' : 'Pas de données concurrents'}
+- Longueur contenu concurrents : ${competitorDetails.some(c => c.avg_word_count) ? 'Données disponibles' : 'Estimer selon la niche'}
 
 ## SITE
 - Alias: ${site.mcp_alias}
@@ -321,33 +349,45 @@ Analyse toutes les données et propose une architecture de contenu optimale ALIG
 ## KEYWORDS ANALYSÉS (${analysisData.keywords.length} total)
 ${JSON.stringify(topKeywords.slice(0, 30), null, 2)}
 
-## CONCURRENTS VALIDÉS
-${competitorDomains || 'Aucun concurrent analysé'}
+## CONCURRENTS DÉTAILLÉS
+${JSON.stringify(competitorDetails, null, 2)}
 
 ## RECHERCHES MARCHÉ
 ${researchSummary || 'Aucune recherche disponible'}
 
 ## TA MISSION
-Propose une architecture de contenu avec:
-1. 2-4 Pages Mères (piliers) basées sur les clusters de keywords à fort volume
-2. 3-5 Pages Filles par Mère (sous-thématiques)
-3. 2-3 Articles supports par cluster
-4. Questions PAA pertinentes pour chaque page
+1. ANALYSE le contexte et JUSTIFIE tes choix d'architecture
+2. DÉTERMINE le nombre optimal de piliers selon la niche (pas de fourchette arbitraire)
+3. ADAPTE le nombre de filles par pilier (certains piliers peuvent avoir 2 filles, d'autres 6)
+4. RECOMMANDE le nombre de mots par type basé sur la concurrence
 
 ## FORMAT JSON STRICT
 {
   "analysis_summary": "Résumé de ton analyse en 2-3 phrases",
+  "architecture_rationale": {
+    "pillar_count_reason": "Pourquoi X piliers (pas plus, pas moins)",
+    "competition_level": "faible|moyen|fort",
+    "niche_complexity": "simple|moyenne|complexe"
+  },
+  "word_count_recommendations": {
+    "pilier": 3000,
+    "fille": 1800,
+    "article": 1200,
+    "rationale": "Basé sur analyse concurrence : les top pages font en moyenne X mots"
+  },
   "piliers": [
     {
       "keyword": "keyword principal pilier",
       "title_suggestion": "Titre H1 suggéré",
       "search_volume": 1000,
       "rationale": "Pourquoi ce pilier",
+      "recommended_word_count": 3500,
       "filles": [
         {
           "keyword": "keyword fille 1",
           "title_suggestion": "Titre suggéré",
           "search_volume": 500,
+          "recommended_word_count": 1800,
           "paa_questions": ["Question 1 ?", "Question 2 ?"]
         }
       ],
@@ -356,6 +396,7 @@ Propose une architecture de contenu avec:
           "keyword": "keyword article",
           "title_suggestion": "Titre suggéré",
           "angle": "Angle éditorial",
+          "recommended_word_count": 1200,
           "paa_questions": ["Question ?"]
         }
       ],
@@ -453,6 +494,11 @@ Propose une architecture de contenu avec:
     // Get PAA questions for this keyword
     const relatedPaa = getPaaForKeyword(pageData.keyword);
 
+    // Get recommended word count (from page or global recommendations)
+    const targetWordCount = pageData.recommended_word_count ||
+      proposals?.word_count_recommendations?.[type] ||
+      (type === 'pilier' ? 3000 : type === 'fille' ? 1800 : 1200);
+
     setSelectedPage({ type, pilierKeyword, ...pageData });
     setBrief({
       keyword: pageData.keyword,
@@ -461,6 +507,7 @@ Propose une architecture de contenu avec:
         : [],
       content_type: type,
       tone: CONTENT_TYPES[type]?.defaultTone || 'neutre',
+      target_word_count: targetWordCount,
       paa_questions: pageData.paa_questions?.length > 0 ? pageData.paa_questions : relatedPaa,
       competitors: analysisData.competitors,
       site: site,
@@ -971,12 +1018,82 @@ Propose une architecture de contenu avec:
               <Card className="p-4 bg-gradient-to-r from-primary/10 to-purple-600/10 border-primary/30">
                 <div className="flex items-start gap-3">
                   <Brain className="w-6 h-6 text-primary flex-shrink-0 mt-1" />
-                  <div>
+                  <div className="flex-1">
                     <h3 className="text-white font-medium mb-1">Analyse de l'Architecte IA</h3>
-                    <p className="text-dark-muted text-sm">{proposals.analysis_summary}</p>
+                    <p className="text-dark-muted text-sm mb-3">{proposals.analysis_summary}</p>
+
+                    {/* Architecture Rationale */}
+                    {proposals.architecture_rationale && (
+                      <div className="grid grid-cols-3 gap-2 mb-3">
+                        <div className="p-2 bg-dark-bg/50 rounded text-center">
+                          <div className="text-xs text-dark-muted">Complexité niche</div>
+                          <div className={`font-medium capitalize ${
+                            proposals.architecture_rationale.niche_complexity === 'complexe' ? 'text-red-400' :
+                            proposals.architecture_rationale.niche_complexity === 'moyenne' ? 'text-yellow-400' : 'text-green-400'
+                          }`}>
+                            {proposals.architecture_rationale.niche_complexity || 'N/A'}
+                          </div>
+                        </div>
+                        <div className="p-2 bg-dark-bg/50 rounded text-center">
+                          <div className="text-xs text-dark-muted">Concurrence</div>
+                          <div className={`font-medium capitalize ${
+                            proposals.architecture_rationale.competition_level === 'fort' ? 'text-red-400' :
+                            proposals.architecture_rationale.competition_level === 'moyen' ? 'text-yellow-400' : 'text-green-400'
+                          }`}>
+                            {proposals.architecture_rationale.competition_level || 'N/A'}
+                          </div>
+                        </div>
+                        <div className="p-2 bg-dark-bg/50 rounded text-center">
+                          <div className="text-xs text-dark-muted">Piliers recommandés</div>
+                          <div className="font-medium text-primary">{proposals.piliers?.length || 0}</div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Why this architecture */}
+                    {proposals.architecture_rationale?.pillar_count_reason && (
+                      <p className="text-xs text-dark-muted italic">
+                        💡 {proposals.architecture_rationale.pillar_count_reason}
+                      </p>
+                    )}
                   </div>
                 </div>
               </Card>
+
+              {/* Word Count Recommendations */}
+              {proposals.word_count_recommendations && (
+                <Card className="p-4 bg-gradient-to-r from-blue-500/10 to-blue-600/5 border-blue-500/30">
+                  <div className="flex items-center gap-2 mb-3">
+                    <FileText className="w-5 h-5 text-blue-500" />
+                    <h3 className="text-white font-medium">Longueur recommandée (basée sur la concurrence)</h3>
+                  </div>
+                  <div className="grid grid-cols-3 gap-3 mb-2">
+                    <div className="p-3 bg-purple-500/10 border border-purple-500/30 rounded-lg text-center">
+                      <div className="text-2xl font-bold text-purple-400">
+                        {proposals.word_count_recommendations.pilier?.toLocaleString() || '3000'}
+                      </div>
+                      <div className="text-xs text-dark-muted">mots / Page Mère</div>
+                    </div>
+                    <div className="p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg text-center">
+                      <div className="text-2xl font-bold text-blue-400">
+                        {proposals.word_count_recommendations.fille?.toLocaleString() || '1800'}
+                      </div>
+                      <div className="text-xs text-dark-muted">mots / Page Fille</div>
+                    </div>
+                    <div className="p-3 bg-green-500/10 border border-green-500/30 rounded-lg text-center">
+                      <div className="text-2xl font-bold text-green-400">
+                        {proposals.word_count_recommendations.article?.toLocaleString() || '1200'}
+                      </div>
+                      <div className="text-xs text-dark-muted">mots / Article</div>
+                    </div>
+                  </div>
+                  {proposals.word_count_recommendations.rationale && (
+                    <p className="text-xs text-dark-muted italic">
+                      📊 {proposals.word_count_recommendations.rationale}
+                    </p>
+                  )}
+                </Card>
+              )}
 
               {/* Quick wins */}
               {proposals.quick_wins?.length > 0 && (
@@ -1087,6 +1204,11 @@ Propose une architecture de contenu avec:
                           {pilier.search_volume && (
                             <span className="text-sm text-dark-muted">{pilier.search_volume} vol</span>
                           )}
+                          {pilier.recommended_word_count && (
+                            <span className="text-xs text-purple-400 bg-purple-500/10 px-2 py-1 rounded">
+                              {pilier.recommended_word_count.toLocaleString()} mots
+                            </span>
+                          )}
                           <button
                             onClick={() => selectCluster(pilier)}
                             className="px-3 py-1 text-xs bg-purple-500/20 text-purple-400 rounded hover:bg-purple-500/30"
@@ -1138,12 +1260,19 @@ Propose une architecture de contenu avec:
                                   <div className="flex-1">
                                     <div className="text-white text-sm font-medium">{fille.title_suggestion}</div>
                                     <div className="text-xs text-blue-400">{fille.keyword}</div>
-                                    {fille.paa_questions?.length > 0 && (
-                                      <div className="text-xs text-dark-muted mt-1">
-                                        <HelpCircle className="w-3 h-3 inline mr-1" />
-                                        {fille.paa_questions.length} PAA
-                                      </div>
-                                    )}
+                                    <div className="flex items-center gap-2 mt-1">
+                                      {fille.recommended_word_count && (
+                                        <span className="text-xs text-blue-300 bg-blue-500/10 px-1.5 py-0.5 rounded">
+                                          {fille.recommended_word_count.toLocaleString()} mots
+                                        </span>
+                                      )}
+                                      {fille.paa_questions?.length > 0 && (
+                                        <span className="text-xs text-dark-muted">
+                                          <HelpCircle className="w-3 h-3 inline mr-1" />
+                                          {fille.paa_questions.length} PAA
+                                        </span>
+                                      )}
+                                    </div>
                                   </div>
                                 </div>
                                 <button
@@ -1188,7 +1317,14 @@ Propose une architecture de contenu avec:
                                   </button>
                                   <div className="flex-1 min-w-0">
                                     <div className="text-white text-sm truncate">{article.title_suggestion}</div>
-                                    <div className="text-xs text-green-400 truncate">{article.keyword}</div>
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-xs text-green-400 truncate">{article.keyword}</span>
+                                      {article.recommended_word_count && (
+                                        <span className="text-xs text-green-300 bg-green-500/10 px-1 py-0.5 rounded flex-shrink-0">
+                                          {article.recommended_word_count.toLocaleString()}
+                                        </span>
+                                      )}
+                                    </div>
                                   </div>
                                 </div>
                                 <button
@@ -1304,6 +1440,43 @@ Propose une architecture de contenu avec:
               <div className="text-xs text-dark-muted mt-1">
                 Recommandé pour {CONTENT_TYPES[brief.content_type]?.label}: <span className="text-primary">{TONE_OPTIONS[CONTENT_TYPES[brief.content_type]?.defaultTone]?.label}</span>
               </div>
+            </div>
+
+            {/* Word count target */}
+            <div>
+              <label className="block text-sm text-dark-muted mb-2">Nombre de mots cible (basé sur la concurrence)</label>
+              <div className="flex items-center gap-3">
+                <input
+                  type="number"
+                  value={brief.target_word_count || 1500}
+                  onChange={(e) => setBrief(prev => ({ ...prev, target_word_count: parseInt(e.target.value) || 1500 }))}
+                  min="500"
+                  max="10000"
+                  step="100"
+                  className="w-32 bg-dark-bg border border-dark-border rounded-lg px-3 py-2 text-white"
+                />
+                <span className="text-dark-muted">mots</span>
+                <div className="flex gap-1">
+                  {[1000, 1500, 2000, 3000, 4000].map(wc => (
+                    <button
+                      key={wc}
+                      onClick={() => setBrief(prev => ({ ...prev, target_word_count: wc }))}
+                      className={`px-2 py-1 text-xs rounded ${
+                        brief.target_word_count === wc
+                          ? 'bg-primary text-white'
+                          : 'bg-dark-bg text-dark-muted hover:text-white'
+                      }`}
+                    >
+                      {wc >= 1000 ? `${wc/1000}k` : wc}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {proposals?.word_count_recommendations?.rationale && (
+                <div className="text-xs text-dark-muted mt-1 italic">
+                  💡 {proposals.word_count_recommendations.rationale}
+                </div>
+              )}
             </div>
 
             {/* Secondary keywords */}

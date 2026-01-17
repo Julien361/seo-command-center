@@ -393,7 +393,7 @@ ${JSON.stringify(strategistOutput, null, 2)}
 ## CONTEXTE
 - Keyword principal: ${brief.keyword}
 - Type de page: ${brief.content_type}
-- Longueur cible: ${strategistOutput.target_length || 1500} mots
+- Longueur cible: ${brief.target_word_count || strategistOutput.target_length || 1500} mots (IMPÉRATIF, basé sur analyse concurrentielle)
 
 ## TON À ADOPTER (TRÈS IMPORTANT)
 ${toneGuidance[brief.tone] || toneGuidance.neutre}
