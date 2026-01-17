@@ -12,14 +12,16 @@ import Card from '../components/common/Card';
 import { supabase } from '../lib/supabase';
 import { claudeApi } from '../lib/claude';
 
-// Agent configuration - PAA Analyst first, then rest of pipeline
+// Agent configuration - Full pipeline
 const AGENTS = [
   { id: 'paaAnalyst', name: 'PAA Analyst', icon: HelpCircle, color: 'text-violet-500', description: 'Génère questions PAA', model: 'Haiku' },
   { id: 'strategist', name: 'Stratège', icon: Target, color: 'text-blue-500', description: 'Crée le brief détaillé', model: 'Sonnet' },
+  { id: 'slugGenerator', name: 'URL/Slug', icon: Link, color: 'text-orange-500', description: 'Génère URL optimisée', model: 'Haiku' },
   { id: 'writer', name: 'Rédacteur', icon: PenTool, color: 'text-green-500', description: 'Écrit le contenu', model: 'Sonnet' },
   { id: 'factChecker', name: 'Fact-Checker', icon: CheckCircle, color: 'text-red-500', description: 'Vérifie les faits', model: 'Haiku' },
-  { id: 'seoEditor', name: 'SEO Editor', icon: Search, color: 'text-yellow-500', description: 'Optimise pour 85+', model: 'Sonnet' },
   { id: 'humanizer', name: 'Humanizer', icon: Sparkles, color: 'text-purple-500', description: 'Rend naturel', model: 'Sonnet' },
+  { id: 'seoEditor', name: 'SEO Editor', icon: Search, color: 'text-yellow-500', description: 'Optimise pour 85+', model: 'Sonnet' },
+  { id: 'proofreader', name: 'Relecteur', icon: Eye, color: 'text-pink-500', description: 'Cohérence & fluidité', model: 'Haiku' },
   { id: 'schemaGenerator', name: 'Schema', icon: FileCode, color: 'text-cyan-500', description: 'Génère JSON-LD', model: 'Haiku' }
 ];
 
@@ -355,7 +357,7 @@ Propose une architecture de contenu avec:
     }
   };
 
-  // Run the factory
+  // Run the factory with SEO Director guidance (Orchestrator pattern)
   const runFactory = async () => {
     if (!brief.keyword) return;
 
@@ -366,7 +368,13 @@ Propose une architecture de contenu avec:
     setFinalResult(null);
 
     try {
-      const result = await claudeApi.runContentFactory(brief, analysisData.paaQuestions || [], handleProgress);
+      // Pass SEO Director guidance to orchestrate all agents
+      const result = await claudeApi.runContentFactory(
+        brief,
+        analysisData.paaQuestions || [],
+        handleProgress,
+        seoDirection // <-- Inject SEO Director guidance into all agents
+      );
       setFinalResult(result);
       if (result.success) {
         setEditedContent(result.finalContent);
@@ -1129,7 +1137,7 @@ Propose une architecture de contenu avec:
               className="flex items-center gap-2 px-6 py-3 bg-primary text-white rounded-lg font-medium hover:bg-primary/90"
             >
               <Play className="w-5 h-5" />
-              Lancer les 6 agents
+              Lancer les 9 agents
             </button>
           </div>
         </Card>
@@ -1219,7 +1227,7 @@ Propose une architecture de contenu avec:
         <>
           {/* Metrics */}
           <Card className="p-4">
-            <div className="grid grid-cols-6 gap-4 text-center">
+            <div className="grid grid-cols-4 md:grid-cols-7 gap-4 text-center">
               <div>
                 <div className={`text-2xl font-bold ${finalResult.metadata.seoScore >= 85 ? 'text-success' : 'text-warning'}`}>
                   {finalResult.metadata.seoScore || '-'}
@@ -1246,6 +1254,15 @@ Propose une architecture de contenu avec:
                 <div className="text-xs text-dark-muted">Détection IA</div>
               </div>
               <div>
+                <div className={`text-2xl font-bold ${finalResult.metadata.proofreadScore >= 80 ? 'text-pink-500' : 'text-warning'}`}>
+                  {finalResult.metadata.proofreadScore || '-'}
+                </div>
+                <div className="text-xs text-dark-muted">Relecture</div>
+                {finalResult.metadata.proofreadFixes > 0 && (
+                  <div className="text-xs text-pink-400">{finalResult.metadata.proofreadFixes} fixes</div>
+                )}
+              </div>
+              <div>
                 <div className="text-2xl font-bold text-cyan-500">{finalResult.metadata.schemas?.length || 0}</div>
                 <div className="text-xs text-dark-muted">Schemas</div>
               </div>
@@ -1259,6 +1276,13 @@ Propose une architecture de contenu avec:
               Meta Tags (cliquer pour copier)
             </h3>
             <div className="space-y-2">
+              <div
+                onClick={() => { navigator.clipboard.writeText(finalResult.metadata.slug || ''); }}
+                className="p-2 bg-dark-bg rounded cursor-pointer hover:bg-dark-border transition-colors"
+              >
+                <span className="text-xs text-orange-500">URL/Slug:</span>
+                <span className="text-white ml-2">/{finalResult.metadata.slug}</span>
+              </div>
               <div
                 onClick={() => { navigator.clipboard.writeText(finalResult.metadata.title); }}
                 className="p-2 bg-dark-bg rounded cursor-pointer hover:bg-dark-border transition-colors"
@@ -1304,13 +1328,42 @@ Propose une architecture de contenu avec:
               <div className="flex gap-2">
                 <button
                   onClick={() => {
-                    const fullContent = `<!-- Title: ${finalResult.metadata.title} -->\n<!-- Description: ${finalResult.metadata.description} -->\n\n${editedContent}`;
-                    navigator.clipboard.writeText(fullContent);
+                    navigator.clipboard.writeText(editedContent);
+                    alert('Markdown copié !');
+                  }}
+                  className="flex items-center gap-1 px-3 py-1 bg-dark-border text-dark-muted rounded-lg hover:bg-dark-card hover:text-white text-sm"
+                >
+                  <Copy className="w-4 h-4" />
+                  Markdown
+                </button>
+                <button
+                  onClick={() => {
+                    // Convert Markdown to HTML
+                    const html = editedContent
+                      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+                      .replace(/\*(.+?)\*/g, '<em>$1</em>')
+                      .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+                      .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+                      .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+                      .replace(/^#### (.+)$/gm, '<h4>$1</h4>')
+                      .replace(/^\- (.+)$/gm, '<li>$1</li>')
+                      .replace(/^\d+\. (.+)$/gm, '<li>$1</li>')
+                      .replace(/\[LIEN: (.+?) -> (.+?)\]/g, '<a href="#">$1</a>')
+                      .split('\n')
+                      .map(line => {
+                        if (line.startsWith('<h') || line.startsWith('<li')) return line;
+                        if (line.trim() === '') return '';
+                        return `<p>${line}</p>`;
+                      })
+                      .filter(line => line !== '')
+                      .join('\n');
+                    navigator.clipboard.writeText(html);
+                    alert('HTML copié !');
                   }}
                   className="flex items-center gap-1 px-3 py-1 bg-primary/20 text-primary rounded-lg hover:bg-primary/30 text-sm"
                 >
-                  <Copy className="w-4 h-4" />
-                  Tout copier
+                  <FileCode className="w-4 h-4" />
+                  HTML
                 </button>
                 <button onClick={() => setEditMode(!editMode)} className={`p-2 rounded-lg ${editMode ? 'bg-primary text-white' : 'hover:bg-dark-border text-dark-muted'}`}>
                   {editMode ? <Eye className="w-4 h-4" /> : <Edit3 className="w-4 h-4" />}
@@ -1342,14 +1395,19 @@ Propose une architecture de contenu avec:
             ) : (
               <div className="h-96 overflow-auto p-4 bg-dark-bg rounded-lg text-sm text-white prose prose-invert max-w-none">
                 {editedContent.split('\n').map((line, idx) => {
-                  if (line.startsWith('# ')) return <h1 key={idx} className="text-xl font-bold text-purple-400 mt-4 mb-2">{line.replace('# ', '')}</h1>;
-                  if (line.startsWith('## ')) return <h2 key={idx} className="text-lg font-semibold text-blue-400 mt-3 mb-2">{line.replace('## ', '')}</h2>;
-                  if (line.startsWith('### ')) return <h3 key={idx} className="text-base font-medium text-green-400 mt-2 mb-1">{line.replace('### ', '')}</h3>;
-                  if (line.startsWith('- ')) return <li key={idx} className="ml-4 text-dark-text">{line.replace('- ', '')}</li>;
-                  if (line.match(/^\d+\. /)) return <li key={idx} className="ml-4 text-dark-text list-decimal">{line.replace(/^\d+\. /, '')}</li>;
+                  // Clean line: remove ** and * for display
+                  const cleanLine = (text) => text
+                    .replace(/\*\*(.+?)\*\*/g, '$1')
+                    .replace(/\*(.+?)\*/g, '$1');
+
+                  if (line.startsWith('# ')) return <h1 key={idx} className="text-xl font-bold text-purple-400 mt-4 mb-2">{cleanLine(line.replace('# ', ''))}</h1>;
+                  if (line.startsWith('## ')) return <h2 key={idx} className="text-lg font-semibold text-blue-400 mt-3 mb-2">{cleanLine(line.replace('## ', ''))}</h2>;
+                  if (line.startsWith('### ')) return <h3 key={idx} className="text-base font-medium text-green-400 mt-2 mb-1">{cleanLine(line.replace('### ', ''))}</h3>;
+                  if (line.startsWith('- ')) return <li key={idx} className="ml-4 text-dark-text">{cleanLine(line.replace('- ', ''))}</li>;
+                  if (line.match(/^\d+\. /)) return <li key={idx} className="ml-4 text-dark-text list-decimal">{cleanLine(line.replace(/^\d+\. /, ''))}</li>;
                   if (line.includes('[LIEN:')) return <p key={idx} className="text-info bg-info/10 px-2 py-1 rounded my-1">{line}</p>;
                   if (line.trim() === '') return <br key={idx} />;
-                  return <p key={idx} className="text-dark-text my-1">{line}</p>;
+                  return <p key={idx} className="text-dark-text my-1">{cleanLine(line)}</p>;
                 })}
               </div>
             )}

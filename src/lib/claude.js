@@ -13,11 +13,17 @@ async function callClaude(prompt, options = {}) {
     system = null
   } = options;
 
+  // Add current date context to help Claude know we're in 2026
+  const currentYear = new Date().getFullYear();
+  const dateContext = `[DATE: ${new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}]
+[ANNÉE EN COURS: ${currentYear}]
+[INSTRUCTION IMPORTANTE: Utilise TOUJOURS l'année ${currentYear} dans les titres, dates et références. N'utilise JAMAIS ${currentYear - 1}.]\n\n`;
+
   try {
     const body = {
       model,
       max_tokens: maxTokens,
-      messages: [{ role: 'user', content: prompt }]
+      messages: [{ role: 'user', content: dateContext + prompt }]
     };
 
     if (system) {
@@ -58,6 +64,12 @@ async function callClaudeWithSearch(prompt, options = {}) {
     maxTokens = 4096
   } = options;
 
+  // Add current date context
+  const currentYear = new Date().getFullYear();
+  const dateContext = `[DATE: ${new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}]
+[ANNÉE EN COURS: ${currentYear}]
+[INSTRUCTION IMPORTANTE: Utilise TOUJOURS l'année ${currentYear} dans les titres, dates et références. N'utilise JAMAIS ${currentYear - 1}.]\n\n`;
+
   try {
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -75,7 +87,7 @@ async function callClaudeWithSearch(prompt, options = {}) {
           name: 'web_search',
           max_uses: 5
         }],
-        messages: [{ role: 'user', content: prompt }]
+        messages: [{ role: 'user', content: dateContext + prompt }]
       })
     });
 
@@ -238,14 +250,19 @@ ${paaExamples.length > 0 ? paaExamples.map((q, i) => `${i + 1}. ${q}`).join('\n'
   /**
    * Agent 1: Strategist - Creates detailed brief
    * Strategy based on: keyword, niche, competitors. PAA is just for FAQ enrichment.
+   * Now accepts SEO Director guidance for strategic alignment
    */
-  async runStrategist(brief, paaAnalysis = null) {
+  async runStrategist(brief, paaAnalysis = null, seoDirection = null) {
     const skills = getAgentSkills('strategist');
 
     // PAA questions are OPTIONAL enrichment for FAQ section only
     const paaQuestions = paaAnalysis?.generated_questions?.map(q => q.question) || [];
 
+    // Build Director context if available
+    const directorContext = seoDirection ? this.buildDirectorContext(seoDirection) : '';
+
     const prompt = `Tu es le Stratège SEO. Tu crées des briefs détaillés pour la rédaction.
+${directorContext}
 
 ## TES SKILLS
 ${skills}
@@ -316,9 +333,13 @@ Réponds en JSON:
 
   /**
    * Agent 2: Writer - Creates the content
+   * Now accepts SEO Director guidance for tone, CTAs, and monetization alignment
    */
-  async runWriter(brief, strategistOutput) {
+  async runWriter(brief, strategistOutput, seoDirection = null) {
     const skills = getAgentSkills('writer');
+
+    // Build Director context for monetization and CTAs
+    const directorContext = seoDirection ? this.buildDirectorContext(seoDirection) : '';
 
     // Tone guidance based on brief.tone
     const toneGuidance = {
@@ -340,6 +361,7 @@ Réponds en JSON:
     };
 
     const prompt = `Tu es le Rédacteur SEO expert. Tu écris du contenu optimisé et engageant.
+${directorContext}
 
 ## TES SKILLS
 ${skills}
@@ -400,16 +422,21 @@ Retourne UNIQUEMENT le contenu en Markdown:
 
   /**
    * Agent 4: SEO Editor - Optimizes the content with minimum score 85
+   * Now accepts SEO Director guidance for optimization alignment
    */
-  async runSeoEditor(brief, content, minScore = 85, maxRetries = 3) {
+  async runSeoEditor(brief, content, minScore = 85, maxRetries = 3, seoDirection = null) {
     const skills = getAgentSkills('seo_editor');
     let currentContent = content;
     let lastResult = null;
     let attempt = 0;
 
+    // Build Director context for SEO guidelines
+    const directorContext = seoDirection ? this.buildDirectorContext(seoDirection) : '';
+
     while (attempt < maxRetries) {
       attempt++;
       const prompt = `Tu es l'Éditeur SEO. Tu optimises le contenu pour le référencement.
+${directorContext}
 ${attempt > 1 ? `\n⚠️ TENTATIVE ${attempt}/${maxRetries} - Le score précédent était ${lastResult?.seo_score || 'N/A'}. Tu DOIS atteindre ${minScore}+ !` : ''}
 
 ## TES SKILLS
@@ -871,12 +898,32 @@ Tu DOIS générer des suggestions supplémentaires basées sur les clusters exis
 
     const competitorDomains = analysisData.competitors?.map(c => c.domain).join(', ') || 'Non analysés';
 
-    const prompt = `Tu es le Directeur SEO expert. Tu orientes la stratégie globale et donnes des directions claires.
+    // Extract monetization types
+    const monetization = site.monetization_types || [];
+    const monetizationLabels = {
+      'lead_gen': 'Génération de leads',
+      'sponsored': 'Articles sponsorisés',
+      'e-commerce': 'E-commerce',
+      'saas': 'SaaS / Abonnement',
+      'consulting': 'Consulting / Services',
+      'affiliate': 'Affiliation',
+      'ads': 'Publicité (Adsense, etc.)',
+      'training': 'Formation / E-learning'
+    };
+    const monetizationText = monetization.map(m => monetizationLabels[m] || m).join(', ') || 'Non définie';
 
-## SITE
+    const prompt = `Tu es le Directeur SEO expert. Tu orientes la stratégie globale en tenant compte du CONTEXTE BUSINESS complet.
+
+## IDENTITÉ DU SITE
 - Alias: ${site.mcp_alias}
 - URL: ${site.url}
-- Focus SEO: ${JSON.stringify(site.seo_focus)}
+- Domaine/Niche: ${site.domain || 'N/A'}
+
+## CONTEXTE BUSINESS (TRÈS IMPORTANT)
+- **Objectif SEO**: ${Array.isArray(site.seo_focus) ? site.seo_focus.filter(f => f && !f.startsWith('seeds:')).join(', ') : site.seo_focus || 'Non défini'}
+- **Monétisation**: ${monetizationText}
+- **Audience cible**: ${site.target_audience || 'Non définie'}
+- **Zone géographique**: ${site.geographic_focus || 'France'}
 
 ## DONNÉES ANALYSÉES
 - Keywords: ${analysisData.keywords?.length || 0} (top 30 ci-dessous)
@@ -890,13 +937,15 @@ ${JSON.stringify(topKeywords, null, 2)}
 ${proposals ? `${proposals.piliers?.length || 0} piliers proposés` : 'Pas encore définie'}
 
 ## TA MISSION
-En tant que Directeur SEO, donne des ORIENTATIONS STRATÉGIQUES claires :
+En tant que Directeur SEO, donne des ORIENTATIONS STRATÉGIQUES claires ALIGNÉES avec le contexte business :
 
-1. **Focus Principal** : Quel angle attaquer en priorité ?
+1. **Focus Principal** : Quel angle attaquer en priorité ? (en lien avec la monétisation)
 2. **Positionnement** : Comment se différencier des concurrents ?
-3. **Quick Wins** : Actions rapides à fort impact ?
-4. **Risques** : Points de vigilance ?
-5. **Opportunités** : Niches ou angles sous-exploités ?
+3. **Ton & Style** : Adapté à l'audience cible
+4. **Quick Wins** : Actions rapides à fort impact pour la monétisation
+5. **Risques** : Points de vigilance ?
+6. **Opportunités** : Niches ou angles sous-exploités ?
+7. **CTA recommandés** : Types d'appels à l'action selon la monétisation
 
 ## FORMAT JSON STRICT
 {
@@ -904,7 +953,14 @@ En tant que Directeur SEO, donne des ORIENTATIONS STRATÉGIQUES claires :
     "main_angle": "L'angle principal à attaquer",
     "positioning": "Comment se positionner vs concurrence",
     "tone": "expert|accessible|technique|vulgarisé",
-    "target_audience": "Qui cibler en priorité"
+    "target_audience": "Qui cibler en priorité",
+    "geographic_adaptation": "Comment adapter au marché géographique"
+  },
+  "monetization_strategy": {
+    "primary_goal": "Objectif principal de conversion",
+    "recommended_ctas": ["CTA type 1", "CTA type 2"],
+    "conversion_points": ["Où placer les conversions dans le contenu"],
+    "value_proposition": "Proposition de valeur à mettre en avant"
   },
   "priorities": [
     {
@@ -937,7 +993,8 @@ En tant que Directeur SEO, donne des ORIENTATIONS STRATÉGIQUES claires :
   "content_guidelines": {
     "must_include": ["élément obligatoire 1", "élément 2"],
     "avoid": ["à éviter 1", "à éviter 2"],
-    "differentiation": "Ce qui doit nous différencier"
+    "differentiation": "Ce qui doit nous différencier",
+    "tone_examples": ["Exemple de formulation 1", "Exemple 2"]
   }
 }`;
 
@@ -962,64 +1019,344 @@ En tant que Directeur SEO, donne des ORIENTATIONS STRATÉGIQUES claires :
   },
 
   /**
-   * Run the complete Content Factory pipeline
-   * Order: Strategist → Writer → Fact Checker → SEO Editor (85+) → Humanizer → Schema
+   * Agent: Slug Generator - Creates intelligent SEO-friendly URLs
    */
-  async runContentFactory(brief, existingPaa, onProgress) {
+  async runSlugGenerator(keyword, contentType, site) {
+    const currentYear = new Date().getFullYear();
+
+    const prompt = `Tu es un expert SEO spécialisé dans les URLs. Génère un slug optimisé.
+
+## KEYWORD
+${keyword}
+
+## TYPE DE CONTENU
+${contentType} (pilier = court et autoritaire, fille = descriptif, article = engageant)
+
+## SITE
+${site?.mcp_alias || 'N/A'} - ${site?.seo_focus?.[0] || 'N/A'}
+
+## RÈGLES POUR LE SLUG
+1. 3-5 mots maximum
+2. Tout en minuscules, sans accents
+3. Tirets entre les mots
+4. Pas de mots vides (le, la, les, de, du, des, un, une, pour, avec, etc.)
+5. Inclure l'année ${currentYear} SI pertinent (guides, prix, actualités)
+6. Pas de caractères spéciaux
+
+## EXEMPLES
+- "prix ppt copropriété" → "prix-ppt-copropriete-${currentYear}"
+- "qu'est-ce que MaPrimeAdapt" → "maprimeadapt-guide"
+- "formation diagnostiqueur immobilier CPF" → "formation-diagnostiqueur-cpf"
+
+## FORMAT JSON
+{
+  "slug": "le-slug-optimise",
+  "includes_year": true,
+  "rationale": "Pourquoi ce choix"
+}`;
+
+    const text = await callClaude(prompt, {
+      maxTokens: 256,
+      model: 'claude-3-5-haiku-20241022'
+    });
+
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      try {
+        return JSON.parse(jsonMatch[0]);
+      } catch (e) {
+        console.error('[Slug Generator] JSON parse error:', e);
+      }
+    }
+
+    // Fallback: simple slugify
+    return {
+      slug: keyword.toLowerCase()
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9\s-]/g, '')
+        .replace(/\s+/g, '-')
+        .substring(0, 60),
+      includes_year: false,
+      rationale: 'Fallback automatique'
+    };
+  },
+
+  /**
+   * Agent: Proofreader - Final review for coherence, repetitions, fluidity
+   */
+  async runProofreader(content, keyword) {
+    const prompt = `Tu es un Relecteur professionnel. Tu fais une relecture finale du contenu.
+
+## CONTENU À RELIRE
+${content}
+
+## KEYWORD PRINCIPAL
+${keyword}
+
+## TA MISSION
+1. **Cohérence** : Le fil conducteur est-il clair ?
+2. **Répétitions** : Mots ou expressions trop répétés ?
+3. **Fluidité** : Les transitions sont-elles naturelles ?
+4. **Clarté** : Y a-t-il des phrases confuses ?
+5. **Longueur** : Certains paragraphes sont-ils trop longs ?
+
+## RÈGLES
+- NE CHANGE PAS le sens
+- NE SUPPRIME PAS d'informations importantes
+- Fais des corrections SUBTILES
+- Garde le style et le ton
+- Ne touche PAS aux H1, H2, H3 (structure)
+
+## FORMAT JSON
+{
+  "issues_found": [
+    {
+      "type": "repetition|coherence|fluidity|clarity|length",
+      "location": "Description de l'endroit",
+      "original": "Texte original",
+      "suggestion": "Texte corrigé",
+      "severity": "minor|moderate"
+    }
+  ],
+  "corrections_count": 5,
+  "quality_score": 85,
+  "content_corrected": "LE CONTENU COMPLET CORRIGÉ"
+}`;
+
+    const text = await callClaude(prompt, {
+      maxTokens: 8192,
+      model: 'claude-3-5-haiku-20241022'
+    });
+
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      try {
+        return JSON.parse(jsonMatch[0]);
+      } catch (e) {
+        console.error('[Proofreader] JSON parse error:', e);
+      }
+    }
+
+    return {
+      issues_found: [],
+      corrections_count: 0,
+      quality_score: 80,
+      content_corrected: content
+    };
+  },
+
+  /**
+   * Agent: Internal Linking - Creates internal links with anchor distribution
+   * Called AFTER all pages in a batch are created
+   */
+  async runInternalLinking(pages) {
+    // pages = [{ keyword, slug, type, content, pilierKeyword? }, ...]
+
+    const pagesContext = pages.map(p => ({
+      keyword: p.keyword,
+      slug: p.slug,
+      type: p.type,
+      pilierKeyword: p.pilierKeyword || null
+    }));
+
+    const prompt = `Tu es un Expert en Maillage Interne SEO. Tu crées des liens entre les pages.
+
+## PAGES CRÉÉES
+${JSON.stringify(pagesContext, null, 2)}
+
+## RÈGLES DE MAILLAGE
+1. Chaque FILLE doit avoir 1-2 liens vers son PILIER
+2. Chaque PILIER doit avoir des liens vers ses FILLES
+3. Les FILLES d'un même pilier peuvent se lier entre elles (1-2 liens)
+4. Les ARTICLES supportent le cluster avec 1-2 liens
+
+## RÉPARTITION DES ANCRES (TRÈS IMPORTANT)
+- 40-50% Semi-optimisées : variations naturelles du keyword ("les tarifs du PPT", "coût d'un plan pluriannuel")
+- 20-30% Exactes : le keyword tel quel ("prix ppt copropriété")
+- 20-30% Génériques avec contexte : ("en savoir plus", "découvrir notre guide", "voir les détails")
+
+## TA MISSION
+Pour CHAQUE page, génère les liens à insérer avec des ancres variées.
+
+## FORMAT JSON
+{
+  "links": [
+    {
+      "from_page": "keyword de la page source",
+      "to_page": "keyword de la page cible",
+      "to_slug": "/slug-de-la-cible",
+      "anchor": "texte de l'ancre",
+      "anchor_type": "semi_optimized|exact|generic",
+      "insert_after_h2": "Titre du H2 après lequel insérer (ou null pour fin de section)"
+    }
+  ],
+  "distribution": {
+    "semi_optimized": 45,
+    "exact": 25,
+    "generic": 30
+  },
+  "total_links": 12
+}`;
+
+    const text = await callClaude(prompt, {
+      maxTokens: 4096,
+      model: 'claude-sonnet-4-20250514' // Sonnet pour la qualité des ancres
+    });
+
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      try {
+        return JSON.parse(jsonMatch[0]);
+      } catch (e) {
+        console.error('[Internal Linking] JSON parse error:', e);
+      }
+    }
+
+    return {
+      links: [],
+      distribution: { semi_optimized: 0, exact: 0, generic: 0 },
+      total_links: 0
+    };
+  },
+
+  /**
+   * Apply internal links to content
+   */
+  applyInternalLinks(content, links, pageKeyword) {
+    let updatedContent = content;
+
+    // Filter links for this page
+    const pageLinks = links.filter(l => l.from_page === pageKeyword);
+
+    for (const link of pageLinks) {
+      const linkHtml = `[LIEN: ${link.anchor} -> ${link.to_slug}]`;
+
+      if (link.insert_after_h2) {
+        // Insert after specific H2
+        const h2Regex = new RegExp(`(## ${link.insert_after_h2}[\\s\\S]*?)(\n## |$)`, 'i');
+        const match = updatedContent.match(h2Regex);
+        if (match) {
+          const insertPoint = match[1].lastIndexOf('\n\n');
+          if (insertPoint > -1) {
+            const before = match[1].substring(0, insertPoint);
+            const after = match[1].substring(insertPoint);
+            updatedContent = updatedContent.replace(match[1], `${before}\n\n${linkHtml}${after}`);
+          }
+        }
+      } else {
+        // Insert before FAQ or at end
+        const faqIndex = updatedContent.indexOf('## FAQ');
+        if (faqIndex > -1) {
+          updatedContent = updatedContent.substring(0, faqIndex) + `\n${linkHtml}\n\n` + updatedContent.substring(faqIndex);
+        } else {
+          updatedContent += `\n\n${linkHtml}`;
+        }
+      }
+    }
+
+    return updatedContent;
+  },
+
+  /**
+   * Build Director context string to inject into all agents
+   */
+  buildDirectorContext(seoDirection) {
+    if (!seoDirection) return '';
+
+    return `
+## DIRECTIVES DU SEO DIRECTOR (À RESPECTER IMPÉRATIVEMENT)
+- **Angle principal**: ${seoDirection.strategic_focus?.main_angle || 'Non défini'}
+- **Positionnement**: ${seoDirection.strategic_focus?.positioning || 'Non défini'}
+- **Ton**: ${seoDirection.strategic_focus?.tone || 'expert'}
+- **Audience cible**: ${seoDirection.strategic_focus?.target_audience || 'Non définie'}
+- **Adaptation géo**: ${seoDirection.strategic_focus?.geographic_adaptation || 'France'}
+
+## STRATÉGIE DE MONÉTISATION
+- **Objectif**: ${seoDirection.monetization_strategy?.primary_goal || 'Non défini'}
+- **CTAs recommandés**: ${seoDirection.monetization_strategy?.recommended_ctas?.join(', ') || 'N/A'}
+- **Points de conversion**: ${seoDirection.monetization_strategy?.conversion_points?.join(', ') || 'N/A'}
+- **Proposition de valeur**: ${seoDirection.monetization_strategy?.value_proposition || 'N/A'}
+
+## GUIDELINES CONTENU
+- **À inclure**: ${seoDirection.content_guidelines?.must_include?.join(', ') || 'N/A'}
+- **À éviter**: ${seoDirection.content_guidelines?.avoid?.join(', ') || 'N/A'}
+- **Différenciation**: ${seoDirection.content_guidelines?.differentiation || 'N/A'}
+`;
+  },
+
+  /**
+   * Run the complete Content Factory pipeline with Orchestrator
+   * Order: PAA → Strategist → Slug → Writer → Fact Checker → Humanizer → SEO Editor → Proofreader → Schema
+   * The Orchestrator injects SEO Director guidance into each agent
+   */
+  async runContentFactory(brief, existingPaa, onProgress, seoDirection = null) {
     const results = {
       paaAnalyst: null,
       strategist: null,
+      slugGenerator: null,
       writer: null,
       factChecker: null,
-      seoEditor: null,
       humanizer: null,
+      seoEditor: null,
+      proofreader: null,
       schemaGenerator: null
     };
 
     try {
-      // Agent 0: PAA Analyst - Generates relevant questions
+      // Agent 1: PAA Analyst - Generates relevant questions
       onProgress?.('paaAnalyst', 'running');
       results.paaAnalyst = await this.runPaaAnalyst(brief, existingPaa || []);
       onProgress?.('paaAnalyst', 'completed', results.paaAnalyst);
 
-      // Agent 1: Strategist - Creates the brief using PAA analysis
+      // Agent 2: Strategist - Creates the brief using PAA analysis + Director guidance
       onProgress?.('strategist', 'running');
-      results.strategist = await this.runStrategist(brief, results.paaAnalyst);
+      results.strategist = await this.runStrategist(brief, results.paaAnalyst, seoDirection);
       onProgress?.('strategist', 'completed', results.strategist);
 
-      // Agent 2: Writer - Writes the content
+      // Agent 3: Slug Generator - Creates SEO-friendly URL
+      onProgress?.('slugGenerator', 'running');
+      results.slugGenerator = await this.runSlugGenerator(brief.keyword, brief.content_type, brief.site);
+      onProgress?.('slugGenerator', 'completed', results.slugGenerator);
+
+      // Agent 4: Writer - Writes the content with Director guidance
       onProgress?.('writer', 'running');
-      results.writer = await this.runWriter(brief, results.strategist);
+      results.writer = await this.runWriter(brief, results.strategist, seoDirection);
       onProgress?.('writer', 'completed', results.writer);
 
-      // Agent 3: Fact Checker - Verifies facts BEFORE optimization (Haiku)
+      // Agent 5: Fact Checker - Verifies facts (Haiku)
       onProgress?.('factChecker', 'running');
       results.factChecker = await this.runFactChecker(results.writer.content, brief.keyword);
       onProgress?.('factChecker', 'completed', results.factChecker);
 
       // Apply fact corrections if any
-      let contentForSeo = results.writer.content;
+      let contentAfterFacts = results.writer.content;
       if (results.factChecker.corrections_needed?.length > 0) {
         for (const correction of results.factChecker.corrections_needed) {
-          contentForSeo = contentForSeo.replace(correction.original, correction.corrected);
+          contentAfterFacts = contentAfterFacts.replace(correction.original, correction.corrected);
         }
       }
 
-      // Agent 4: SEO Editor - Optimizes with minimum score 85 (with retry)
-      onProgress?.('seoEditor', 'running');
-      results.seoEditor = await this.runSeoEditor(brief, contentForSeo, 85, 3);
-      onProgress?.('seoEditor', 'completed', results.seoEditor);
-
-      // Agent 5: Humanizer - Makes content natural (LAST text modification)
+      // Agent 6: Humanizer - Makes content natural BEFORE SEO optimization
       onProgress?.('humanizer', 'running');
-      const contentToHumanize = results.seoEditor.content_optimized || contentForSeo;
-      results.humanizer = await this.runHumanizer(contentToHumanize);
+      results.humanizer = await this.runHumanizer(contentAfterFacts);
       onProgress?.('humanizer', 'completed', results.humanizer);
 
-      // Agent 6: Schema Generator - Creates JSON-LD (Haiku)
+      // Agent 7: SEO Editor - Optimizes with minimum score 85 (with retry) + Director guidelines
+      onProgress?.('seoEditor', 'running');
+      results.seoEditor = await this.runSeoEditor(brief, results.humanizer.content, 85, 3, seoDirection);
+      onProgress?.('seoEditor', 'completed', results.seoEditor);
+
+      // Agent 8: Proofreader - Final review for coherence and fluidity
+      onProgress?.('proofreader', 'running');
+      const contentForProof = results.seoEditor.content_optimized || results.humanizer.content;
+      results.proofreader = await this.runProofreader(contentForProof, brief.keyword);
+      onProgress?.('proofreader', 'completed', results.proofreader);
+
+      // Agent 9: Schema Generator - Creates JSON-LD (Haiku)
       onProgress?.('schemaGenerator', 'running');
+      const finalContent = results.proofreader.content_corrected || contentForProof;
       results.schemaGenerator = await this.runSchemaGenerator(
-        results.humanizer.content,
+        finalContent,
         brief,
         results.seoEditor
       );
@@ -1028,10 +1365,11 @@ En tant que Directeur SEO, donne des ORIENTATIONS STRATÉGIQUES claires :
       return {
         success: true,
         results,
-        finalContent: results.humanizer.content,
+        finalContent: results.proofreader.content_corrected || contentForProof,
         metadata: {
           title: results.seoEditor.meta_title,
           description: results.seoEditor.meta_description,
+          slug: results.slugGenerator.slug,
           seoScore: results.seoEditor.seo_score,
           seoAttempts: results.seoEditor.attempts,
           wordCount: results.writer.word_count,
@@ -1039,6 +1377,8 @@ En tant que Directeur SEO, donne des ORIENTATIONS STRATÉGIQUES claires :
           factCheckScore: results.factChecker.verification_summary?.score,
           factsVerified: results.factChecker.verification_summary?.verified || 0,
           correctionsApplied: results.factChecker.corrections_needed?.length || 0,
+          proofreadScore: results.proofreader.quality_score,
+          proofreadFixes: results.proofreader.corrections_count,
           internalLinks: results.seoEditor.internal_links || [],
           schemas: results.schemaGenerator.schemas,
           paaGenerated: results.paaAnalyst?.generated_questions?.length || 0,
