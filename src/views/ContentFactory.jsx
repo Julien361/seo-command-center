@@ -137,18 +137,11 @@ export default function ContentFactory({ site, onBack }) {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        // Check if analysis is not too old (7 days)
-        const savedDate = new Date(parsed.savedAt);
-        const daysSinceSaved = (Date.now() - savedDate.getTime()) / (1000 * 60 * 60 * 24);
-        if (daysSinceSaved < 7) {
-          setSavedAnalysis(parsed);
-          setShowSavedAnalysisPrompt(true);
-        } else {
-          // Too old, remove it
-          localStorage.removeItem(`analysis_${site.id}`);
-        }
+        setSavedAnalysis(parsed);
+        setShowSavedAnalysisPrompt(true);
       } catch (e) {
         console.error('Error loading saved analysis:', e);
+        localStorage.removeItem(`analysis_${site.id}`);
       }
     }
   }, [site?.id]);
