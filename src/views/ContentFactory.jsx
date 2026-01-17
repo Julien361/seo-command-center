@@ -130,6 +130,7 @@ export default function ContentFactory({ site, onBack }) {
   const [batchResults, setBatchResults] = useState([]); // [{page, result, html}]
   const [batchProgress, setBatchProgress] = useState({ current: 0, total: 0, currentKeyword: '' });
   const [isBatchRunning, setIsBatchRunning] = useState(false);
+  const [selectedBatchIndex, setSelectedBatchIndex] = useState(0); // Index of selected page in batch results
 
   // Saved analysis state
   const [savedAnalysis, setSavedAnalysis] = useState(null);
@@ -1858,128 +1859,224 @@ ${researchSummary || 'Aucune recherche disponible'}
       {/* Step: Batch Create */}
       {step === 'batch-create' && (
         <div className="space-y-4">
-          {/* Progress */}
-          <Card className="p-6">
-            <div className="flex items-center gap-4 mb-4">
-              {isBatchRunning ? (
-                <Loader2 className="w-8 h-8 text-primary animate-spin" />
-              ) : (
-                <CheckCircle className="w-8 h-8 text-success" />
-              )}
-              <div>
-                <h2 className="text-xl font-bold text-white">
-                  {isBatchRunning ? 'Création en cours...' : 'Création terminée !'}
-                </h2>
-                <p className="text-dark-muted">
-                  {batchProgress.current} / {batchProgress.total} page(s)
+          {/* Progress Header */}
+          <Card className="p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                {isBatchRunning ? (
+                  <Loader2 className="w-8 h-8 text-primary animate-spin" />
+                ) : (
+                  <CheckCircle className="w-8 h-8 text-success" />
+                )}
+                <div>
+                  <h2 className="text-xl font-bold text-white">
+                    {isBatchRunning ? `Création ${batchProgress.current}/${batchProgress.total}...` : `${batchResults.filter(r => !r.error).length} page(s) créée(s)`}
+                  </h2>
                   {isBatchRunning && batchProgress.currentKeyword && (
-                    <span className="ml-2 text-primary">→ {batchProgress.currentKeyword}</span>
+                    <p className="text-primary text-sm">→ {batchProgress.currentKeyword}</p>
                   )}
-                </p>
+                </div>
               </div>
-            </div>
 
-            {/* Progress bar */}
-            <div className="w-full bg-dark-bg rounded-full h-2 mb-4">
-              <div
-                className="bg-primary h-2 rounded-full transition-all duration-500"
-                style={{ width: `${(batchProgress.current / batchProgress.total) * 100}%` }}
-              />
+              {/* Progress bar */}
+              <div className="w-48 bg-dark-bg rounded-full h-2">
+                <div
+                  className="bg-primary h-2 rounded-full transition-all duration-500"
+                  style={{ width: `${(batchProgress.current / Math.max(batchProgress.total, 1)) * 100}%` }}
+                />
+              </div>
             </div>
           </Card>
 
-          {/* Results */}
+          {/* Two columns layout */}
           {batchResults.length > 0 && (
-            <div className="space-y-4">
-              {/* Individual results */}
-              {batchResults.map((item, idx) => (
-                <Card key={idx} className={`p-4 ${item.error ? 'border-error/50' : 'border-success/30'}`}>
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-3">
-                      <div className={`p-2 rounded-lg ${
-                        item.page.type === 'pilier' ? 'bg-purple-500/20' :
-                        item.page.type === 'fille' ? 'bg-blue-500/20' : 'bg-green-500/20'
-                      }`}>
-                        {item.page.type === 'pilier' ? <Crown className="w-5 h-5 text-purple-400" /> :
-                         item.page.type === 'fille' ? <FileText className="w-5 h-5 text-blue-400" /> :
-                         <FileText className="w-5 h-5 text-green-400" />}
-                      </div>
+            <div className="grid grid-cols-3 gap-4">
+              {/* Left: Pages list */}
+              <div className="col-span-1 space-y-2">
+                <div className="text-sm text-dark-muted mb-2">Pages créées ({batchResults.length})</div>
+                {batchResults.map((item, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => setSelectedBatchIndex(idx)}
+                    className={`w-full p-3 rounded-lg text-left transition-all ${
+                      selectedBatchIndex === idx
+                        ? 'bg-primary/20 border border-primary'
+                        : item.error
+                          ? 'bg-error/10 border border-error/30 hover:bg-error/20'
+                          : 'bg-dark-card border border-dark-border hover:border-primary/50'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <div className={`w-2 h-2 rounded-full ${
+                        item.error ? 'bg-error' :
+                        item.page.type === 'pilier' ? 'bg-purple-500' :
+                        item.page.type === 'fille' ? 'bg-blue-500' : 'bg-green-500'
+                      }`} />
+                      <span className="text-white text-sm font-medium truncate">{item.page.keyword}</span>
+                    </div>
+                    <div className="flex items-center gap-2 mt-1 text-xs text-dark-muted">
+                      <span className="capitalize">{item.page.type}</span>
+                      {item.result?.metadata?.wordCount && (
+                        <>
+                          <span>•</span>
+                          <span>{item.result.metadata.wordCount} mots</span>
+                        </>
+                      )}
+                      {item.error && <span className="text-error">Erreur</span>}
+                    </div>
+                  </button>
+                ))}
+
+                {/* Back button */}
+                {!isBatchRunning && (
+                  <button
+                    onClick={() => {
+                      setStep('proposals');
+                      setBatchResults([]);
+                      setSelectedPages([]);
+                      setSelectedBatchIndex(0);
+                    }}
+                    className="w-full mt-4 p-2 text-dark-muted hover:text-white text-sm"
+                  >
+                    ← Retour aux propositions
+                  </button>
+                )}
+              </div>
+
+              {/* Right: Selected page detail */}
+              <div className="col-span-2">
+                {batchResults[selectedBatchIndex] && !batchResults[selectedBatchIndex].error ? (
+                  <Card className="p-4 space-y-4">
+                    {/* Header with copy button */}
+                    <div className="flex items-center justify-between">
                       <div>
-                        <div className="font-medium text-white">{item.page.keyword}</div>
-                        <div className="text-xs text-dark-muted">
-                          {item.page.type} • {item.result?.metadata?.wordCount || 0} mots
-                          {item.result?.metadata?.seoScore && (
-                            <span className={`ml-2 ${item.result.metadata.seoScore >= 85 ? 'text-success' : 'text-warning'}`}>
-                              Score: {item.result.metadata.seoScore}
-                            </span>
-                          )}
+                        <h3 className="text-lg font-bold text-white">
+                          {batchResults[selectedBatchIndex].result?.metadata?.title || batchResults[selectedBatchIndex].page.keyword}
+                        </h3>
+                        <div className="flex items-center gap-3 text-sm text-dark-muted mt-1">
+                          <span className={`px-2 py-0.5 rounded text-xs ${
+                            batchResults[selectedBatchIndex].page.type === 'pilier' ? 'bg-purple-500/20 text-purple-400' :
+                            batchResults[selectedBatchIndex].page.type === 'fille' ? 'bg-blue-500/20 text-blue-400' : 'bg-green-500/20 text-green-400'
+                          }`}>
+                            {batchResults[selectedBatchIndex].page.type}
+                          </span>
+                          <span>{batchResults[selectedBatchIndex].result?.metadata?.wordCount || 0} mots</span>
+                          <span className={batchResults[selectedBatchIndex].result?.metadata?.seoScore >= 85 ? 'text-success' : 'text-warning'}>
+                            Score: {batchResults[selectedBatchIndex].result?.metadata?.seoScore || '-'}
+                          </span>
                         </div>
                       </div>
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(batchResults[selectedBatchIndex].html);
+                          alert('Contenu complet copié ! (HTML + liens + schemas)');
+                        }}
+                        className="flex items-center gap-2 px-5 py-2.5 bg-success text-white rounded-lg font-bold hover:bg-success/90"
+                      >
+                        <Copy className="w-5 h-5" />
+                        COPIER PAGE
+                      </button>
                     </div>
 
-                    {item.error ? (
-                      <span className="text-error text-sm">Erreur: {item.error}</span>
-                    ) : (
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => {
-                            navigator.clipboard.writeText(item.html);
-                            alert('Contenu copié !');
-                          }}
-                          className="flex items-center gap-1 px-4 py-2 bg-success text-white rounded-lg font-medium hover:bg-success/90"
-                        >
-                          <Copy className="w-4 h-4" />
-                          Copier
-                        </button>
+                    {/* Meta infos */}
+                    <div className="space-y-2">
+                      <div
+                        onClick={() => {
+                          navigator.clipboard.writeText(batchResults[selectedBatchIndex].result?.metadata?.slug || '');
+                          alert('Slug copié !');
+                        }}
+                        className="p-3 bg-dark-bg rounded-lg cursor-pointer hover:bg-dark-border"
+                      >
+                        <div className="text-xs text-orange-400 mb-1">URL / Slug</div>
+                        <div className="text-white">/{batchResults[selectedBatchIndex].result?.metadata?.slug || '-'}</div>
                       </div>
-                    )}
-                  </div>
 
-                  {/* Meta info */}
-                  {item.result && !item.error && (
-                    <div className="grid grid-cols-3 gap-2 text-xs">
                       <div
-                        onClick={() => navigator.clipboard.writeText(item.result.metadata.slug || '')}
-                        className="p-2 bg-dark-bg rounded cursor-pointer hover:bg-dark-border"
+                        onClick={() => {
+                          navigator.clipboard.writeText(batchResults[selectedBatchIndex].result?.metadata?.title || '');
+                          alert('Title copié !');
+                        }}
+                        className="p-3 bg-dark-bg rounded-lg cursor-pointer hover:bg-dark-border"
                       >
-                        <span className="text-orange-400">Slug:</span>
-                        <span className="text-white ml-1">/{item.result.metadata.slug}</span>
+                        <div className="text-xs text-primary mb-1">Meta Title</div>
+                        <div className="text-white">{batchResults[selectedBatchIndex].result?.metadata?.title || '-'}</div>
                       </div>
+
                       <div
-                        onClick={() => navigator.clipboard.writeText(item.result.metadata.title || '')}
-                        className="p-2 bg-dark-bg rounded cursor-pointer hover:bg-dark-border"
+                        onClick={() => {
+                          navigator.clipboard.writeText(batchResults[selectedBatchIndex].result?.metadata?.description || '');
+                          alert('Description copiée !');
+                        }}
+                        className="p-3 bg-dark-bg rounded-lg cursor-pointer hover:bg-dark-border"
                       >
-                        <span className="text-primary">Title:</span>
-                        <span className="text-white ml-1 truncate">{item.result.metadata.title?.substring(0, 40)}...</span>
-                      </div>
-                      <div
-                        onClick={() => navigator.clipboard.writeText(item.result.metadata.description || '')}
-                        className="p-2 bg-dark-bg rounded cursor-pointer hover:bg-dark-border"
-                      >
-                        <span className="text-primary">Desc:</span>
-                        <span className="text-white ml-1 truncate">{item.result.metadata.description?.substring(0, 40)}...</span>
+                        <div className="text-xs text-primary mb-1">Meta Description</div>
+                        <div className="text-white">{batchResults[selectedBatchIndex].result?.metadata?.description || '-'}</div>
                       </div>
                     </div>
-                  )}
-                </Card>
-              ))}
+
+                    {/* Stats */}
+                    <div className="grid grid-cols-4 gap-2 text-center">
+                      <div className="p-2 bg-dark-bg rounded">
+                        <div className="text-lg font-bold text-white">{batchResults[selectedBatchIndex].result?.metadata?.wordCount || 0}</div>
+                        <div className="text-xs text-dark-muted">Mots</div>
+                      </div>
+                      <div className="p-2 bg-dark-bg rounded">
+                        <div className={`text-lg font-bold ${batchResults[selectedBatchIndex].result?.metadata?.seoScore >= 85 ? 'text-success' : 'text-warning'}`}>
+                          {batchResults[selectedBatchIndex].result?.metadata?.seoScore || '-'}
+                        </div>
+                        <div className="text-xs text-dark-muted">Score SEO</div>
+                      </div>
+                      <div className="p-2 bg-dark-bg rounded">
+                        <div className="text-lg font-bold text-cyan-500">{batchResults[selectedBatchIndex].result?.metadata?.schemas?.length || 0}</div>
+                        <div className="text-xs text-dark-muted">Schemas</div>
+                      </div>
+                      <div className="p-2 bg-dark-bg rounded">
+                        <div className="text-lg font-bold text-info">{batchResults[selectedBatchIndex].result?.metadata?.internalLinks?.length || 0}</div>
+                        <div className="text-xs text-dark-muted">Liens</div>
+                      </div>
+                    </div>
+
+                    {/* Content preview */}
+                    <div className="border-t border-dark-border pt-4">
+                      <div className="text-xs text-dark-muted mb-2">Aperçu du contenu (scroll pour voir plus)</div>
+                      <div className="bg-dark-bg rounded-lg p-4 max-h-64 overflow-auto">
+                        <div
+                          className="prose prose-invert prose-sm max-w-none"
+                          dangerouslySetInnerHTML={{ __html: batchResults[selectedBatchIndex].html?.substring(0, 3000) + '...' }}
+                        />
+                      </div>
+                    </div>
+                  </Card>
+                ) : batchResults[selectedBatchIndex]?.error ? (
+                  <Card className="p-6 border-error/50">
+                    <div className="text-center">
+                      <AlertTriangle className="w-12 h-12 text-error mx-auto mb-3" />
+                      <h3 className="text-lg font-bold text-white mb-2">Erreur de création</h3>
+                      <p className="text-error">{batchResults[selectedBatchIndex].error}</p>
+                      <p className="text-dark-muted text-sm mt-2">Keyword: {batchResults[selectedBatchIndex].page.keyword}</p>
+                    </div>
+                  </Card>
+                ) : (
+                  <Card className="p-6">
+                    <div className="text-center text-dark-muted">
+                      <Loader2 className="w-8 h-8 animate-spin mx-auto mb-2" />
+                      Sélectionnez une page dans la liste
+                    </div>
+                  </Card>
+                )}
+              </div>
             </div>
           )}
 
-          {/* Back button */}
-          {!isBatchRunning && (
-            <div className="text-center">
-              <button
-                onClick={() => {
-                  setStep('proposals');
-                  setBatchResults([]);
-                  setSelectedPages([]);
-                }}
-                className="text-dark-muted hover:text-white"
-              >
-                ← Retour aux propositions
-              </button>
-            </div>
+          {/* Empty state while running */}
+          {batchResults.length === 0 && isBatchRunning && (
+            <Card className="p-12">
+              <div className="text-center">
+                <Loader2 className="w-12 h-12 text-primary animate-spin mx-auto mb-4" />
+                <p className="text-white">Création de la première page...</p>
+                <p className="text-dark-muted text-sm mt-1">Cela peut prendre quelques minutes</p>
+              </div>
+            </Card>
           )}
         </div>
       )}
