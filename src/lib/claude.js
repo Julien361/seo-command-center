@@ -209,11 +209,25 @@ ${paaExamples.length > 0 ? paaExamples.map((q, i) => `${i + 1}. ${q}`).join('\n'
 - Adaptées au type de contenu (pilier = large, fille = spécifique)
 - En français
 
+## DÉTECTION FORMAT SNIPPET (TRÈS IMPORTANT)
+Pour chaque question, détermine le format optimal pour Position 0:
+
+| Type de question | Format snippet | Longueur cible |
+|-----------------|----------------|----------------|
+| "Qu'est-ce que", "Définition", "C'est quoi" | paragraph | 40-60 mots |
+| "Comment", "Étapes", "Faire" | list | 5-8 items |
+| "Pourquoi", "Causes", "Raisons" | list | 4-6 items |
+| "Combien", "Prix", "Coût" | paragraph ou table | 40-60 mots ou 3-5 colonnes |
+| "Meilleur", "Comparatif", "vs" | table | 3-5 colonnes |
+| "Quand", "Délai", "Durée" | paragraph | 40-60 mots |
+
 ## FORMAT JSON
 {
   "keyword_analysis": {
     "main_intent": "informationnel|commercial|transactionnel",
-    "user_needs": ["besoin 1", "besoin 2"]
+    "user_needs": ["besoin 1", "besoin 2"],
+    "primary_snippet_format": "paragraph|list|table",
+    "snippet_opportunity_score": 85
   },
   "generated_questions": [
     {
@@ -221,9 +235,16 @@ ${paaExamples.length > 0 ? paaExamples.map((q, i) => `${i + 1}. ${q}`).join('\n'
       "priority": 1,
       "type": "definition|how_to|why|comparison|cost|list",
       "position_zero_potential": true,
-      "suggested_format": "paragraph|list|table"
+      "snippet_format": "paragraph|list|table",
+      "target_length": "40-60 mots|5-8 items|3-5 colonnes",
+      "trigger_words": ["qu'est-ce", "comment"]
     }
   ],
+  "snippet_strategy": {
+    "primary_format": "paragraph|list|table",
+    "answer_box_locations": ["après H1", "après H2 'Question...'"],
+    "competing_snippets_likely": true
+  },
   "faq_structure_suggestion": "Comment organiser la FAQ dans l'article"
 }`;
 
@@ -700,7 +721,30 @@ Génère les schemas JSON-LD appropriés:
 1. Article ou BlogPosting (obligatoire)
 2. FAQPage si le contenu a une section FAQ
 3. BreadcrumbList pour la navigation
-4. HowTo si c'est un tutoriel
+4. **HowTo si c'est un tutoriel** (détecte: "comment", "étapes", "guide", listes numérotées)
+
+## RÈGLES SCHEMA HowTo
+Si le contenu contient des étapes numérotées ou des instructions:
+- @type: "HowTo"
+- name: Le titre du guide
+- step: Array de HowToStep avec name, text, (optionnel: image, url)
+- Extrait les étapes depuis les listes numérotées ou les H3
+
+Exemple HowTo:
+{
+  "@context": "https://schema.org",
+  "@type": "HowTo",
+  "name": "Comment faire X",
+  "description": "Guide complet pour...",
+  "totalTime": "PT30M",
+  "step": [
+    {
+      "@type": "HowToStep",
+      "name": "Étape 1: Préparer",
+      "text": "Description de l'étape..."
+    }
+  ]
+}
 
 ## FORMAT DE SORTIE
 Réponds en JSON:
@@ -713,10 +757,16 @@ Réponds en JSON:
     {
       "type": "FAQPage",
       "schema": { "@context": "https://schema.org", "@type": "FAQPage", ... }
+    },
+    {
+      "type": "HowTo",
+      "schema": { "@context": "https://schema.org", "@type": "HowTo", ... }
     }
   ],
   "has_faq": true,
-  "faq_count": 5
+  "faq_count": 5,
+  "has_howto": true,
+  "howto_steps": 6
 }`;
 
     const text = await callClaude(prompt, {
@@ -1082,6 +1132,169 @@ ${site?.mcp_alias || 'N/A'} - ${site?.seo_focus?.[0] || 'N/A'}
   },
 
   /**
+   * Agent: Position 0 Optimizer - Formats content specifically for featured snippets
+   * Ensures paragraphs are 40-60 words, lists are 5-8 items, adds answer boxes
+   */
+  async runPosition0Optimizer(content, keyword, snippetFormats = []) {
+    // snippetFormats comes from PAA Analyst: [{question, format: 'paragraph'|'list'|'table'}]
+
+    const prompt = `Tu es l'Expert Position 0 (Featured Snippets). Tu optimises le contenu pour apparaître en Position 0 sur Google.
+
+## CONTENU À OPTIMISER
+${content}
+
+## KEYWORD PRINCIPAL
+${keyword}
+
+## FORMATS SNIPPET DÉTECTÉS PAR L'ANALYSTE PAA
+${snippetFormats.length > 0 ? JSON.stringify(snippetFormats, null, 2) : 'Aucun format spécifique détecté - utilise ton expertise'}
+
+## RÈGLES POSITION 0 STRICTES
+
+### Pour les PARAGRAPHES (définitions, "qu'est-ce que")
+- Exactement 40-60 mots
+- Réponse directe dès la première phrase
+- Pas de "Il est important de noter que..."
+- Commencer par "[Keyword] est..." ou "Le/La [keyword]..."
+
+### Pour les LISTES (comment faire, étapes, conseils)
+- Exactement 5-8 items
+- Chaque item commence par un verbe d'action
+- Items courts (10-15 mots max)
+- Numérotées pour les étapes, à puces pour les conseils
+
+### Pour les TABLEAUX (comparaisons, prix)
+- 3-5 colonnes maximum
+- En-têtes clairs
+- Données concises
+
+## TA MISSION
+1. Identifie le premier paragraphe après le H1 → reformate en "Answer Box" (40-60 mots)
+2. Pour chaque H2 question, vérifie que la réponse immédiate fait 40-60 mots
+3. Convertis les listes longues en 5-8 items
+4. Ajoute des "Answer Box" après les H2 qui sont des questions
+5. NE CHANGE PAS le reste du contenu
+
+## FORMAT "ANSWER BOX" À UTILISER
+Après un H2 question, ajoute immédiatement:
+> **En bref:** [Réponse directe en 40-60 mots]
+
+Puis le développement normal.
+
+## FORMAT DE SORTIE JSON
+{
+  "optimizations_applied": [
+    {
+      "location": "Après H1 / Après H2 'Question...'",
+      "type": "answer_box|list_optimization|paragraph_trim",
+      "original_words": 120,
+      "optimized_words": 55,
+      "snippet_ready": true
+    }
+  ],
+  "answer_boxes_added": 3,
+  "lists_optimized": 2,
+  "position_0_score": 85,
+  "content_optimized": "LE CONTENU COMPLET AVEC LES OPTIMISATIONS"
+}`;
+
+    const text = await callClaude(prompt, {
+      maxTokens: 8192,
+      model: 'claude-sonnet-4-20250514'
+    });
+
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      try {
+        return JSON.parse(jsonMatch[0]);
+      } catch (e) {
+        console.error('[Position 0 Optimizer] JSON parse error:', e);
+      }
+    }
+
+    return {
+      optimizations_applied: [],
+      answer_boxes_added: 0,
+      position_0_score: 70,
+      content_optimized: content
+    };
+  },
+
+  /**
+   * Agent: Table of Contents Generator - Creates a clickable TOC for fille/article pages
+   */
+  async generateTableOfContents(content, contentType) {
+    // Only for fille and article pages
+    if (contentType === 'pilier') {
+      return { toc: null, content_with_toc: content };
+    }
+
+    // Extract H2 and H3 headings
+    const h2Matches = content.match(/^## .+$/gm) || [];
+    const h3Matches = content.match(/^### .+$/gm) || [];
+
+    if (h2Matches.length < 3) {
+      // Not enough sections for a TOC
+      return { toc: null, content_with_toc: content };
+    }
+
+    // Build TOC structure
+    const tocItems = [];
+    const lines = content.split('\n');
+    let currentH2 = null;
+
+    for (const line of lines) {
+      if (line.startsWith('## ') && !line.toLowerCase().includes('faq')) {
+        const title = line.replace('## ', '').trim();
+        const anchor = title.toLowerCase()
+          .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+          .replace(/[^a-z0-9\s-]/g, '')
+          .replace(/\s+/g, '-');
+        currentH2 = { level: 2, title, anchor, children: [] };
+        tocItems.push(currentH2);
+      } else if (line.startsWith('### ') && currentH2) {
+        const title = line.replace('### ', '').trim();
+        const anchor = title.toLowerCase()
+          .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+          .replace(/[^a-z0-9\s-]/g, '')
+          .replace(/\s+/g, '-');
+        currentH2.children.push({ level: 3, title, anchor });
+      }
+    }
+
+    // Generate markdown TOC
+    let tocMarkdown = '## Sommaire\n\n';
+    for (const item of tocItems.slice(0, 8)) { // Max 8 items
+      tocMarkdown += `- [${item.title}](#${item.anchor})\n`;
+      for (const child of item.children.slice(0, 3)) { // Max 3 sub-items
+        tocMarkdown += `  - [${child.title}](#${child.anchor})\n`;
+      }
+    }
+    tocMarkdown += '\n---\n\n';
+
+    // Insert TOC after first paragraph (after H1)
+    const h1Match = content.match(/^# .+\n+/m);
+    if (h1Match) {
+      const h1End = content.indexOf(h1Match[0]) + h1Match[0].length;
+      // Find end of first paragraph
+      const firstParaEnd = content.indexOf('\n\n', h1End);
+      if (firstParaEnd > -1) {
+        const contentWithToc =
+          content.substring(0, firstParaEnd + 2) +
+          tocMarkdown +
+          content.substring(firstParaEnd + 2);
+        return {
+          toc: tocItems,
+          content_with_toc: contentWithToc,
+          toc_markdown: tocMarkdown
+        };
+      }
+    }
+
+    return { toc: tocItems, content_with_toc: content, toc_markdown: tocMarkdown };
+  },
+
+  /**
    * Agent: Proofreader - Final review for coherence, repetitions, fluidity
    */
   async runProofreader(content, keyword) {
@@ -1286,7 +1499,7 @@ Pour CHAQUE page, génère les liens à insérer avec des ancres variées.
 
   /**
    * Run the complete Content Factory pipeline with Orchestrator
-   * Order: PAA → Strategist → Slug → Writer → Fact Checker → Humanizer → SEO Editor → Proofreader → Schema
+   * Order: PAA → Strategist → Slug → Writer → Fact Checker → Position0 → TOC → Humanizer → SEO Editor → Proofreader → Schema
    * The Orchestrator injects SEO Director guidance into each agent
    */
   async runContentFactory(brief, existingPaa, onProgress, seoDirection = null) {
@@ -1296,6 +1509,8 @@ Pour CHAQUE page, génère les liens à insérer avec des ancres variées.
       slugGenerator: null,
       writer: null,
       factChecker: null,
+      position0Optimizer: null,
+      tocGenerator: null,
       humanizer: null,
       seoEditor: null,
       proofreader: null,
@@ -1336,23 +1551,45 @@ Pour CHAQUE page, génère les liens à insérer avec des ancres variées.
         }
       }
 
-      // Agent 6: Humanizer - Makes content natural BEFORE SEO optimization
+      // Agent 6: Position 0 Optimizer - Formats for featured snippets
+      onProgress?.('position0Optimizer', 'running');
+      const snippetFormats = results.paaAnalyst?.generated_questions?.map(q => ({
+        question: q.question,
+        format: q.snippet_format || 'paragraph'
+      })) || [];
+      results.position0Optimizer = await this.runPosition0Optimizer(
+        contentAfterFacts,
+        brief.keyword,
+        snippetFormats
+      );
+      onProgress?.('position0Optimizer', 'completed', results.position0Optimizer);
+
+      // Get optimized content from Position 0
+      let contentAfterP0 = results.position0Optimizer.content_optimized || contentAfterFacts;
+
+      // Agent 7: TOC Generator - Add table of contents for fille/article pages
+      onProgress?.('tocGenerator', 'running');
+      results.tocGenerator = await this.generateTableOfContents(contentAfterP0, brief.content_type);
+      const contentWithToc = results.tocGenerator.content_with_toc || contentAfterP0;
+      onProgress?.('tocGenerator', 'completed', results.tocGenerator);
+
+      // Agent 8: Humanizer - Makes content natural BEFORE SEO optimization
       onProgress?.('humanizer', 'running');
-      results.humanizer = await this.runHumanizer(contentAfterFacts);
+      results.humanizer = await this.runHumanizer(contentWithToc);
       onProgress?.('humanizer', 'completed', results.humanizer);
 
-      // Agent 7: SEO Editor - Optimizes with minimum score 85 (with retry) + Director guidelines
+      // Agent 9: SEO Editor - Optimizes with minimum score 85 (with retry) + Director guidelines
       onProgress?.('seoEditor', 'running');
       results.seoEditor = await this.runSeoEditor(brief, results.humanizer.content, 85, 3, seoDirection);
       onProgress?.('seoEditor', 'completed', results.seoEditor);
 
-      // Agent 8: Proofreader - Final review for coherence and fluidity
+      // Agent 10: Proofreader - Final review for coherence and fluidity
       onProgress?.('proofreader', 'running');
       const contentForProof = results.seoEditor.content_optimized || results.humanizer.content;
       results.proofreader = await this.runProofreader(contentForProof, brief.keyword);
       onProgress?.('proofreader', 'completed', results.proofreader);
 
-      // Agent 9: Schema Generator - Creates JSON-LD (Haiku)
+      // Agent 11: Schema Generator - Creates JSON-LD including HowTo (Haiku)
       onProgress?.('schemaGenerator', 'running');
       const finalContent = results.proofreader.content_corrected || contentForProof;
       results.schemaGenerator = await this.runSchemaGenerator(
@@ -1377,12 +1614,25 @@ Pour CHAQUE page, génère les liens à insérer avec des ancres variées.
           factCheckScore: results.factChecker.verification_summary?.score,
           factsVerified: results.factChecker.verification_summary?.verified || 0,
           correctionsApplied: results.factChecker.corrections_needed?.length || 0,
+          // Position 0 metrics
+          position0Score: results.position0Optimizer?.position_0_score || 0,
+          answerBoxesAdded: results.position0Optimizer?.answer_boxes_added || 0,
+          snippetFormat: results.paaAnalyst?.keyword_analysis?.primary_snippet_format || 'paragraph',
+          // TOC
+          hasToc: !!results.tocGenerator?.toc,
+          tocSections: results.tocGenerator?.toc?.length || 0,
+          // Proofreading
           proofreadScore: results.proofreader.quality_score,
           proofreadFixes: results.proofreader.corrections_count,
           internalLinks: results.seoEditor.internal_links || [],
+          // Schemas
           schemas: results.schemaGenerator.schemas,
+          hasHowTo: results.schemaGenerator?.has_howto || false,
+          howToSteps: results.schemaGenerator?.howto_steps || 0,
+          // PAA
           paaGenerated: results.paaAnalyst?.generated_questions?.length || 0,
-          paaIntent: results.paaAnalyst?.keyword_analysis?.main_intent
+          paaIntent: results.paaAnalyst?.keyword_analysis?.main_intent,
+          snippetOpportunity: results.paaAnalyst?.keyword_analysis?.snippet_opportunity_score || 0
         }
       };
     } catch (err) {

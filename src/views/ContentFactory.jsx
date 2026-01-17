@@ -6,23 +6,26 @@ import {
   ChevronDown, ChevronRight, RefreshCw, X, Link,
   FileText, Circle, HelpCircle, ArrowRight, Wand2,
   CalendarDays, Clock, TrendingUp, Zap, Compass,
-  Shield, Lightbulb, Users
+  Shield, Lightbulb, Users, Square, CheckSquare,
+  MessageCircle, List
 } from 'lucide-react';
 import Card from '../components/common/Card';
 import { supabase } from '../lib/supabase';
 import { claudeApi } from '../lib/claude';
 
-// Agent configuration - Full pipeline
+// Agent configuration - Full pipeline (11 agents)
 const AGENTS = [
-  { id: 'paaAnalyst', name: 'PAA Analyst', icon: HelpCircle, color: 'text-violet-500', description: 'Génère questions PAA', model: 'Haiku' },
+  { id: 'paaAnalyst', name: 'PAA Analyst', icon: HelpCircle, color: 'text-violet-500', description: 'Génère PAA + format snippet', model: 'Haiku' },
   { id: 'strategist', name: 'Stratège', icon: Target, color: 'text-blue-500', description: 'Crée le brief détaillé', model: 'Sonnet' },
   { id: 'slugGenerator', name: 'URL/Slug', icon: Link, color: 'text-orange-500', description: 'Génère URL optimisée', model: 'Haiku' },
   { id: 'writer', name: 'Rédacteur', icon: PenTool, color: 'text-green-500', description: 'Écrit le contenu', model: 'Sonnet' },
   { id: 'factChecker', name: 'Fact-Checker', icon: CheckCircle, color: 'text-red-500', description: 'Vérifie les faits', model: 'Haiku' },
+  { id: 'position0Optimizer', name: 'Position 0', icon: Zap, color: 'text-amber-500', description: 'Optimise snippets', model: 'Sonnet' },
+  { id: 'tocGenerator', name: 'Sommaire', icon: FileText, color: 'text-indigo-500', description: 'Génère TOC', model: 'Local' },
   { id: 'humanizer', name: 'Humanizer', icon: Sparkles, color: 'text-purple-500', description: 'Rend naturel', model: 'Sonnet' },
   { id: 'seoEditor', name: 'SEO Editor', icon: Search, color: 'text-yellow-500', description: 'Optimise pour 85+', model: 'Sonnet' },
   { id: 'proofreader', name: 'Relecteur', icon: Eye, color: 'text-pink-500', description: 'Cohérence & fluidité', model: 'Haiku' },
-  { id: 'schemaGenerator', name: 'Schema', icon: FileCode, color: 'text-cyan-500', description: 'Génère JSON-LD', model: 'Haiku' }
+  { id: 'schemaGenerator', name: 'Schema', icon: FileCode, color: 'text-cyan-500', description: 'JSON-LD + HowTo', model: 'Haiku' }
 ];
 
 // Content types with tone guidance
@@ -118,7 +121,128 @@ export default function ContentFactory({ site, onBack }) {
   const [scheduledDate, setScheduledDate] = useState('');
   const [publishing, setPublishing] = useState(false);
 
-  
+  // Batch selection state
+  const [selectedPages, setSelectedPages] = useState([]); // [{type, keyword, pilierKeyword, ...pageData}]
+  const [showClarification, setShowClarification] = useState(false);
+  const [clarificationData, setClarificationData] = useState(null);
+
+  // Saved analysis state
+  const [savedAnalysis, setSavedAnalysis] = useState(null);
+  const [showSavedAnalysisPrompt, setShowSavedAnalysisPrompt] = useState(false);
+
+  // Load saved analysis from localStorage on mount
+  useEffect(() => {
+    if (!site?.id) return;
+    const saved = localStorage.getItem(`analysis_${site.id}`);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        // Check if analysis is not too old (7 days)
+        const savedDate = new Date(parsed.savedAt);
+        const daysSinceSaved = (Date.now() - savedDate.getTime()) / (1000 * 60 * 60 * 24);
+        if (daysSinceSaved < 7) {
+          setSavedAnalysis(parsed);
+          setShowSavedAnalysisPrompt(true);
+        } else {
+          // Too old, remove it
+          localStorage.removeItem(`analysis_${site.id}`);
+        }
+      } catch (e) {
+        console.error('Error loading saved analysis:', e);
+      }
+    }
+  }, [site?.id]);
+
+  // Save analysis to localStorage
+  const saveAnalysisToStorage = (direction, props) => {
+    if (!site?.id) return;
+    const data = {
+      seoDirection: direction,
+      proposals: props,
+      savedAt: new Date().toISOString(),
+      siteAlias: site.mcp_alias
+    };
+    localStorage.setItem(`analysis_${site.id}`, JSON.stringify(data));
+  };
+
+  // Load saved analysis
+  const loadSavedAnalysis = () => {
+    if (savedAnalysis) {
+      setSeoDirection(savedAnalysis.seoDirection);
+      setProposals(savedAnalysis.proposals);
+      setStep('proposals');
+      setShowSavedAnalysisPrompt(false);
+    }
+  };
+
+  // Clear saved analysis
+  const clearSavedAnalysis = () => {
+    if (site?.id) {
+      localStorage.removeItem(`analysis_${site.id}`);
+    }
+    setSavedAnalysis(null);
+    setShowSavedAnalysisPrompt(false);
+  };
+
+  // Toggle page selection
+  const togglePageSelection = (type, pilierKeyword, pageData) => {
+    const pageId = `${type}-${pageData.keyword}`;
+    const isSelected = selectedPages.some(p => `${p.type}-${p.keyword}` === pageId);
+
+    if (isSelected) {
+      setSelectedPages(prev => prev.filter(p => `${p.type}-${p.keyword}` !== pageId));
+    } else {
+      setSelectedPages(prev => [...prev, { type, pilierKeyword, ...pageData }]);
+    }
+  };
+
+  // Check if page is selected
+  const isPageSelected = (type, keyword) => {
+    return selectedPages.some(p => p.type === type && p.keyword === keyword);
+  };
+
+  // Select all pages from a pilier (pilier + filles + articles)
+  const selectCluster = (pilier) => {
+    const clusterPages = [];
+    // Add pilier
+    clusterPages.push({ type: 'pilier', pilierKeyword: pilier.keyword, ...pilier });
+    // Add filles
+    pilier.filles?.forEach(fille => {
+      clusterPages.push({ type: 'fille', pilierKeyword: pilier.keyword, ...fille });
+    });
+    // Add articles
+    pilier.articles?.forEach(article => {
+      clusterPages.push({ type: 'article', pilierKeyword: pilier.keyword, ...article });
+    });
+
+    // Merge with existing selection (avoid duplicates)
+    setSelectedPages(prev => {
+      const existingIds = new Set(prev.map(p => `${p.type}-${p.keyword}`));
+      const newPages = clusterPages.filter(p => !existingIds.has(`${p.type}-${p.keyword}`));
+      return [...prev, ...newPages];
+    });
+  };
+
+  // Select all pages
+  const selectAll = () => {
+    const allPages = [];
+    proposals?.piliers?.forEach(pilier => {
+      allPages.push({ type: 'pilier', pilierKeyword: pilier.keyword, ...pilier });
+      pilier.filles?.forEach(fille => {
+        allPages.push({ type: 'fille', pilierKeyword: pilier.keyword, ...fille });
+      });
+      pilier.articles?.forEach(article => {
+        allPages.push({ type: 'article', pilierKeyword: pilier.keyword, ...article });
+      });
+    });
+    setSelectedPages(allPages);
+  };
+
+  // Clear selection
+  const clearSelection = () => {
+    setSelectedPages([]);
+  };
+
   // Load all analysis data
   useEffect(() => {
     if (!site?.id) return;
@@ -257,6 +381,9 @@ Propose une architecture de contenu avec:
       if (jsonMatch) {
         const parsed = JSON.parse(jsonMatch[0]);
         setProposals(parsed);
+
+        // Save analysis to localStorage for recovery
+        saveAnalysisToStorage(direction, parsed);
       } else {
         throw new Error('Invalid response format');
       }
@@ -473,6 +600,49 @@ Propose une architecture de contenu avec:
       {/* Step 1: Analysis Overview */}
       {step === 'analyze' && (
         <>
+          {/* Saved Analysis Prompt */}
+          {showSavedAnalysisPrompt && savedAnalysis && (
+            <Card className="p-4 bg-gradient-to-r from-cyan-500/10 to-cyan-600/5 border-cyan-500/30">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-cyan-500/20">
+                    <Clock className="w-6 h-6 text-cyan-500" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-white">Analyse précédente trouvée</h3>
+                    <p className="text-sm text-cyan-400">
+                      {savedAnalysis.siteAlias} - {new Date(savedAnalysis.savedAt).toLocaleDateString('fr-FR', {
+                        day: 'numeric',
+                        month: 'long',
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      })}
+                    </p>
+                    <p className="text-xs text-dark-muted mt-1">
+                      {savedAnalysis.proposals?.piliers?.length || 0} piliers • {savedAnalysis.seoDirection ? 'Directives SEO Director incluses' : 'Sans directives'}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={clearSavedAnalysis}
+                    className="px-3 py-2 text-dark-muted hover:text-white text-sm"
+                  >
+                    Ignorer
+                  </button>
+                  <button
+                    onClick={loadSavedAnalysis}
+                    className="flex items-center gap-2 px-4 py-2 bg-cyan-500 text-white rounded-lg font-medium hover:bg-cyan-600"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                    Charger
+                  </button>
+                </div>
+              </div>
+            </Card>
+          )}
+
           {/* Data summary */}
           <Card className="p-6">
             <h2 className="text-lg font-semibold text-white mb-4">Données disponibles pour l'analyse</h2>
@@ -830,6 +1000,62 @@ Propose une architecture de contenu avec:
                 </Card>
               )}
 
+              {/* Selection toolbar */}
+              <Card className="p-3 flex items-center justify-between sticky top-0 z-10 bg-dark-card/95 backdrop-blur">
+                <div className="flex items-center gap-3">
+                  <span className="text-sm text-dark-muted">
+                    {selectedPages.length > 0 ? (
+                      <span className="text-primary font-medium">{selectedPages.length} page(s) sélectionnée(s)</span>
+                    ) : (
+                      'Cochez les pages à créer'
+                    )}
+                  </span>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={selectAll}
+                      className="px-2 py-1 text-xs bg-dark-border text-dark-muted rounded hover:bg-dark-bg hover:text-white"
+                    >
+                      Tout sélectionner
+                    </button>
+                    {selectedPages.length > 0 && (
+                      <button
+                        onClick={clearSelection}
+                        className="px-2 py-1 text-xs bg-dark-border text-dark-muted rounded hover:bg-red-500/20 hover:text-red-400"
+                      >
+                        <X className="w-3 h-3 inline mr-1" />
+                        Effacer
+                      </button>
+                    )}
+                  </div>
+                </div>
+                {selectedPages.length > 0 && (
+                  <button
+                    onClick={() => {
+                      // Check if we have enough info or need clarification
+                      const needsClarification = !seoDirection || analysisData.competitors.length === 0;
+                      if (needsClarification) {
+                        setClarificationData({
+                          pages: selectedPages,
+                          missingInfo: {
+                            noDirection: !seoDirection,
+                            noCompetitors: analysisData.competitors.length === 0,
+                            noPaa: analysisData.paaQuestions?.length === 0
+                          }
+                        });
+                        setShowClarification(true);
+                      } else {
+                        // Go directly to batch creation
+                        setStep('batch-create');
+                      }
+                    }}
+                    className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-primary to-purple-600 text-white rounded-lg font-medium hover:opacity-90"
+                  >
+                    <Play className="w-4 h-4" />
+                    Créer {selectedPages.length} page(s)
+                  </button>
+                )}
+              </Card>
+
               {/* Piliers proposés */}
               <div className="space-y-4">
                 <h2 className="text-lg font-semibold text-white">
@@ -842,6 +1068,17 @@ Propose une architecture de contenu avec:
                     <div className="p-4 bg-gradient-to-r from-purple-500/10 to-transparent border-b border-dark-border">
                       <div className="flex items-start justify-between">
                         <div className="flex items-center gap-3">
+                          {/* Checkbox */}
+                          <button
+                            onClick={() => togglePageSelection('pilier', pilier.keyword, pilier)}
+                            className="p-1 hover:bg-purple-500/20 rounded transition-colors"
+                          >
+                            {isPageSelected('pilier', pilier.keyword) ? (
+                              <CheckSquare className="w-5 h-5 text-purple-500" />
+                            ) : (
+                              <Square className="w-5 h-5 text-dark-muted hover:text-purple-400" />
+                            )}
+                          </button>
                           <div className="p-2 rounded-lg bg-purple-500/20 text-purple-500 font-bold">
                             M{pIdx + 1}
                           </div>
@@ -858,10 +1095,18 @@ Propose une architecture de contenu avec:
                             <span className="text-sm text-dark-muted">{pilier.search_volume} vol</span>
                           )}
                           <button
+                            onClick={() => selectCluster(pilier)}
+                            className="px-3 py-1 text-xs bg-purple-500/20 text-purple-400 rounded hover:bg-purple-500/30"
+                            title="Sélectionner tout le cluster"
+                          >
+                            <List className="w-3 h-3 inline mr-1" />
+                            Cluster
+                          </button>
+                          <button
                             onClick={() => selectPage('pilier', pilier.keyword, pilier)}
                             className="px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 font-medium"
                           >
-                            Créer la Mère
+                            Créer
                           </button>
                         </div>
                       </div>
@@ -880,17 +1125,33 @@ Propose une architecture de contenu avec:
                             {pilier.filles.map((fille, fIdx) => (
                               <div
                                 key={fIdx}
-                                className="flex items-center justify-between p-3 bg-blue-500/5 border border-blue-500/20 rounded-lg hover:bg-blue-500/10 transition-all"
+                                className={`flex items-center justify-between p-3 border rounded-lg hover:bg-blue-500/10 transition-all ${
+                                  isPageSelected('fille', fille.keyword)
+                                    ? 'bg-blue-500/20 border-blue-500/50'
+                                    : 'bg-blue-500/5 border-blue-500/20'
+                                }`}
                               >
-                                <div className="flex-1">
-                                  <div className="text-white text-sm font-medium">{fille.title_suggestion}</div>
-                                  <div className="text-xs text-blue-400">{fille.keyword}</div>
-                                  {fille.paa_questions?.length > 0 && (
-                                    <div className="text-xs text-dark-muted mt-1">
-                                      <HelpCircle className="w-3 h-3 inline mr-1" />
-                                      {fille.paa_questions.length} PAA
-                                    </div>
-                                  )}
+                                <div className="flex items-center gap-2 flex-1">
+                                  <button
+                                    onClick={() => togglePageSelection('fille', pilier.keyword, fille)}
+                                    className="p-0.5 hover:bg-blue-500/20 rounded"
+                                  >
+                                    {isPageSelected('fille', fille.keyword) ? (
+                                      <CheckSquare className="w-4 h-4 text-blue-500" />
+                                    ) : (
+                                      <Square className="w-4 h-4 text-dark-muted hover:text-blue-400" />
+                                    )}
+                                  </button>
+                                  <div className="flex-1">
+                                    <div className="text-white text-sm font-medium">{fille.title_suggestion}</div>
+                                    <div className="text-xs text-blue-400">{fille.keyword}</div>
+                                    {fille.paa_questions?.length > 0 && (
+                                      <div className="text-xs text-dark-muted mt-1">
+                                        <HelpCircle className="w-3 h-3 inline mr-1" />
+                                        {fille.paa_questions.length} PAA
+                                      </div>
+                                    )}
+                                  </div>
                                 </div>
                                 <button
                                   onClick={() => selectPage('fille', pilier.keyword, fille)}
@@ -915,11 +1176,27 @@ Propose une architecture de contenu avec:
                             {pilier.articles.map((article, aIdx) => (
                               <div
                                 key={aIdx}
-                                className="flex items-center justify-between p-2 bg-green-500/5 border border-green-500/20 rounded-lg hover:bg-green-500/10 transition-all"
+                                className={`flex items-center justify-between p-2 border rounded-lg hover:bg-green-500/10 transition-all ${
+                                  isPageSelected('article', article.keyword)
+                                    ? 'bg-green-500/20 border-green-500/50'
+                                    : 'bg-green-500/5 border-green-500/20'
+                                }`}
                               >
-                                <div className="flex-1 min-w-0">
-                                  <div className="text-white text-sm truncate">{article.title_suggestion}</div>
-                                  <div className="text-xs text-green-400 truncate">{article.keyword}</div>
+                                <div className="flex items-center gap-2 flex-1 min-w-0">
+                                  <button
+                                    onClick={() => togglePageSelection('article', pilier.keyword, article)}
+                                    className="p-0.5 hover:bg-green-500/20 rounded flex-shrink-0"
+                                  >
+                                    {isPageSelected('article', article.keyword) ? (
+                                      <CheckSquare className="w-4 h-4 text-green-500" />
+                                    ) : (
+                                      <Square className="w-4 h-4 text-dark-muted hover:text-green-400" />
+                                    )}
+                                  </button>
+                                  <div className="flex-1 min-w-0">
+                                    <div className="text-white text-sm truncate">{article.title_suggestion}</div>
+                                    <div className="text-xs text-green-400 truncate">{article.keyword}</div>
+                                  </div>
                                 </div>
                                 <button
                                   onClick={() => selectPage('article', pilier.keyword, article)}
@@ -1137,7 +1414,7 @@ Propose une architecture de contenu avec:
               className="flex items-center gap-2 px-6 py-3 bg-primary text-white rounded-lg font-medium hover:bg-primary/90"
             >
               <Play className="w-5 h-5" />
-              Lancer les 9 agents
+              Lancer les 11 agents
             </button>
           </div>
         </Card>
@@ -1227,14 +1504,20 @@ Propose une architecture de contenu avec:
         <>
           {/* Metrics */}
           <Card className="p-4">
-            <div className="grid grid-cols-4 md:grid-cols-7 gap-4 text-center">
+            <div className="grid grid-cols-4 md:grid-cols-5 lg:grid-cols-10 gap-3 text-center">
               <div>
                 <div className={`text-2xl font-bold ${finalResult.metadata.seoScore >= 85 ? 'text-success' : 'text-warning'}`}>
                   {finalResult.metadata.seoScore || '-'}
                 </div>
                 <div className="text-xs text-dark-muted">Score SEO</div>
-                {finalResult.metadata.seoAttempts > 1 && (
-                  <div className="text-xs text-warning">{finalResult.metadata.seoAttempts} essais</div>
+              </div>
+              <div>
+                <div className={`text-2xl font-bold ${finalResult.metadata.position0Score >= 80 ? 'text-amber-500' : 'text-amber-700'}`}>
+                  {finalResult.metadata.position0Score || '-'}
+                </div>
+                <div className="text-xs text-dark-muted">Position 0</div>
+                {finalResult.metadata.answerBoxesAdded > 0 && (
+                  <div className="text-xs text-amber-400">{finalResult.metadata.answerBoxesAdded} boxes</div>
                 )}
               </div>
               <div>
@@ -1243,28 +1526,39 @@ Propose une architecture de contenu avec:
               </div>
               <div>
                 <div className="text-2xl font-bold text-success">{finalResult.metadata.factCheckScore || '-'}%</div>
-                <div className="text-xs text-dark-muted">Faits vérifiés</div>
-              </div>
-              <div>
-                <div className="text-2xl font-bold text-info">{finalResult.metadata.factsVerified || 0}</div>
                 <div className="text-xs text-dark-muted">Faits OK</div>
               </div>
               <div>
                 <div className="text-2xl font-bold text-purple-500">{finalResult.metadata.aiDetection || '-'}%</div>
-                <div className="text-xs text-dark-muted">Détection IA</div>
+                <div className="text-xs text-dark-muted">IA Detect</div>
               </div>
               <div>
                 <div className={`text-2xl font-bold ${finalResult.metadata.proofreadScore >= 80 ? 'text-pink-500' : 'text-warning'}`}>
                   {finalResult.metadata.proofreadScore || '-'}
                 </div>
                 <div className="text-xs text-dark-muted">Relecture</div>
-                {finalResult.metadata.proofreadFixes > 0 && (
-                  <div className="text-xs text-pink-400">{finalResult.metadata.proofreadFixes} fixes</div>
+              </div>
+              <div>
+                <div className="text-2xl font-bold text-indigo-500">{finalResult.metadata.hasToc ? '✓' : '-'}</div>
+                <div className="text-xs text-dark-muted">Sommaire</div>
+                {finalResult.metadata.tocSections > 0 && (
+                  <div className="text-xs text-indigo-400">{finalResult.metadata.tocSections} sections</div>
                 )}
               </div>
               <div>
                 <div className="text-2xl font-bold text-cyan-500">{finalResult.metadata.schemas?.length || 0}</div>
                 <div className="text-xs text-dark-muted">Schemas</div>
+                {finalResult.metadata.hasHowTo && (
+                  <div className="text-xs text-cyan-400">+HowTo</div>
+                )}
+              </div>
+              <div>
+                <div className="text-2xl font-bold text-violet-500">{finalResult.metadata.snippetOpportunity || '-'}</div>
+                <div className="text-xs text-dark-muted">Snippet %</div>
+              </div>
+              <div>
+                <div className="text-2xl font-bold text-blue-400 text-xs uppercase">{finalResult.metadata.snippetFormat || '-'}</div>
+                <div className="text-xs text-dark-muted">Format P0</div>
               </div>
             </div>
           </Card>
@@ -1453,6 +1747,104 @@ Propose une architecture de contenu avec:
             </div>
           </Card>
         </>
+      )}
+
+      {/* Clarification Modal */}
+      {showClarification && clarificationData && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <Card className="w-full max-w-lg p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 rounded-lg bg-warning/20">
+                <MessageCircle className="w-6 h-6 text-warning" />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold text-white">Avant de commencer...</h2>
+                <p className="text-sm text-dark-muted">Quelques informations manquent ou nécessitent confirmation</p>
+              </div>
+            </div>
+
+            <div className="space-y-4 mb-6">
+              {clarificationData.missingInfo.noDirection && (
+                <div className="p-3 bg-warning/10 border border-warning/30 rounded-lg">
+                  <div className="flex items-center gap-2 text-warning text-sm font-medium mb-1">
+                    <AlertTriangle className="w-4 h-4" />
+                    Pas de directives SEO Director
+                  </div>
+                  <p className="text-xs text-dark-muted">
+                    Le SEO Director n'a pas encore analysé ce site. Les contenus seront créés sans orientation stratégique.
+                  </p>
+                </div>
+              )}
+
+              {clarificationData.missingInfo.noCompetitors && (
+                <div className="p-3 bg-warning/10 border border-warning/30 rounded-lg">
+                  <div className="flex items-center gap-2 text-warning text-sm font-medium mb-1">
+                    <AlertTriangle className="w-4 h-4" />
+                    Pas de concurrents analysés
+                  </div>
+                  <p className="text-xs text-dark-muted">
+                    Sans analyse concurrentielle, le contenu ne pourra pas se différencier efficacement.
+                  </p>
+                </div>
+              )}
+
+              {clarificationData.missingInfo.noPaa && (
+                <div className="p-3 bg-info/10 border border-info/30 rounded-lg">
+                  <div className="flex items-center gap-2 text-info text-sm font-medium mb-1">
+                    <HelpCircle className="w-4 h-4" />
+                    Pas de PAA existantes
+                  </div>
+                  <p className="text-xs text-dark-muted">
+                    L'agent PAA Analyst générera ses propres questions (moins précis que les vraies PAA Google).
+                  </p>
+                </div>
+              )}
+
+              <div className="p-3 bg-dark-bg rounded-lg">
+                <div className="text-sm text-white mb-2">Pages à créer ({clarificationData.pages.length})</div>
+                <div className="flex flex-wrap gap-1 max-h-20 overflow-y-auto">
+                  {clarificationData.pages.map((p, idx) => (
+                    <span
+                      key={idx}
+                      className={`px-2 py-0.5 rounded text-xs ${
+                        p.type === 'pilier' ? 'bg-purple-500/20 text-purple-400' :
+                        p.type === 'fille' ? 'bg-blue-500/20 text-blue-400' :
+                        'bg-green-500/20 text-green-400'
+                      }`}
+                    >
+                      {p.keyword}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setShowClarification(false);
+                  setClarificationData(null);
+                }}
+                className="flex-1 px-4 py-2 bg-dark-border text-white rounded-lg hover:bg-dark-bg"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={() => {
+                  setShowClarification(false);
+                  // Start with first selected page
+                  if (clarificationData.pages.length > 0) {
+                    const firstPage = clarificationData.pages[0];
+                    selectPage(firstPage.type, firstPage.pilierKeyword, firstPage);
+                  }
+                }}
+                className="flex-1 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 font-medium"
+              >
+                Continuer quand même
+              </button>
+            </div>
+          </Card>
+        </div>
       )}
     </div>
   );
