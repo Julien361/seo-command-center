@@ -1857,32 +1857,6 @@ ${researchSummary || 'Aucune recherche disponible'}
           {/* Results */}
           {batchResults.length > 0 && (
             <div className="space-y-4">
-              {/* Copy All Button */}
-              {!isBatchRunning && (
-                <Card className="p-4 bg-gradient-to-r from-success/20 to-success/5 border-success/50">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="text-white font-semibold">{batchResults.filter(r => !r.error).length} page(s) prêtes</h3>
-                      <p className="text-sm text-dark-muted">Cliquez pour copier chaque contenu</p>
-                    </div>
-                    <button
-                      onClick={() => {
-                        const allHtml = batchResults
-                          .filter(r => !r.error)
-                          .map(r => `<!-- ===== ${r.page.keyword.toUpperCase()} ===== -->\n${r.html}`)
-                          .join('\n\n\n');
-                        navigator.clipboard.writeText(allHtml);
-                        alert(`${batchResults.filter(r => !r.error).length} pages copiées !`);
-                      }}
-                      className="flex items-center gap-2 px-6 py-3 bg-success text-white rounded-lg font-bold hover:bg-success/90"
-                    >
-                      <Copy className="w-5 h-5" />
-                      COPIER TOUT ({batchResults.filter(r => !r.error).length})
-                    </button>
-                  </div>
-                </Card>
-              )}
-
               {/* Individual results */}
               {batchResults.map((item, idx) => (
                 <Card key={idx} className={`p-4 ${item.error ? 'border-error/50' : 'border-success/30'}`}>
