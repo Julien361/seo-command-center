@@ -126,6 +126,11 @@ export default function ContentFactory({ site, onBack }) {
   const [showClarification, setShowClarification] = useState(false);
   const [clarificationData, setClarificationData] = useState(null);
 
+  // Batch creation state
+  const [batchResults, setBatchResults] = useState([]); // [{page, result, html}]
+  const [batchProgress, setBatchProgress] = useState({ current: 0, total: 0, currentKeyword: '' });
+  const [isBatchRunning, setIsBatchRunning] = useState(false);
+
   // Saved analysis state
   const [savedAnalysis, setSavedAnalysis] = useState(null);
   const [showSavedAnalysisPrompt, setShowSavedAnalysisPrompt] = useState(false);
@@ -555,16 +560,188 @@ ${researchSummary || 'Aucune recherche disponible'}
     }
   };
 
+  // Run batch factory for multiple pages
+  const runBatchFactory = async (pages) => {
+    setStep('batch-create');
+    setIsBatchRunning(true);
+    setBatchResults([]);
+    setBatchProgress({ current: 0, total: pages.length, currentKeyword: '' });
+
+    const results = [];
+
+    for (let i = 0; i < pages.length; i++) {
+      const page = pages[i];
+      setBatchProgress({ current: i + 1, total: pages.length, currentKeyword: page.keyword });
+
+      try {
+        // Build brief for this page
+        const pageBrief = {
+          keyword: page.keyword,
+          secondary_keywords: page.type === 'pilier'
+            ? proposals?.piliers?.find(p => p.keyword === page.keyword)?.filles?.map(f => f.keyword) || []
+            : [],
+          content_type: page.type,
+          tone: CONTENT_TYPES[page.type]?.defaultTone || 'neutre',
+          target_word_count: page.recommended_word_count ||
+            proposals?.word_count_recommendations?.[page.type] ||
+            (page.type === 'pilier' ? 3000 : page.type === 'fille' ? 1800 : 1200),
+          paa_questions: page.paa_questions || [],
+          competitors: analysisData.competitors,
+          site: site,
+          internal_links: buildInternalLinks(page)
+        };
+
+        // Run factory for this page
+        const result = await claudeApi.runContentFactory(
+          pageBrief,
+          analysisData.paaQuestions || [],
+          null, // No progress callback for batch
+          seoDirection
+        );
+
+        if (result.success) {
+          // Generate complete HTML
+          const html = generateCompleteHtmlForResult(result, pageBrief);
+          results.push({ page, result, html, brief: pageBrief });
+          setBatchResults([...results]);
+        }
+      } catch (err) {
+        console.error(`Error creating ${page.keyword}:`, err);
+        results.push({ page, error: err.message });
+        setBatchResults([...results]);
+      }
+    }
+
+    setIsBatchRunning(false);
+  };
+
+  // Build internal links for a page
+  const buildInternalLinks = (page) => {
+    const links = [];
+    if (page.type !== 'pilier' && page.pilierKeyword) {
+      links.push({ type: 'pilier', keyword: page.pilierKeyword });
+      const pilier = proposals?.piliers?.find(p => p.keyword === page.pilierKeyword);
+      pilier?.filles?.forEach(f => {
+        if (f.keyword !== page.keyword) {
+          links.push({ type: 'fille', keyword: f.keyword });
+        }
+      });
+    }
+    return links;
+  };
+
+  // Generate complete HTML for a result (used in batch)
+  const generateCompleteHtmlForResult = (result, pageBrief) => {
+    if (!result?.success) return '';
+
+    let html = result.finalContent;
+
+    // Convert Markdown to HTML
+    html = html
+      .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+      .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+      .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+      .replace(/^#### (.+)$/gm, '<h4>$1</h4>')
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*(.+?)\*/g, '<em>$1</em>')
+      .replace(/^\- (.+)$/gm, '<li>$1</li>')
+      .replace(/^\d+\. (.+)$/gm, '<li>$1</li>');
+
+    // Convert internal link placeholders to real links
+    const siteUrl = site?.url || '';
+    html = html.replace(/\[LIEN:\s*(.+?)\s*->\s*(.+?)\]/g, (match, anchor, target) => {
+      const slug = target.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+      return `<a href="${siteUrl}/${slug}" title="${target}">${anchor}</a>`;
+    });
+
+    // Wrap paragraphs
+    html = html.split('\n').map(line => {
+      const trimmed = line.trim();
+      if (!trimmed) return '';
+      if (trimmed.startsWith('<')) return line;
+      return `<p>${trimmed}</p>`;
+    }).filter(l => l).join('\n');
+
+    // Add schemas at the end
+    if (result.metadata.schemas?.length > 0) {
+      const schemasHtml = result.metadata.schemas.map(s =>
+        `<script type="application/ld+json">\n${JSON.stringify(s.schema, null, 2)}\n</script>`
+      ).join('\n');
+      html += `\n\n<!-- Schemas JSON-LD -->\n${schemasHtml}`;
+    }
+
+    return html;
+  };
+
+  // Generate complete HTML content with internal links and schemas
+  const generateCompleteHtml = () => {
+    if (!finalResult?.success) return '';
+
+    let html = editedContent || finalResult.finalContent;
+
+    // Convert Markdown to HTML
+    html = html
+      .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+      .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+      .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+      .replace(/^#### (.+)$/gm, '<h4>$1</h4>')
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*(.+?)\*/g, '<em>$1</em>')
+      .replace(/^\- (.+)$/gm, '<li>$1</li>')
+      .replace(/^\d+\. (.+)$/gm, '<li>$1</li>');
+
+    // Wrap lists in ul/ol
+    html = html.replace(/(<li>.*<\/li>\n?)+/g, (match) => {
+      if (match.includes('1.')) return `<ol>${match}</ol>`;
+      return `<ul>${match}</ul>`;
+    });
+
+    // Convert internal link placeholders to real links
+    // Pattern: [LIEN: anchor text -> target page]
+    const siteUrl = site?.url || '';
+    html = html.replace(/\[LIEN:\s*(.+?)\s*->\s*(.+?)\]/g, (match, anchor, target) => {
+      const slug = target.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+      return `<a href="${siteUrl}/${slug}" title="${target}">${anchor}</a>`;
+    });
+
+    // Wrap paragraphs (lines that aren't already wrapped)
+    html = html.split('\n').map(line => {
+      const trimmed = line.trim();
+      if (!trimmed) return '';
+      if (trimmed.startsWith('<')) return line;
+      return `<p>${trimmed}</p>`;
+    }).filter(l => l).join('\n');
+
+    // Add schemas at the end
+    if (finalResult.metadata.schemas?.length > 0) {
+      const schemasHtml = finalResult.metadata.schemas.map(s =>
+        `<script type="application/ld+json">\n${JSON.stringify(s.schema, null, 2)}\n</script>`
+      ).join('\n');
+      html += `\n\n<!-- Schemas JSON-LD -->\n${schemasHtml}`;
+    }
+
+    return html;
+  };
+
+  // Copy complete content to clipboard
+  const copyCompleteContent = () => {
+    const html = generateCompleteHtml();
+    navigator.clipboard.writeText(html);
+    alert('Contenu complet copié ! (HTML + liens + schemas)');
+  };
+
   // Save article
   const saveArticle = async (status = 'draft') => {
     if (!finalResult?.success) return;
 
     try {
+      const completeHtml = generateCompleteHtml();
+
       const { error } = await supabase.from('articles').insert({
         site_id: site.id,
         title: finalResult.metadata.title || brief.keyword,
-        slug: brief.keyword.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, ''),
-        content: editedContent || finalResult.finalContent,
+        slug: finalResult.metadata.slug || brief.keyword.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, ''),
+        content: completeHtml,
         content_type: brief.content_type,
         meta_title: finalResult.metadata.title,
         meta_description: finalResult.metadata.description,
@@ -572,7 +749,7 @@ ${researchSummary || 'Aucune recherche disponible'}
         word_count: finalResult.metadata.wordCount,
         seo_score: finalResult.metadata.seoScore,
         schema_markup: finalResult.metadata.schemas,
-        internal_links: brief.internal_links,
+        internal_links: finalResult.metadata.internalLinks,
         status: status,
         scheduled_at: scheduledDate || null
       });
@@ -585,6 +762,7 @@ ${researchSummary || 'Aucune recherche disponible'}
       setFinalResult(null);
       setSelectedPage(null);
     } catch (err) {
+      console.error('Save error:', err);
       alert('Erreur: ' + err.message);
     }
   };
@@ -1155,7 +1333,7 @@ ${researchSummary || 'Aucune recherche disponible'}
                         setShowClarification(true);
                       } else {
                         // Go directly to batch creation
-                        setStep('batch-create');
+                        runBatchFactory(selectedPages);
                       }
                     }}
                     className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-primary to-purple-600 text-white rounded-lg font-medium hover:opacity-90"
@@ -1643,6 +1821,161 @@ ${researchSummary || 'Aucune recherche disponible'}
         </Card>
       )}
 
+      {/* Step: Batch Create */}
+      {step === 'batch-create' && (
+        <div className="space-y-4">
+          {/* Progress */}
+          <Card className="p-6">
+            <div className="flex items-center gap-4 mb-4">
+              {isBatchRunning ? (
+                <Loader2 className="w-8 h-8 text-primary animate-spin" />
+              ) : (
+                <CheckCircle className="w-8 h-8 text-success" />
+              )}
+              <div>
+                <h2 className="text-xl font-bold text-white">
+                  {isBatchRunning ? 'Création en cours...' : 'Création terminée !'}
+                </h2>
+                <p className="text-dark-muted">
+                  {batchProgress.current} / {batchProgress.total} page(s)
+                  {isBatchRunning && batchProgress.currentKeyword && (
+                    <span className="ml-2 text-primary">→ {batchProgress.currentKeyword}</span>
+                  )}
+                </p>
+              </div>
+            </div>
+
+            {/* Progress bar */}
+            <div className="w-full bg-dark-bg rounded-full h-2 mb-4">
+              <div
+                className="bg-primary h-2 rounded-full transition-all duration-500"
+                style={{ width: `${(batchProgress.current / batchProgress.total) * 100}%` }}
+              />
+            </div>
+          </Card>
+
+          {/* Results */}
+          {batchResults.length > 0 && (
+            <div className="space-y-4">
+              {/* Copy All Button */}
+              {!isBatchRunning && (
+                <Card className="p-4 bg-gradient-to-r from-success/20 to-success/5 border-success/50">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-white font-semibold">{batchResults.filter(r => !r.error).length} page(s) prêtes</h3>
+                      <p className="text-sm text-dark-muted">Cliquez pour copier chaque contenu</p>
+                    </div>
+                    <button
+                      onClick={() => {
+                        const allHtml = batchResults
+                          .filter(r => !r.error)
+                          .map(r => `<!-- ===== ${r.page.keyword.toUpperCase()} ===== -->\n${r.html}`)
+                          .join('\n\n\n');
+                        navigator.clipboard.writeText(allHtml);
+                        alert(`${batchResults.filter(r => !r.error).length} pages copiées !`);
+                      }}
+                      className="flex items-center gap-2 px-6 py-3 bg-success text-white rounded-lg font-bold hover:bg-success/90"
+                    >
+                      <Copy className="w-5 h-5" />
+                      COPIER TOUT ({batchResults.filter(r => !r.error).length})
+                    </button>
+                  </div>
+                </Card>
+              )}
+
+              {/* Individual results */}
+              {batchResults.map((item, idx) => (
+                <Card key={idx} className={`p-4 ${item.error ? 'border-error/50' : 'border-success/30'}`}>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-3">
+                      <div className={`p-2 rounded-lg ${
+                        item.page.type === 'pilier' ? 'bg-purple-500/20' :
+                        item.page.type === 'fille' ? 'bg-blue-500/20' : 'bg-green-500/20'
+                      }`}>
+                        {item.page.type === 'pilier' ? <Crown className="w-5 h-5 text-purple-400" /> :
+                         item.page.type === 'fille' ? <FileText className="w-5 h-5 text-blue-400" /> :
+                         <FileText className="w-5 h-5 text-green-400" />}
+                      </div>
+                      <div>
+                        <div className="font-medium text-white">{item.page.keyword}</div>
+                        <div className="text-xs text-dark-muted">
+                          {item.page.type} • {item.result?.metadata?.wordCount || 0} mots
+                          {item.result?.metadata?.seoScore && (
+                            <span className={`ml-2 ${item.result.metadata.seoScore >= 85 ? 'text-success' : 'text-warning'}`}>
+                              Score: {item.result.metadata.seoScore}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {item.error ? (
+                      <span className="text-error text-sm">Erreur: {item.error}</span>
+                    ) : (
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => {
+                            navigator.clipboard.writeText(item.html);
+                            alert('Contenu copié !');
+                          }}
+                          className="flex items-center gap-1 px-4 py-2 bg-success text-white rounded-lg font-medium hover:bg-success/90"
+                        >
+                          <Copy className="w-4 h-4" />
+                          Copier
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Meta info */}
+                  {item.result && !item.error && (
+                    <div className="grid grid-cols-3 gap-2 text-xs">
+                      <div
+                        onClick={() => navigator.clipboard.writeText(item.result.metadata.slug || '')}
+                        className="p-2 bg-dark-bg rounded cursor-pointer hover:bg-dark-border"
+                      >
+                        <span className="text-orange-400">Slug:</span>
+                        <span className="text-white ml-1">/{item.result.metadata.slug}</span>
+                      </div>
+                      <div
+                        onClick={() => navigator.clipboard.writeText(item.result.metadata.title || '')}
+                        className="p-2 bg-dark-bg rounded cursor-pointer hover:bg-dark-border"
+                      >
+                        <span className="text-primary">Title:</span>
+                        <span className="text-white ml-1 truncate">{item.result.metadata.title?.substring(0, 40)}...</span>
+                      </div>
+                      <div
+                        onClick={() => navigator.clipboard.writeText(item.result.metadata.description || '')}
+                        className="p-2 bg-dark-bg rounded cursor-pointer hover:bg-dark-border"
+                      >
+                        <span className="text-primary">Desc:</span>
+                        <span className="text-white ml-1 truncate">{item.result.metadata.description?.substring(0, 40)}...</span>
+                      </div>
+                    </div>
+                  )}
+                </Card>
+              ))}
+            </div>
+          )}
+
+          {/* Back button */}
+          {!isBatchRunning && (
+            <div className="text-center">
+              <button
+                onClick={() => {
+                  setStep('proposals');
+                  setBatchResults([]);
+                  setSelectedPages([]);
+                }}
+                className="text-dark-muted hover:text-white"
+              >
+                ← Retour aux propositions
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Step 5: Result */}
       {step === 'result' && finalResult?.success && (
         <>
@@ -1738,70 +2071,56 @@ ${researchSummary || 'Aucune recherche disponible'}
             </div>
           </Card>
 
-          {/* Internal Links */}
+          {/* Internal Links - Integrated info */}
           {finalResult.metadata.internalLinks?.length > 0 && (
-            <Card className="p-4">
-              <h3 className="text-sm font-medium text-dark-muted mb-3 flex items-center gap-2">
-                <Link className="w-4 h-4" />
-                Maillage interne suggéré ({finalResult.metadata.internalLinks.length})
-              </h3>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+            <Card className="p-3 bg-info/10 border-info/30">
+              <div className="flex items-center gap-2 text-sm">
+                <CheckCircle className="w-4 h-4 text-info" />
+                <span className="text-info">
+                  {finalResult.metadata.internalLinks.length} lien(s) interne(s) intégré(s) dans le contenu
+                </span>
+              </div>
+              <div className="flex flex-wrap gap-1 mt-2">
                 {finalResult.metadata.internalLinks.map((link, idx) => (
-                  <div key={idx} className="p-2 bg-info/10 border border-info/20 rounded text-sm">
-                    <div className="text-info font-medium">{link.anchor}</div>
-                    <div className="text-dark-muted text-xs flex items-center gap-1">
-                      <ArrowRight className="w-3 h-3" />
-                      {link.target}
-                    </div>
-                  </div>
+                  <span key={idx} className="px-2 py-0.5 bg-dark-bg rounded text-xs text-dark-muted">
+                    {link.anchor} → {link.target}
+                  </span>
                 ))}
               </div>
             </Card>
           )}
 
+          {/* MAIN ACTION: Copy Complete Content */}
+          <Card className="p-4 bg-gradient-to-r from-success/20 to-success/5 border-success/50">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-white font-semibold">Contenu prêt à publier</h3>
+                <p className="text-sm text-dark-muted">HTML + liens internes + schemas JSON-LD intégrés</p>
+              </div>
+              <button
+                onClick={copyCompleteContent}
+                className="flex items-center gap-2 px-6 py-3 bg-success text-white rounded-lg font-bold hover:bg-success/90 transition-all shadow-lg"
+              >
+                <Copy className="w-5 h-5" />
+                COPIER TOUT
+              </button>
+            </div>
+          </Card>
+
           {/* Content with Structure View */}
           <Card className="p-6">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-white">{editMode ? 'Modifier' : 'Contenu'}</h2>
+              <h2 className="text-lg font-semibold text-white">{editMode ? 'Modifier (Markdown)' : 'Aperçu HTML'}</h2>
               <div className="flex gap-2">
                 <button
                   onClick={() => {
                     navigator.clipboard.writeText(editedContent);
-                    alert('Markdown copié !');
+                    alert('Markdown source copié !');
                   }}
                   className="flex items-center gap-1 px-3 py-1 bg-dark-border text-dark-muted rounded-lg hover:bg-dark-card hover:text-white text-sm"
                 >
                   <Copy className="w-4 h-4" />
-                  Markdown
-                </button>
-                <button
-                  onClick={() => {
-                    // Convert Markdown to HTML
-                    const html = editedContent
-                      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-                      .replace(/\*(.+?)\*/g, '<em>$1</em>')
-                      .replace(/^# (.+)$/gm, '<h1>$1</h1>')
-                      .replace(/^## (.+)$/gm, '<h2>$1</h2>')
-                      .replace(/^### (.+)$/gm, '<h3>$1</h3>')
-                      .replace(/^#### (.+)$/gm, '<h4>$1</h4>')
-                      .replace(/^\- (.+)$/gm, '<li>$1</li>')
-                      .replace(/^\d+\. (.+)$/gm, '<li>$1</li>')
-                      .replace(/\[LIEN: (.+?) -> (.+?)\]/g, '<a href="#">$1</a>')
-                      .split('\n')
-                      .map(line => {
-                        if (line.startsWith('<h') || line.startsWith('<li')) return line;
-                        if (line.trim() === '') return '';
-                        return `<p>${line}</p>`;
-                      })
-                      .filter(line => line !== '')
-                      .join('\n');
-                    navigator.clipboard.writeText(html);
-                    alert('HTML copié !');
-                  }}
-                  className="flex items-center gap-1 px-3 py-1 bg-primary/20 text-primary rounded-lg hover:bg-primary/30 text-sm"
-                >
-                  <FileCode className="w-4 h-4" />
-                  HTML
+                  Source MD
                 </button>
                 <button onClick={() => setEditMode(!editMode)} className={`p-2 rounded-lg ${editMode ? 'bg-primary text-white' : 'hover:bg-dark-border text-dark-muted'}`}>
                   {editMode ? <Eye className="w-4 h-4" /> : <Edit3 className="w-4 h-4" />}
@@ -1851,28 +2170,14 @@ ${researchSummary || 'Aucune recherche disponible'}
             )}
           </Card>
 
-          {/* Schemas JSON-LD */}
+          {/* Schemas JSON-LD - Integrated info */}
           {finalResult.metadata.schemas?.length > 0 && (
-            <Card className="p-4">
-              <h3 className="text-sm font-medium text-dark-muted mb-3 flex items-center gap-2">
-                <FileCode className="w-4 h-4" />
-                Schemas JSON-LD ({finalResult.metadata.schemas.length})
-              </h3>
-              <div className="space-y-2">
-                {finalResult.metadata.schemas.map((schema, idx) => (
-                  <div key={idx} className="flex items-center justify-between p-2 bg-dark-bg rounded">
-                    <span className="text-cyan-400">{schema.type}</span>
-                    <button
-                      onClick={() => {
-                        navigator.clipboard.writeText(JSON.stringify(schema.schema, null, 2));
-                      }}
-                      className="text-xs text-dark-muted hover:text-white flex items-center gap-1"
-                    >
-                      <Copy className="w-3 h-3" />
-                      Copier
-                    </button>
-                  </div>
-                ))}
+            <Card className="p-3 bg-cyan-500/10 border-cyan-500/30">
+              <div className="flex items-center gap-2 text-sm">
+                <CheckCircle className="w-4 h-4 text-cyan-500" />
+                <span className="text-cyan-400">
+                  {finalResult.metadata.schemas.length} schema(s) intégré(s) : {finalResult.metadata.schemas.map(s => s.type).join(', ')}
+                </span>
               </div>
             </Card>
           )}
