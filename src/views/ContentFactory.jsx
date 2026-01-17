@@ -1442,39 +1442,17 @@ ${researchSummary || 'Aucune recherche disponible'}
               </div>
             </div>
 
-            {/* Word count target */}
-            <div>
-              <label className="block text-sm text-dark-muted mb-2">Nombre de mots cible (basé sur la concurrence)</label>
-              <div className="flex items-center gap-3">
-                <input
-                  type="number"
-                  value={brief.target_word_count || 1500}
-                  onChange={(e) => setBrief(prev => ({ ...prev, target_word_count: parseInt(e.target.value) || 1500 }))}
-                  min="500"
-                  max="10000"
-                  step="100"
-                  className="w-32 bg-dark-bg border border-dark-border rounded-lg px-3 py-2 text-white"
-                />
-                <span className="text-dark-muted">mots</span>
-                <div className="flex gap-1">
-                  {[1000, 1500, 2000, 3000, 4000].map(wc => (
-                    <button
-                      key={wc}
-                      onClick={() => setBrief(prev => ({ ...prev, target_word_count: wc }))}
-                      className={`px-2 py-1 text-xs rounded ${
-                        brief.target_word_count === wc
-                          ? 'bg-primary text-white'
-                          : 'bg-dark-bg text-dark-muted hover:text-white'
-                      }`}
-                    >
-                      {wc >= 1000 ? `${wc/1000}k` : wc}
-                    </button>
-                  ))}
-                </div>
+            {/* Word count target - Auto-calculated */}
+            <div className="p-3 bg-dark-bg rounded-lg">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-dark-muted">Longueur cible (auto)</span>
+                <span className="text-lg font-bold text-primary">
+                  {(brief.target_word_count || 1500).toLocaleString()} mots
+                </span>
               </div>
               {proposals?.word_count_recommendations?.rationale && (
                 <div className="text-xs text-dark-muted mt-1 italic">
-                  💡 {proposals.word_count_recommendations.rationale}
+                  📊 {proposals.word_count_recommendations.rationale}
                 </div>
               )}
             </div>
