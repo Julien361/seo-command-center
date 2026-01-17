@@ -562,6 +562,7 @@ ${researchSummary || 'Aucune recherche disponible'}
 
   // Run batch factory for multiple pages
   const runBatchFactory = async (pages) => {
+    console.log('Starting batch creation for', pages.length, 'pages:', pages);
     setStep('batch-create');
     setIsBatchRunning(true);
     setBatchResults([]);
@@ -571,6 +572,7 @@ ${researchSummary || 'Aucune recherche disponible'}
 
     for (let i = 0; i < pages.length; i++) {
       const page = pages[i];
+      console.log(`Creating page ${i + 1}/${pages.length}:`, page.keyword);
       setBatchProgress({ current: i + 1, total: pages.length, currentKeyword: page.keyword });
 
       try {
@@ -591,6 +593,8 @@ ${researchSummary || 'Aucune recherche disponible'}
           internal_links: buildInternalLinks(page)
         };
 
+        console.log('Brief for', page.keyword, ':', pageBrief);
+
         // Run factory for this page
         const result = await claudeApi.runContentFactory(
           pageBrief,
@@ -599,19 +603,35 @@ ${researchSummary || 'Aucune recherche disponible'}
           seoDirection
         );
 
-        if (result.success) {
+        console.log('Result for', page.keyword, ':', result?.success ? 'SUCCESS' : 'FAILED', result);
+
+        if (result && result.success) {
           // Generate complete HTML
           const html = generateCompleteHtmlForResult(result, pageBrief);
-          results.push({ page, result, html, brief: pageBrief });
+          const newResult = { page, result, html, brief: pageBrief };
+          results.push(newResult);
           setBatchResults([...results]);
+          console.log('Added result, total:', results.length);
+        } else {
+          const errorResult = { page, error: result?.error || 'Résultat invalide' };
+          results.push(errorResult);
+          setBatchResults([...results]);
+          console.log('Added error result:', errorResult);
         }
       } catch (err) {
         console.error(`Error creating ${page.keyword}:`, err);
-        results.push({ page, error: err.message });
+        const errorResult = { page, error: err.message || 'Erreur inconnue' };
+        results.push(errorResult);
         setBatchResults([...results]);
+      }
+
+      // Small delay between pages to avoid rate limiting
+      if (i < pages.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
       }
     }
 
+    console.log('Batch complete. Total results:', results.length);
     setIsBatchRunning(false);
   };
 
@@ -732,29 +752,43 @@ ${researchSummary || 'Aucune recherche disponible'}
 
   // Save article
   const saveArticle = async (status = 'draft') => {
-    if (!finalResult?.success) return;
+    if (!finalResult?.success) {
+      alert('Pas de contenu à sauvegarder');
+      return;
+    }
 
     try {
       const completeHtml = generateCompleteHtml();
+      const slug = finalResult.metadata.slug || brief.keyword.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
 
-      const { error } = await supabase.from('articles').insert({
+      // Build article data - only include fields that exist in the table
+      const articleData = {
         site_id: site.id,
         title: finalResult.metadata.title || brief.keyword,
-        slug: finalResult.metadata.slug || brief.keyword.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, ''),
+        slug: slug,
         content: completeHtml,
         content_type: brief.content_type,
-        meta_title: finalResult.metadata.title,
-        meta_description: finalResult.metadata.description,
         main_keyword: brief.keyword,
-        word_count: finalResult.metadata.wordCount,
-        seo_score: finalResult.metadata.seoScore,
-        schema_markup: finalResult.metadata.schemas,
-        internal_links: finalResult.metadata.internalLinks,
-        status: status,
-        scheduled_at: scheduledDate || null
-      });
+        word_count: finalResult.metadata.wordCount || 0,
+        status: status
+      };
 
-      if (error) throw error;
+      // Add optional fields if they exist
+      if (finalResult.metadata.title) articleData.meta_title = finalResult.metadata.title;
+      if (finalResult.metadata.description) articleData.meta_description = finalResult.metadata.description;
+      if (finalResult.metadata.seoScore) articleData.seo_score = finalResult.metadata.seoScore;
+      if (scheduledDate) articleData.scheduled_at = scheduledDate;
+
+      console.log('Saving article:', articleData);
+
+      const { data, error } = await supabase.from('articles').insert(articleData).select();
+
+      if (error) {
+        console.error('Supabase error:', error);
+        throw new Error(error.message || 'Erreur Supabase');
+      }
+
+      console.log('Article saved:', data);
       alert('Article sauvegardé !');
 
       // Back to proposals
@@ -763,7 +797,7 @@ ${researchSummary || 'Aucune recherche disponible'}
       setSelectedPage(null);
     } catch (err) {
       console.error('Save error:', err);
-      alert('Erreur: ' + err.message);
+      alert('Erreur sauvegarde: ' + (err.message || 'Erreur inconnue') + '\n\nVous pouvez toujours copier le contenu manuellement.');
     }
   };
 
