@@ -131,6 +131,7 @@ export default function ContentFactory({ site, onBack }) {
   const [batchProgress, setBatchProgress] = useState({ current: 0, total: 0, currentKeyword: '', startTime: null, currentAgent: '' });
   const [isBatchRunning, setIsBatchRunning] = useState(false);
   const [selectedBatchIndex, setSelectedBatchIndex] = useState(0); // Index of selected page in batch results
+  const [batchQueue, setBatchQueue] = useState([]); // Pages to create in batch (saved copy)
 
   // History state
   const [showHistory, setShowHistory] = useState(false);
@@ -611,6 +612,7 @@ ${researchSummary || 'Aucune recherche disponible'}
     setIsBatchRunning(true);
     setBatchResults([]);
     setSelectedBatchIndex(0);
+    setBatchQueue([...pages]); // Save copy of pages for display
     const startTime = Date.now();
     setBatchProgress({ current: 0, total: pages.length, currentKeyword: '', startTime, currentAgent: '' });
 
@@ -2195,13 +2197,13 @@ ${researchSummary || 'Aucune recherche disponible'}
             </div>
           </Card>
 
-          {/* Pages queue - Show ALL selected pages with their status */}
+          {/* Pages queue - Show ALL pages to create with their status */}
           <Card className="p-4">
             <div className="text-sm text-dark-muted mb-3">
-              File d'attente ({batchResults.length}/{selectedPages.length} terminées)
+              File d'attente : {batchResults.length} / {batchQueue.length} terminées
             </div>
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
-              {selectedPages.map((page, idx) => {
+              {batchQueue.map((page, idx) => {
                 const result = batchResults.find(r => r.page.keyword === page.keyword);
                 const isCurrentPage = batchProgress.currentKeyword === page.keyword;
                 const isDone = !!result;
