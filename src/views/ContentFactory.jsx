@@ -132,6 +132,12 @@ export default function ContentFactory({ site, onBack }) {
   const [isBatchRunning, setIsBatchRunning] = useState(false);
   const [selectedBatchIndex, setSelectedBatchIndex] = useState(0); // Index of selected page in batch results
 
+  // History state
+  const [showHistory, setShowHistory] = useState(false);
+  const [createdPages, setCreatedPages] = useState([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+  const [selectedHistoryPage, setSelectedHistoryPage] = useState(null);
+
   // Saved analysis state
   const [savedAnalysis, setSavedAnalysis] = useState(null);
   const [showSavedAnalysisPrompt, setShowSavedAnalysisPrompt] = useState(false);
@@ -151,6 +157,33 @@ export default function ContentFactory({ site, onBack }) {
       }
     }
   }, [site?.id]);
+
+  // Load created pages from Supabase
+  const loadCreatedPages = async () => {
+    if (!site?.id) return;
+    setLoadingHistory(true);
+    try {
+      const { data, error } = await supabase
+        .from('articles')
+        .select('*')
+        .eq('site_id', site.id)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setCreatedPages(data || []);
+    } catch (err) {
+      console.error('Error loading created pages:', err);
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
+
+  // Load history when switching to history view
+  useEffect(() => {
+    if (showHistory && site?.id) {
+      loadCreatedPages();
+    }
+  }, [showHistory, site?.id]);
 
   // Save analysis to localStorage
   const saveAnalysisToStorage = (direction, props) => {
@@ -842,36 +875,234 @@ ${researchSummary || 'Aucune recherche disponible'}
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center gap-4">
-        <button
-          onClick={() => {
-            if (step === 'analyze') onBack();
-            else if (step === 'proposals') setStep('analyze');
-            else if (step === 'create') setStep('proposals');
-            else if (step === 'result') { setStep('proposals'); setFinalResult(null); }
-            else setStep('proposals');
-          }}
-          className="p-2 rounded-lg hover:bg-dark-border text-dark-muted hover:text-white"
-        >
-          <ArrowLeft className="w-5 h-5" />
-        </button>
-        <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-            <Factory className="w-6 h-6 text-primary" />
-            Content Factory
-          </h1>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <button
+            onClick={() => {
+              if (showHistory) { setShowHistory(false); return; }
+              if (step === 'analyze') onBack();
+              else if (step === 'proposals') setStep('analyze');
+              else if (step === 'create') setStep('proposals');
+              else if (step === 'result') { setStep('proposals'); setFinalResult(null); }
+              else if (step === 'batch-create' && !isBatchRunning) setStep('proposals');
+              else setStep('proposals');
+            }}
+            className="p-2 rounded-lg hover:bg-dark-border text-dark-muted hover:text-white"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+          <div>
+            <h1 className="text-2xl font-bold text-white flex items-center gap-2">
+              <Factory className="w-6 h-6 text-primary" />
+              Content Factory
+            </h1>
           <p className="text-dark-muted">
-            {step === 'analyze' && `${site?.mcp_alias} - Prêt à analyser`}
-            {step === 'proposals' && 'Propositions de l\'Architecte IA'}
-            {step === 'create' && `Création: ${CONTENT_TYPES[brief.content_type]?.label}`}
-            {step === 'running' && 'Génération en cours...'}
-            {step === 'result' && 'Validation du contenu'}
+            {showHistory && 'Pages créées'}
+            {!showHistory && step === 'analyze' && `${site?.mcp_alias} - Prêt à analyser`}
+            {!showHistory && step === 'proposals' && 'Propositions de l\'Architecte IA'}
+            {!showHistory && step === 'create' && `Création: ${CONTENT_TYPES[brief.content_type]?.label}`}
+            {!showHistory && step === 'running' && 'Génération en cours...'}
+            {!showHistory && step === 'result' && 'Validation du contenu'}
+            {!showHistory && step === 'batch-create' && 'Création en batch'}
           </p>
         </div>
+        </div>
+
+        {/* History toggle button */}
+        <button
+          onClick={() => setShowHistory(!showHistory)}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
+            showHistory
+              ? 'bg-primary text-white'
+              : 'bg-dark-card border border-dark-border text-dark-muted hover:text-white hover:border-primary'
+          }`}
+        >
+          <Clock className="w-4 h-4" />
+          {showHistory ? 'Retour création' : `Historique${createdPages.length > 0 ? ` (${createdPages.length})` : ''}`}
+        </button>
       </div>
 
+      {/* History View */}
+      {showHistory && (
+        <div className="grid grid-cols-3 gap-4">
+          {/* Left: Pages list */}
+          <div className="col-span-1 space-y-2">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm text-dark-muted">
+                {loadingHistory ? 'Chargement...' : `${createdPages.length} page(s)`}
+              </span>
+              <button
+                onClick={loadCreatedPages}
+                className="text-xs text-primary hover:underline"
+              >
+                <RefreshCw className="w-3 h-3 inline mr-1" />
+                Actualiser
+              </button>
+            </div>
+
+            {loadingHistory ? (
+              <div className="text-center py-8">
+                <Loader2 className="w-6 h-6 animate-spin mx-auto text-primary" />
+              </div>
+            ) : createdPages.length === 0 ? (
+              <Card className="p-6 text-center">
+                <FileText className="w-8 h-8 text-dark-muted mx-auto mb-2" />
+                <p className="text-dark-muted">Aucune page créée</p>
+                <button
+                  onClick={() => setShowHistory(false)}
+                  className="mt-3 text-primary text-sm hover:underline"
+                >
+                  Créer ma première page
+                </button>
+              </Card>
+            ) : (
+              createdPages.map((page, idx) => (
+                <button
+                  key={page.id}
+                  onClick={() => setSelectedHistoryPage(page)}
+                  className={`w-full p-3 rounded-lg text-left transition-all ${
+                    selectedHistoryPage?.id === page.id
+                      ? 'bg-primary/20 border border-primary'
+                      : 'bg-dark-card border border-dark-border hover:border-primary/50'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <div className={`w-2 h-2 rounded-full ${
+                      page.content_type === 'pilier' ? 'bg-purple-500' :
+                      page.content_type === 'fille' ? 'bg-blue-500' : 'bg-green-500'
+                    }`} />
+                    <span className="text-white text-sm font-medium truncate">{page.title || page.main_keyword}</span>
+                  </div>
+                  <div className="flex items-center gap-2 mt-1 text-xs text-dark-muted">
+                    <span className="capitalize">{page.content_type || 'article'}</span>
+                    <span>•</span>
+                    <span>{page.word_count || 0} mots</span>
+                    {page.seo_score > 0 && (
+                      <>
+                        <span>•</span>
+                        <span className={page.seo_score >= 85 ? 'text-success' : 'text-warning'}>
+                          {page.seo_score}%
+                        </span>
+                      </>
+                    )}
+                  </div>
+                  <div className="text-xs text-dark-muted mt-1">
+                    {new Date(page.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                  </div>
+                </button>
+              ))
+            )}
+          </div>
+
+          {/* Right: Selected page detail */}
+          <div className="col-span-2">
+            {selectedHistoryPage ? (
+              <Card className="p-4 space-y-4">
+                {/* Header */}
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-lg font-bold text-white">{selectedHistoryPage.title || selectedHistoryPage.main_keyword}</h3>
+                    <div className="flex items-center gap-3 text-sm text-dark-muted mt-1">
+                      <span className={`px-2 py-0.5 rounded text-xs ${
+                        selectedHistoryPage.content_type === 'pilier' ? 'bg-purple-500/20 text-purple-400' :
+                        selectedHistoryPage.content_type === 'fille' ? 'bg-blue-500/20 text-blue-400' : 'bg-green-500/20 text-green-400'
+                      }`}>
+                        {selectedHistoryPage.content_type || 'article'}
+                      </span>
+                      <span>{selectedHistoryPage.word_count || 0} mots</span>
+                      {selectedHistoryPage.seo_score > 0 && (
+                        <span className={selectedHistoryPage.seo_score >= 85 ? 'text-success' : 'text-warning'}>
+                          Score: {selectedHistoryPage.seo_score}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(selectedHistoryPage.content || '');
+                      alert('Contenu complet copié !');
+                    }}
+                    className="flex items-center gap-2 px-5 py-2.5 bg-success text-white rounded-lg font-bold hover:bg-success/90"
+                  >
+                    <Copy className="w-5 h-5" />
+                    COPIER PAGE
+                  </button>
+                </div>
+
+                {/* Meta infos */}
+                <div className="space-y-2">
+                  <div
+                    onClick={() => {
+                      navigator.clipboard.writeText(selectedHistoryPage.slug || '');
+                      alert('Slug copié !');
+                    }}
+                    className="p-3 bg-dark-bg rounded-lg cursor-pointer hover:bg-dark-border"
+                  >
+                    <div className="text-xs text-orange-400 mb-1">URL / Slug</div>
+                    <div className="text-white">/{selectedHistoryPage.slug || '-'}</div>
+                  </div>
+
+                  <div
+                    onClick={() => {
+                      navigator.clipboard.writeText(selectedHistoryPage.meta_title || '');
+                      alert('Title copié !');
+                    }}
+                    className="p-3 bg-dark-bg rounded-lg cursor-pointer hover:bg-dark-border"
+                  >
+                    <div className="text-xs text-primary mb-1">Meta Title</div>
+                    <div className="text-white">{selectedHistoryPage.meta_title || '-'}</div>
+                  </div>
+
+                  <div
+                    onClick={() => {
+                      navigator.clipboard.writeText(selectedHistoryPage.meta_description || '');
+                      alert('Description copiée !');
+                    }}
+                    className="p-3 bg-dark-bg rounded-lg cursor-pointer hover:bg-dark-border"
+                  >
+                    <div className="text-xs text-primary mb-1">Meta Description</div>
+                    <div className="text-white">{selectedHistoryPage.meta_description || '-'}</div>
+                  </div>
+                </div>
+
+                {/* Content preview */}
+                <div className="border-t border-dark-border pt-4">
+                  <div className="text-xs text-dark-muted mb-2">Contenu ({selectedHistoryPage.content?.length || 0} caractères)</div>
+                  <div className="bg-dark-bg rounded-lg p-4 max-h-96 overflow-auto border border-dark-border">
+                    <pre className="text-sm text-white whitespace-pre-wrap font-mono">
+                      {selectedHistoryPage.content?.substring(0, 5000) || 'Aucun contenu'}
+                      {selectedHistoryPage.content?.length > 5000 && '\n\n... (tronqué)'}
+                    </pre>
+                  </div>
+                </div>
+
+                {/* Delete button */}
+                <div className="flex justify-end pt-2">
+                  <button
+                    onClick={async () => {
+                      if (!confirm('Supprimer cette page ?')) return;
+                      await supabase.from('articles').delete().eq('id', selectedHistoryPage.id);
+                      setSelectedHistoryPage(null);
+                      loadCreatedPages();
+                    }}
+                    className="text-xs text-error hover:underline"
+                  >
+                    Supprimer cette page
+                  </button>
+                </div>
+              </Card>
+            ) : (
+              <Card className="p-12 text-center">
+                <FileText className="w-12 h-12 text-dark-muted mx-auto mb-3" />
+                <p className="text-dark-muted">Sélectionnez une page dans la liste</p>
+              </Card>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Step 1: Analysis Overview */}
-      {step === 'analyze' && (
+      {!showHistory && step === 'analyze' && (
         <>
           {/* Saved Analysis Prompt */}
           {showSavedAnalysisPrompt && savedAnalysis && (
@@ -980,7 +1211,7 @@ ${researchSummary || 'Aucune recherche disponible'}
       )}
 
       {/* Step 2: Proposals */}
-      {step === 'proposals' && (
+      {!showHistory && step === 'proposals' && (
         <>
           {loadingProposals ? (
             <Card className="p-12 text-center">
@@ -1624,7 +1855,7 @@ ${researchSummary || 'Aucune recherche disponible'}
       )}
 
       {/* Step 3: Create Brief */}
-      {step === 'create' && selectedPage && (
+      {!showHistory && step === 'create' && selectedPage && (
         <Card className="p-6">
           <div className="flex items-center gap-4 mb-6">
             <div className={`p-3 rounded-lg ${CONTENT_TYPES[brief.content_type]?.bgColor}`}>
@@ -1798,7 +2029,7 @@ ${researchSummary || 'Aucune recherche disponible'}
       )}
 
       {/* Step 4: Running */}
-      {(step === 'running' || step === 'result') && (
+      {!showHistory && (step === 'running' || step === 'result') && (
         <Card className="p-6">
           <h2 className="text-lg font-semibold text-white mb-4">Pipeline des agents</h2>
 
@@ -1877,7 +2108,7 @@ ${researchSummary || 'Aucune recherche disponible'}
       )}
 
       {/* Step: Batch Create */}
-      {step === 'batch-create' && (
+      {!showHistory && step === 'batch-create' && (
         <div className="space-y-4">
           {/* Progress Header */}
           <Card className="p-4">
@@ -2119,7 +2350,7 @@ ${researchSummary || 'Aucune recherche disponible'}
       )}
 
       {/* Step 5: Result */}
-      {step === 'result' && finalResult?.success && (
+      {!showHistory && step === 'result' && finalResult?.success && (
         <>
           {/* Metrics */}
           <Card className="p-4">
