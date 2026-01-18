@@ -610,9 +610,29 @@ ${researchSummary || 'Aucune recherche disponible'}
           const html = generateCompleteHtmlForResult(result, pageBrief);
           const newResult = { page, result, html, brief: pageBrief };
           results.push(newResult);
-          // Force React update with new array reference
           setBatchResults(prevResults => [...prevResults, newResult]);
           console.log(`📊 Total results now: ${results.length}`);
+
+          // Auto-save to Supabase
+          try {
+            const slug = result.metadata?.slug || page.keyword.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+            await supabase.from('articles').insert({
+              site_id: site.id,
+              title: result.metadata?.title || page.keyword,
+              slug: slug,
+              content: html,
+              content_type: page.type,
+              main_keyword: page.keyword,
+              meta_title: result.metadata?.title || '',
+              meta_description: result.metadata?.description || '',
+              word_count: result.metadata?.wordCount || 0,
+              seo_score: result.metadata?.seoScore || 0,
+              status: 'draft'
+            });
+            console.log(`💾 Saved to Supabase: ${page.keyword}`);
+          } catch (saveErr) {
+            console.error(`⚠️ Could not save to Supabase:`, saveErr);
+          }
         } else {
           const errorResult = { page, error: result?.error || 'Résultat invalide' };
           results.push(errorResult);
@@ -1923,6 +1943,7 @@ ${researchSummary || 'Aucune recherche disponible'}
                         </>
                       )}
                       {item.error && <span className="text-error">Erreur</span>}
+                      {!item.error && <span className="text-success">✓ Sauvé</span>}
                     </div>
                   </button>
                 ))}
