@@ -563,17 +563,18 @@ ${researchSummary || 'Aucune recherche disponible'}
 
   // Run batch factory for multiple pages
   const runBatchFactory = async (pages) => {
-    console.log('Starting batch creation for', pages.length, 'pages:', pages);
+    console.log('🚀 Starting batch creation for', pages.length, 'pages');
     setStep('batch-create');
     setIsBatchRunning(true);
     setBatchResults([]);
+    setSelectedBatchIndex(0);
     setBatchProgress({ current: 0, total: pages.length, currentKeyword: '' });
 
     const results = [];
 
     for (let i = 0; i < pages.length; i++) {
       const page = pages[i];
-      console.log(`Creating page ${i + 1}/${pages.length}:`, page.keyword);
+      console.log(`📝 Creating page ${i + 1}/${pages.length}: ${page.keyword}`);
       setBatchProgress({ current: i + 1, total: pages.length, currentKeyword: page.keyword });
 
       try {
@@ -594,45 +595,44 @@ ${researchSummary || 'Aucune recherche disponible'}
           internal_links: buildInternalLinks(page)
         };
 
-        console.log('Brief for', page.keyword, ':', pageBrief);
-
         // Run factory for this page
+        console.log(`⏳ Calling API for ${page.keyword}...`);
         const result = await claudeApi.runContentFactory(
           pageBrief,
           analysisData.paaQuestions || [],
-          null, // No progress callback for batch
+          null,
           seoDirection
         );
 
-        console.log('Result for', page.keyword, ':', result?.success ? 'SUCCESS' : 'FAILED', result);
+        console.log(`✅ API returned for ${page.keyword}:`, result?.success ? 'SUCCESS' : 'FAILED');
 
         if (result && result.success) {
-          // Generate complete HTML
           const html = generateCompleteHtmlForResult(result, pageBrief);
           const newResult = { page, result, html, brief: pageBrief };
           results.push(newResult);
-          setBatchResults([...results]);
-          console.log('Added result, total:', results.length);
+          // Force React update with new array reference
+          setBatchResults(prevResults => [...prevResults, newResult]);
+          console.log(`📊 Total results now: ${results.length}`);
         } else {
           const errorResult = { page, error: result?.error || 'Résultat invalide' };
           results.push(errorResult);
-          setBatchResults([...results]);
-          console.log('Added error result:', errorResult);
+          setBatchResults(prevResults => [...prevResults, errorResult]);
         }
       } catch (err) {
-        console.error(`Error creating ${page.keyword}:`, err);
+        console.error(`❌ Error for ${page.keyword}:`, err);
         const errorResult = { page, error: err.message || 'Erreur inconnue' };
         results.push(errorResult);
-        setBatchResults([...results]);
+        setBatchResults(prevResults => [...prevResults, errorResult]);
       }
 
-      // Small delay between pages to avoid rate limiting
+      // Delay between pages
       if (i < pages.length - 1) {
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        console.log('⏸️ Waiting 2s before next page...');
+        await new Promise(resolve => setTimeout(resolve, 2000));
       }
     }
 
-    console.log('Batch complete. Total results:', results.length);
+    console.log(`🏁 Batch complete! Total: ${results.length} pages`);
     setIsBatchRunning(false);
   };
 
@@ -2038,12 +2038,28 @@ ${researchSummary || 'Aucune recherche disponible'}
 
                     {/* Content preview */}
                     <div className="border-t border-dark-border pt-4">
-                      <div className="text-xs text-dark-muted mb-2">Aperçu du contenu (scroll pour voir plus)</div>
-                      <div className="bg-dark-bg rounded-lg p-4 max-h-64 overflow-auto">
-                        <div
-                          className="prose prose-invert prose-sm max-w-none"
-                          dangerouslySetInnerHTML={{ __html: batchResults[selectedBatchIndex].html?.substring(0, 3000) + '...' }}
-                        />
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs text-dark-muted">Contenu HTML ({batchResults[selectedBatchIndex].html?.length || 0} caractères)</span>
+                        <button
+                          onClick={() => {
+                            const content = batchResults[selectedBatchIndex].result?.finalContent || '';
+                            navigator.clipboard.writeText(content);
+                            alert('Contenu Markdown copié !');
+                          }}
+                          className="text-xs text-primary hover:underline"
+                        >
+                          Copier Markdown
+                        </button>
+                      </div>
+                      <div className="bg-dark-bg rounded-lg p-4 max-h-96 overflow-auto border border-dark-border">
+                        {batchResults[selectedBatchIndex].html ? (
+                          <pre className="text-sm text-white whitespace-pre-wrap font-mono">
+                            {batchResults[selectedBatchIndex].html.substring(0, 5000)}
+                            {batchResults[selectedBatchIndex].html.length > 5000 && '\n\n... (contenu tronqué pour l\'aperçu)'}
+                          </pre>
+                        ) : (
+                          <p className="text-dark-muted">Aucun contenu généré</p>
+                        )}
                       </div>
                     </div>
                   </Card>
