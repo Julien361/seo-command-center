@@ -128,7 +128,7 @@ export default function ContentFactory({ site, onBack }) {
 
   // Batch creation state
   const [batchResults, setBatchResults] = useState([]); // [{page, result, html}]
-  const [batchProgress, setBatchProgress] = useState({ current: 0, total: 0, currentKeyword: '' });
+  const [batchProgress, setBatchProgress] = useState({ current: 0, total: 0, currentKeyword: '', startTime: null, currentAgent: '' });
   const [isBatchRunning, setIsBatchRunning] = useState(false);
   const [selectedBatchIndex, setSelectedBatchIndex] = useState(0); // Index of selected page in batch results
 
@@ -596,19 +596,32 @@ ${researchSummary || 'Aucune recherche disponible'}
 
   // Run batch factory for multiple pages
   const runBatchFactory = async (pages) => {
-    console.log('🚀 Starting batch creation for', pages.length, 'pages');
+    console.log('🚀 ========================================');
+    console.log('🚀 BATCH CREATION STARTED');
+    console.log('🚀 Total pages to create:', pages.length);
+    console.log('🚀 Pages:', pages.map(p => `${p.type}: ${p.keyword}`));
+    console.log('🚀 ========================================');
+
+    if (pages.length === 0) {
+      alert('Aucune page sélectionnée !');
+      return;
+    }
+
     setStep('batch-create');
     setIsBatchRunning(true);
     setBatchResults([]);
     setSelectedBatchIndex(0);
-    setBatchProgress({ current: 0, total: pages.length, currentKeyword: '' });
+    const startTime = Date.now();
+    setBatchProgress({ current: 0, total: pages.length, currentKeyword: '', startTime, currentAgent: '' });
 
     const results = [];
 
     for (let i = 0; i < pages.length; i++) {
       const page = pages[i];
-      console.log(`📝 Creating page ${i + 1}/${pages.length}: ${page.keyword}`);
-      setBatchProgress({ current: i + 1, total: pages.length, currentKeyword: page.keyword });
+      console.log(`\n📝 ======= PAGE ${i + 1}/${pages.length} =======`);
+      console.log(`📝 Keyword: ${page.keyword}`);
+      console.log(`📝 Type: ${page.type}`);
+      setBatchProgress(prev => ({ ...prev, current: i + 1, currentKeyword: page.keyword, currentAgent: 'Initialisation...' }));
 
       try {
         // Build brief for this page
@@ -628,12 +641,20 @@ ${researchSummary || 'Aucune recherche disponible'}
           internal_links: buildInternalLinks(page)
         };
 
-        // Run factory for this page
+        // Run factory for this page with progress callback
         console.log(`⏳ Calling API for ${page.keyword}...`);
+        const onAgentProgress = (agentId, status) => {
+          if (status === 'running') {
+            const agentName = AGENTS.find(a => a.id === agentId)?.name || agentId;
+            console.log(`   🤖 Agent: ${agentName}`);
+            setBatchProgress(prev => ({ ...prev, currentAgent: agentName }));
+          }
+        };
+
         const result = await claudeApi.runContentFactory(
           pageBrief,
           analysisData.paaQuestions || [],
-          null,
+          onAgentProgress,
           seoDirection
         );
 
@@ -1575,26 +1596,26 @@ ${researchSummary || 'Aucune recherche disponible'}
               )}
 
               {/* Selection toolbar */}
-              <Card className="p-3 flex items-center justify-between sticky top-0 z-10 bg-dark-card/95 backdrop-blur">
-                <div className="flex items-center gap-3">
-                  <span className="text-sm text-dark-muted">
+              <Card className="p-4 flex items-center justify-between sticky top-0 z-10 bg-dark-card border-2 border-primary/30">
+                <div className="flex items-center gap-4">
+                  <div className={`text-lg font-bold ${selectedPages.length > 0 ? 'text-primary' : 'text-warning'}`}>
                     {selectedPages.length > 0 ? (
-                      <span className="text-primary font-medium">{selectedPages.length} page(s) sélectionnée(s)</span>
+                      `✓ ${selectedPages.length} page(s) sélectionnée(s)`
                     ) : (
-                      'Cochez les pages à créer'
+                      '⚠️ Cochez les pages à créer'
                     )}
-                  </span>
+                  </div>
                   <div className="flex gap-2">
                     <button
                       onClick={selectAll}
-                      className="px-2 py-1 text-xs bg-dark-border text-dark-muted rounded hover:bg-dark-bg hover:text-white"
+                      className="px-3 py-1.5 text-sm bg-primary/20 text-primary rounded-lg hover:bg-primary/30 font-medium"
                     >
-                      Tout sélectionner
+                      ☑ Tout sélectionner
                     </button>
                     {selectedPages.length > 0 && (
                       <button
                         onClick={clearSelection}
-                        className="px-2 py-1 text-xs bg-dark-border text-dark-muted rounded hover:bg-red-500/20 hover:text-red-400"
+                        className="px-3 py-1.5 text-sm bg-dark-border text-dark-muted rounded-lg hover:bg-red-500/20 hover:text-red-400"
                       >
                         <X className="w-3 h-3 inline mr-1" />
                         Effacer
@@ -1605,6 +1626,18 @@ ${researchSummary || 'Aucune recherche disponible'}
                 {selectedPages.length > 0 && (
                   <button
                     onClick={() => {
+                      // Confirmation dialog
+                      const piliers = selectedPages.filter(p => p.type === 'pilier').length;
+                      const filles = selectedPages.filter(p => p.type === 'fille').length;
+                      const articles = selectedPages.filter(p => p.type === 'article').length;
+                      const msg = `Créer ${selectedPages.length} page(s) ?\n\n` +
+                        (piliers > 0 ? `• ${piliers} page(s) pilier\n` : '') +
+                        (filles > 0 ? `• ${filles} page(s) fille\n` : '') +
+                        (articles > 0 ? `• ${articles} article(s)\n` : '') +
+                        `\nDurée estimée: ~${selectedPages.length * 30}s`;
+
+                      if (!confirm(msg)) return;
+
                       // Check if we have enough info or need clarification
                       const needsClarification = !seoDirection || analysisData.competitors.length === 0;
                       if (needsClarification) {
@@ -1619,13 +1652,14 @@ ${researchSummary || 'Aucune recherche disponible'}
                         setShowClarification(true);
                       } else {
                         // Go directly to batch creation
+                        console.log('🎯 Starting batch with pages:', selectedPages.map(p => p.keyword));
                         runBatchFactory(selectedPages);
                       }
                     }}
-                    className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-primary to-purple-600 text-white rounded-lg font-medium hover:opacity-90"
+                    className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-primary to-purple-600 text-white rounded-lg font-bold hover:opacity-90 shadow-lg"
                   >
-                    <Play className="w-4 h-4" />
-                    Créer {selectedPages.length} page(s)
+                    <Play className="w-5 h-5" />
+                    CRÉER {selectedPages.length} PAGE(S)
                   </button>
                 )}
               </Card>
@@ -2115,36 +2149,113 @@ ${researchSummary || 'Aucune recherche disponible'}
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
                 {isBatchRunning ? (
-                  <Loader2 className="w-8 h-8 text-primary animate-spin" />
+                  <div className="relative">
+                    <Loader2 className="w-10 h-10 text-primary animate-spin" />
+                    <span className="absolute inset-0 flex items-center justify-center text-xs font-bold text-white">
+                      {batchProgress.current}
+                    </span>
+                  </div>
                 ) : (
-                  <CheckCircle className="w-8 h-8 text-success" />
+                  <CheckCircle className="w-10 h-10 text-success" />
                 )}
                 <div>
                   <h2 className="text-xl font-bold text-white">
-                    {isBatchRunning ? `Création ${batchProgress.current}/${batchProgress.total}...` : `${batchResults.filter(r => !r.error).length} page(s) créée(s)`}
+                    {isBatchRunning ? `Création page ${batchProgress.current}/${batchProgress.total}` : `✓ ${batchResults.filter(r => !r.error).length} page(s) créée(s)`}
                   </h2>
                   {isBatchRunning && batchProgress.currentKeyword && (
-                    <p className="text-primary text-sm">→ {batchProgress.currentKeyword}</p>
+                    <p className="text-primary font-medium">→ {batchProgress.currentKeyword}</p>
+                  )}
+                  {isBatchRunning && batchProgress.currentAgent && (
+                    <p className="text-dark-muted text-sm flex items-center gap-2">
+                      <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                      Agent: {batchProgress.currentAgent}
+                    </p>
                   )}
                 </div>
               </div>
 
-              {/* Progress bar */}
-              <div className="w-48 bg-dark-bg rounded-full h-2">
-                <div
-                  className="bg-primary h-2 rounded-full transition-all duration-500"
-                  style={{ width: `${(batchProgress.current / Math.max(batchProgress.total, 1)) * 100}%` }}
-                />
+              <div className="text-right">
+                {/* Timer */}
+                {batchProgress.startTime && (
+                  <div className="text-2xl font-mono text-white mb-2">
+                    {Math.floor((Date.now() - batchProgress.startTime) / 60000)}:{String(Math.floor(((Date.now() - batchProgress.startTime) / 1000) % 60)).padStart(2, '0')}
+                  </div>
+                )}
+                {/* Progress bar */}
+                <div className="w-48 bg-dark-bg rounded-full h-3">
+                  <div
+                    className="bg-gradient-to-r from-primary to-purple-500 h-3 rounded-full transition-all duration-500"
+                    style={{ width: `${(batchProgress.current / Math.max(batchProgress.total, 1)) * 100}%` }}
+                  />
+                </div>
+                <div className="text-xs text-dark-muted mt-1">
+                  {Math.round((batchProgress.current / Math.max(batchProgress.total, 1)) * 100)}% complété
+                </div>
               </div>
             </div>
           </Card>
 
-          {/* Two columns layout */}
+          {/* Pages queue - Show ALL selected pages with their status */}
+          <Card className="p-4">
+            <div className="text-sm text-dark-muted mb-3">
+              File d'attente ({batchResults.length}/{selectedPages.length} terminées)
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+              {selectedPages.map((page, idx) => {
+                const result = batchResults.find(r => r.page.keyword === page.keyword);
+                const isCurrentPage = batchProgress.currentKeyword === page.keyword;
+                const isDone = !!result;
+                const hasError = result?.error;
+                const isWaiting = !isDone && !isCurrentPage;
+
+                return (
+                  <div
+                    key={idx}
+                    className={`p-3 rounded-lg border transition-all ${
+                      isCurrentPage
+                        ? 'bg-primary/20 border-primary animate-pulse'
+                        : hasError
+                          ? 'bg-error/10 border-error/30'
+                          : isDone
+                            ? 'bg-success/10 border-success/30'
+                            : 'bg-dark-bg border-dark-border opacity-50'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 mb-1">
+                      {isCurrentPage && <Loader2 className="w-4 h-4 text-primary animate-spin" />}
+                      {isDone && !hasError && <CheckCircle className="w-4 h-4 text-success" />}
+                      {hasError && <AlertTriangle className="w-4 h-4 text-error" />}
+                      {isWaiting && <Clock className="w-4 h-4 text-dark-muted" />}
+                      <span className={`text-xs font-medium ${
+                        page.type === 'pilier' ? 'text-purple-400' :
+                        page.type === 'fille' ? 'text-blue-400' : 'text-green-400'
+                      }`}>
+                        {page.type}
+                      </span>
+                    </div>
+                    <div className="text-sm text-white truncate">{page.keyword}</div>
+                    {isCurrentPage && batchProgress.currentAgent && (
+                      <div className="text-xs text-primary mt-1 truncate">
+                        {batchProgress.currentAgent}
+                      </div>
+                    )}
+                    {isDone && result?.result?.metadata?.wordCount && (
+                      <div className="text-xs text-dark-muted mt-1">
+                        {result.result.metadata.wordCount} mots
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </Card>
+
+          {/* Two columns layout for results */}
           {batchResults.length > 0 && (
             <div className="grid grid-cols-3 gap-4">
-              {/* Left: Pages list */}
+              {/* Left: Completed pages list */}
               <div className="col-span-1 space-y-2">
-                <div className="text-sm text-dark-muted mb-2">Pages créées ({batchResults.length})</div>
+                <div className="text-sm text-dark-muted mb-2">Pages terminées ({batchResults.length})</div>
                 {batchResults.map((item, idx) => (
                   <button
                     key={idx}
